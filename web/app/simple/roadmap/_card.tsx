@@ -40,7 +40,7 @@ import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
-import { MkHistory, mkParam } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { MkHistory, mkParam, useMkCutToast } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import { withdraw as mkWithdraw } from './_tracks'; // MOCK-HOOK
 import {
   closedItem,
@@ -1037,6 +1037,7 @@ export function FloatingCard({
   // qa4-simple-roadmap-13: a cut item sits below the line; its old date and milestone flags
   // (and their fixes) no longer apply. Only "others still depend on it" stays.
   const cut = item.status === 'cut';
+  const mkCutToast = useMkCutToast(item.title); // MOCK-HOOK
   const flags = cut ? item.flags.filter((f) => f.kind === 'cut_with_dependents') : item.flags;
   useScreenSubject(
     { kind: 'roadmap_item', subject: { item_id: item.id, key: item.key } },
@@ -1336,7 +1337,7 @@ export function FloatingCard({
         </p>
       )}
       {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
-      {cut && (
+      {cut && !mkCutToast && ( // MOCK-HOOK: the cut's toast is its one Undo while it shows
         <CutBy
           id={item.id}
           onRestore={canChange ? () => void restore() : undefined}

@@ -18,13 +18,13 @@ export const mkParam = (k: string) => q().get(k); // MOCK-HOOK
 export const mkOn = () => !!(mkParam('ut1') || mkParam('ut2') || mkParam('ut3')); // MOCK-HOOK
 const ut1 = () => mkParam('ut1') ?? 'c'; // MOCK-HOOK: UT2 and UT3 frames draw the toast the recommended way
 
-type Entry = ToastAsk & { id: number; at: number; done?: 'undone'; kind?: 'tick'; anchor?: string; who?: string; quick?: boolean }; // MOCK-HOOK
+type Entry = ToastAsk & { id: number; at: number; gone?: boolean; done?: 'undone'; kind?: 'tick'; anchor?: string; who?: string; quick?: boolean }; // MOCK-HOOK
 let log: Entry[] = []; // MOCK-HOOK
 let seq = 0; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK
 const emit = () => subs.forEach((f) => f()); // MOCK-HOOK
 const CODES: Record<string, string> = { 'Welcome video': 'F-63', 'In-app tour': 'F-64' }; // MOCK-HOOK: the mock's two uncoded names get one invented code each
-const words = (m: string) => m.replace(/[‘'"]([^’'"]+)[’'"]/g, (_, n: string) => (CODES[n] ? `${CODES[n]} ${n}` : n)).replace(/ in your working draft$/, ''); // MOCK-HOOK
+const words = (m: string) => m.replace(/[‘'"]([^’'"]+)[’'"]/g, (_, n: string) => (CODES[n] ? `${CODES[n]} ${n}` : n)).replace(/ in your working draft$/, '').replace(/^(Cut|Restored) (?!F-\d)(Weekly alert digest)/, (_, v: string, n: string) => `${v} F-79 ${n}`); // MOCK-HOOK: the built cut toast names the feature without its code
 export function mkPush(ask: ToastAsk & { kind?: 'tick'; anchor?: string; quick?: boolean }) { // MOCK-HOOK
   log = [...log, { ...ask, message: typeof ask.message === 'string' ? words(ask.message) : ask.message, id: ++seq, at: Date.now() }]; // MOCK-HOOK
   emit(); // MOCK-HOOK
@@ -34,6 +34,7 @@ if (typeof window !== 'undefined') // MOCK-HOOK
     push: (m: string, label?: string, kind?: 'tick', anchor?: string) => // MOCK-HOOK
       mkPush({ message: m, kind, anchor, quick: !!label, action: label ? { label, onClick: () => mkPush({ message: `Undone: ${m.replace(/^\S+/, (w) => w.toLowerCase())}` }) } : undefined }), // MOCK-HOOK
     clear: () => ((log = []), emit()), // MOCK-HOOK
+    expire: () => (log.forEach((e) => (e.gone = true)), emit()), // MOCK-HOOK: the toasts ran out; History still lists the changes
   }; // MOCK-HOOK
 
 const LIFE = 8000; // MOCK-HOOK
@@ -60,7 +61,12 @@ function useLog() { // MOCK-HOOK
   }, []); // MOCK-HOOK
   return log; // MOCK-HOOK
 } // MOCK-HOOK
-const live = (e: Entry) => !e.done && (mkParam('hold') || Date.now() - e.at < LIFE); // MOCK-HOOK
+const live = (e: Entry) => !e.done && !e.gone && (mkParam('hold') || Date.now() - e.at < LIFE); // MOCK-HOOK
+/** UT2: while a cut's own toast still offers Undo, the panel leaves out its 'Cut on … · Restore' bar, so one undo shows, not two. */ // MOCK-HOOK
+export function useMkCutToast(title: string) { // MOCK-HOOK
+  const all = useLog(); // MOCK-HOOK
+  return !!mkParam('ut2') && all.some((e) => !e.kind && live(e) && e.action?.label === 'Undo' && typeof e.message === 'string' && e.message.startsWith('Cut ') && e.message.includes(title)); // MOCK-HOOK
+} // MOCK-HOOK
 const undo = (e: Entry) => { e.done = 'undone'; emit(); e.action?.onClick(); }; // MOCK-HOOK
 
 const CARD = 'pointer-events-auto rounded-panel border border-line bg-hero text-base text-hero-text shadow-tip'; // MOCK-HOOK
@@ -242,7 +248,7 @@ export function MkHistory({ canUndo }: { canUndo: boolean }) { // MOCK-HOOK
   const mine = log.filter((e) => !e.kind && e.action?.label === 'Undo').reverse(); // MOCK-HOOK
   if (mkParam('ut3') !== 'a') return null; // MOCK-HOOK
   const all = [ // MOCK-HOOK
-    ...mine.map((e) => ({ who: 'You', what: e.message, when: 'Just now', undo: !e.done, undone: !!e.done, e })), // MOCK-HOOK
+    ...mine.map((e) => ({ who: 'You', what: typeof e.message === 'string' ? e.message.replace(/^\S+/, (w) => w.toLowerCase()) : e.message, when: 'Just now', undo: !e.done, undone: !!e.done, e })), // MOCK-HOOK
     ...lines.map((l) => ({ ...l, e: null as Entry | null })), // MOCK-HOOK
   ]; // MOCK-HOOK
   return ( // MOCK-HOOK
@@ -256,7 +262,7 @@ export function MkHistory({ canUndo }: { canUndo: boolean }) { // MOCK-HOOK
           {all.map((l, i) => ( // MOCK-HOOK
             <li key={i} className="flex items-start gap-2 border-b border-line py-2 last:border-0"> {/* MOCK-HOOK */}
               <span className="min-w-0 flex-1 text-sm"> {/* MOCK-HOOK */}
-                <span className={l.undone ? 'text-text2 line-through' : 'text-text'}><b className="font-[650]">{l.who}</b> {l.what}</span> {/* MOCK-HOOK */}
+                <span className={l.undone ? 'text-text2 line-through' : 'text-text'}><b className="font-[650]">{l.who}</b> {typeof l.what === 'string' ? l.what.replace(/([A-Z][a-z]{2}) (\d{1,2})/g, '$1\u00a0$2') : l.what}</span> {/* MOCK-HOOK */}
                 <span className="block text-xs text-text2">{l.when}{l.undone ? ' · undone' : ''}</span> {/* MOCK-HOOK */}
               </span> {/* MOCK-HOOK */}
               {l.undo && !l.undone && ( // MOCK-HOOK
@@ -320,18 +326,20 @@ export function mkUt2( // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
   const said = message.replace(/ in Needs a decision\.?$/, ''); // MOCK-HOOK: a commenter has no Needs a decision
+  const said2 = said.replace(/^(\w+) changed? proposed:\s*/i, (_, w: string) => `Proposed a ${w.toLowerCase()} change: `); // MOCK-HOOK: reads as a sentence
   if ((mk === 'a' || mk === 'c') && !applied) { // MOCK-HOOK
-    push({ message: said, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
+    push({ message: said2, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
+  const to = String((body.after as { status?: string } | undefined)?.status ?? '').replace(/_/g, ' '); // MOCK-HOOK: the new value the mark names
   if (mk === 'b' && !applied) { // MOCK-HOOK: b: no toast for a small change; the mark beside the field says Proposed, with Withdraw
     const f = body.op === 'set_status' ? 'status' : body.op === 'set_dates' ? 'dates' : 'confidence'; // MOCK-HOOK
-    mkPush({ message: 'Proposed', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]`, action: { label: 'Withdraw', onClick: () => void wd(r.change.id).then(() => (mkPush({ message: 'Withdrawn', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }), reload())) } }); // MOCK-HOOK
+    mkPush({ message: to ? `Proposed: ${to[0].toUpperCase()}${to.slice(1)}` : 'Proposed', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]`, action: { label: 'Withdraw', onClick: () => void wd(r.change.id).then(() => (mkPush({ message: 'Withdrawn', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }), reload())) } }); // MOCK-HOOK
     reload(); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
   if (mk === 'd' && !applied) { // MOCK-HOOK: d: a plain toast that names the panel's own Proposals on it, where Withdraw is
-    push({ message: `${said} · Withdraw it under Proposals on it` }); // MOCK-HOOK
+    push({ message: `${said2} · Withdraw it under Proposals on it` }); // MOCK-HOOK
     reload(); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK

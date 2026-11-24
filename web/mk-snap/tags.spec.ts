@@ -10,7 +10,7 @@ const COST: Record<string, string> = { // MOCK-HOOK
   'ut1-c-result': 'Cost: 2 clicks for an earlier change (today: lost)', // MOCK-HOOK
   'ut1-d-result': 'Cost: 1 click (today 1); earlier ones: not here', // MOCK-HOOK
   'ut2-a-result': 'Cost: cut 1 click, Undo 1 (today: cut 2)', // MOCK-HOOK
-  'ut2-b-result': 'Cost: cut 1, Undo 1; a status: 2 by hand', // MOCK-HOOK
+  'ut2-b-result': 'Cost: cut 1, Undo 1; a confidence: 2 by hand', // MOCK-HOOK
   'ut2-c-result': 'Cost: cut 1 click, Undo 1 (today: cut 2)', // MOCK-HOOK
   'ut2-d-result': 'Cost: cut 2 clicks, as today; no Undo', // MOCK-HOOK
   'ut3-a-result': 'Cost: 3 clicks, any time (today: by hand)', // MOCK-HOOK
@@ -25,11 +25,7 @@ const FOCUS: Record<string, string> = { // MOCK-HOOK
 }; // MOCK-HOOK
 const SAY = 'Status changed proposed: it waits for Avery Stone in Needs a decision'; // UT2 b and d: the commenter's toast says where to take it back // MOCK-HOOK
 const TEXT: Record<string, string> = {}; // UT2 b and d hard frames are now snapped live as a commenter (ut2.spec.ts) // MOCK-HOOK
-const SHOW: Record<string, string> = { // scroll what the caption names into the frame // MOCK-HOOK
-  'ut3-a-rest': '[data-mk-history]', // MOCK-HOOK
-  'ut3-a-open': '[data-mk-history]', // MOCK-HOOK
-  'ut3-a-open-dark': '[data-mk-history]', // MOCK-HOOK
-  'ut3-a-mid': '[data-mk-history]', // MOCK-HOOK
+const SHOW: Record<string, string> = { // scroll what the caption names into the frame (UT3 a's frames are snapped scrolled to History, r4.spec.ts) // MOCK-HOOK
   'ut3-c-rest': 'TOP', // MOCK-HOOK
 }; // MOCK-HOOK
 for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(TEXT), ...Object.keys(COST), ...Object.keys(FOCUS)])]) // MOCK-HOOK
