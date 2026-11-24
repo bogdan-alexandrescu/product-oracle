@@ -3,6 +3,12 @@
 server {
     listen 3000;
     server_tokens off;
+    # #1609: Location is the path alone; behind TLS at the load balancer nginx would otherwise
+    # send people to http://<host>:3000/...
+    absolute_redirect off;
+    # #1609: the regex redirects copy part of the decoded path into Location; a CR or LF there
+    # would split the response (nginx refuses only %00).
+    if ($uri ~ "[\x00-\x1f\x7f]") { return 400; }
     root /usr/share/nginx/html;
     include /etc/nginx/security-headers.conf;
 
@@ -10,8 +16,9 @@ server {
     gzip_types text/css application/javascript application/json image/svg+xml;
 
     # The API on the same origin (session cookie, no CORS), when API_INTERNAL_URL is set: in
-    # local and real-stack runs. In production Cloud Run's load balancer sends /v1/* and /healthz
-    # to the API, so the image leaves it unset and this file is empty (40-oracle-config.sh).
+    # local and real-stack runs. In production the load balancer sends /v1/*, /uploads/* and
+    # /healthz to the API, so the image leaves it unset and this file answers /v1/ and /uploads/
+    # with a 404 (40-oracle-config.sh, #1708): a misrouted path is a loud 404, not the app shell.
     include /etc/nginx/api-proxy.conf;
 
     # #1569: the commit this image was built from, for the deploy's containment check.
@@ -22,16 +29,27 @@ server {
         return 200 '{"git_sha":"${ORACLE_GIT_SHA}"}';
     }
 
-    # Redirects: lib/redirects.ts, row for row (lib/redirects.test.ts checks each has one).
+    # Redirects: lib/redirects.ts, row for row (lib/redirects.test.ts runs each through these).
     location = /roadmap { return 308 /plan$is_args$args; }
     location ~ ^/baseline(/.*)?$ { return 308 /ground-truth$1$is_args$args; }
-    location ~ ^/simple/prds/([^/]+)/?$ { return 307 /simple/one-pagers/$1$is_args$args; }
+    location ~ ^/simple/prds/([^/\x5c]+)/?$ { return 307 /simple/one-pagers/$1$is_args$args; }
     location = /requests/new {
         if ($args = "") { return 307 /requests?compose=request; }
         return 307 /requests/to-decide$is_args$args;
     }
-    # A trailing slash is dropped with a 308, as Next did, so old links behave the same.
-    location ~ ^(.+)/$ { return 308 $1$is_args$args; }
+    # A trailing slash is dropped with a 308, as Next did, so old links behave the same. The path
+    # never starts "//" or "/\" (#1609: browsers read /\evil.com as //evil.com, another host).
+    location ~ ^(/[^/\x5c].*)/$ { return 308 $1$is_args$args; }
+
+    # #1609: share and interview pages (app/s, app/i) are the app shell with the headers their
+    # pages ask for, sent before any script runs: the token in the address is never a referrer.
+    location ~ ^/[is]/ {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        try_files /index.html =404;
+    }
 
     # Hashed build output: immutable; a missing chunk is a 404 nobody caches.
     location ^~ /assets/ {
