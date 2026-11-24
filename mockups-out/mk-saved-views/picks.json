@@ -18,7 +18,7 @@
      "frames": [
       {
        "file": "frames/sv1-a-rest.html",
-       "caption": "At rest: views are tabs above the filters; Goal and Owner were just picked, so Save view lights up."
+       "caption": "At rest: views are tabs above the filters; Goal and Drafts only were just picked, so Save view lights up."
       },
       {
        "file": "frames/sv1-a-open.html",
@@ -57,7 +57,7 @@
      "frames": [
       {
        "file": "frames/sv1-b-rest.html",
-       "caption": "At rest: one View button starts the filter row; Goal and Owner were just picked, so it shows Edited and Save as a view."
+       "caption": "At rest: one View button starts the filter row; Goal and Drafts only were just picked, so it shows Edited and Save as a view."
       },
       {
        "file": "frames/sv1-b-open.html",
@@ -184,7 +184,7 @@
       },
       {
        "file": "frames/sv2-a-open.html",
-       "caption": "Owner was added, so the view shows Edited with Save, Save as new and Undo changes; the menu splits Mine from Shared with everyone."
+       "caption": "Drafts only was ticked, so the view shows Edited with Save, Save as new and Undo changes; the menu splits Mine from Shared with everyone."
       },
       {
        "file": "frames/sv2-a-mid.html",
