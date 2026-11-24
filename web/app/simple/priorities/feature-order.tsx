@@ -4,6 +4,8 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { api, type Schemas } from '@/lib/api/client';
 
+import { pinOf } from './places';
+
 type Row = Schemas['SimplePriorityRow'];
 type Out = Schemas['SimplePrioritiesOut'];
 
@@ -84,7 +86,7 @@ export function useFeatureOrder({
     const at = next.indexOf(onto) + (shown.indexOf(code) < shown.indexOf(onto) ? 1 : 0);
     next.splice(at, 0, code);
     if (r.applies) setLocal({ key, codes: next });
-    const position = t.rank;
+    const position = pinOf(t);
     const target = r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id };
     try {
       const {

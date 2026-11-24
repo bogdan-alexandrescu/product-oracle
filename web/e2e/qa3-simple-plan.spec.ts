@@ -412,7 +412,7 @@ test.describe('QA pass 3: simple-plan, a dated plan', () => {
     await setUp(page, { scenario: 'simple-plan', phone: true, scheme: 'dark' });
     await open(page, '?tab=buckets');
     // mk-goalbuckets frames: the intro says where the weeks go and names the plan's quarter.
-    await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
+    await expect(page.getByTestId('prio-subtitle')).toHaveText('This plan, Nov 2 – Feb 12');
     // Demo 9: the intro is behind the (i).
     await expect(page.locator('#prio-about-text')).toHaveText(
       'Where the engineer-weeks go, goal by goal.',

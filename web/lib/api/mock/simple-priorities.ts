@@ -937,6 +937,20 @@ export function prioritiesOut(
   });
   const line = pickLine(lineKey, lines, same);
   const readItems = new Map(read.items.map((i) => [i.id, i]));
+  // prio-ux (#1739, priorities.plan_quarter / above): "this quarter" with a plan is its PRD's items in its span, else
+  // the Now horizon's; the Now line and the goal buckets read it alike.
+  const span = read.span;
+  const thisQuarter = (id: string, horizon: string | null | undefined): boolean => {
+    if (!span) return horizon === 'now';
+    const x = readItems.get(id);
+    return (
+      !!x?.start.date &&
+      !!x.end.date &&
+      x.prd?.slug === PLAN_PRD_SLUG &&
+      x.start.date <= span.end &&
+      x.end.date >= span.start
+    );
+  };
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
   // S7: a draft merged into another is closed too.
   const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
@@ -999,7 +1013,8 @@ export function prioritiesOut(
           }
         : null,
       above_line:
-        mine && (line.date ? readItems.get(i.id)!.end.date <= line.date : i.horizon === 'now'),
+        mine &&
+        (line.date ? readItems.get(i.id)!.end.date <= line.date : thisQuarter(i.id, i.horizon)),
       end_date: mine ? readItems.get(i.id)!.end.date : null,
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
       estimate_pending: mine && !!readItems.get(i.id)!.estimate_pending,
@@ -1034,6 +1049,10 @@ export function prioritiesOut(
     const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
     yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
   }
+  // prio-ux (#1738, priorities._build's `finished`): finished work is not ranked: a done item's row leaves, the
+  // others keep their ranks (the page numbers them by place).
+  const finished = new Set(yours.filter((i) => i.status === 'done').map((i) => i.id));
+  for (let n = rows.length - 1; n >= 0; n--) if (finished.has(yours[n].id)) rows.splice(n, 1);
   // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
   // others its twins, each with how it merges into it. Nothing is merged.
   // A row's names: its title and its feature's own (the item standing for the feature), as priorities.py folds by either.
@@ -1205,7 +1224,7 @@ export function prioritiesOut(
     });
   // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
   const unranked: Schemas['SimplePriorityUnranked'][] = live
-    .filter((i) => !i.draft && noFeature(db, i))
+    .filter((i) => !i.draft && i.status !== 'done' && noFeature(db, i))
     .map((i) => ({
       item_id: i.id,
       code: i.key,
@@ -1232,7 +1251,7 @@ export function prioritiesOut(
           position: r.goal?.position ?? null,
         }),
       );
-    if (r.horizon === 'now' && r.item_id) {
+    if (r.item_id && thisQuarter(r.item_id, r.horizon)) {
       b.weeks = round(b.weeks + (r.effort ?? 0));
       b.codes.push(r.code);
     }
