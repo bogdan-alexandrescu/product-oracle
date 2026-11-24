@@ -763,11 +763,16 @@ def pick_line(
     return next((x for x in offered if x.key == key), NOW_LINE)
 
 
-def above(e: service.Entry | None, line: SimpleLine) -> bool:
+def above(
+    e: service.Entry | None, line: SimpleLine, inside: set[uuid.UUID] | None = None
+) -> bool:
+    """Whether ``e`` makes ``line``. The Now line is "this quarter" as the goal buckets count
+    it (prio-ux #1739: one rule for the three tabs): the plan's items in its span
+    (``inside``), else the Now horizon's."""
     if e is None:
         return False
     if line.date is None:
-        return e.horizon == "now"
+        return e.row.id in inside if inside is not None else e.horizon == "now"
     return e.resolved.end.date <= line.date
 
 
@@ -906,6 +911,7 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
     # feature-parts: each part's parent, as the roadmap reads it.
     extras: dict[uuid.UUID, dict[str, Any]] = {}
     additions._parts(read_, list(items.values()), extras)
+    this_quarter, inside = await plan_quarter(db, read_)
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
     prd_of: list[str | None] = []
@@ -947,7 +953,7 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
                 )
                 if f.override is not None
                 else None,
-                above_line=above(e, line),
+                above_line=above(e, line, inside),
                 end_date=e.resolved.end.date if e is not None else None,
                 end_estimated=e is not None and e.resolved.end.estimated,
                 estimate_pending=e is not None and e.row.estimate_pending,
@@ -972,7 +978,6 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
             r.short_code = own
         r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
     _after(rows, deps)
-    this_quarter, inside = await plan_quarter(db, read_)
     _, plan_out = await plan_in_play(db, read_)
     if plan_out is not None:
         for r, pid in zip(rows, prd_of, strict=True):
