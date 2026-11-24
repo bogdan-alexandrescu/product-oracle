@@ -8,6 +8,7 @@ import { useFitViewport } from '@/lib/fit-viewport';
 import { keyDateWords } from '@/lib/milestone-code';
 
 import type { Act } from './_card';
+import { DayField } from './_dayfield';
 import { shortDay, type KeyDate, type Roadmap } from './_lib';
 
 type Draft = { name: string; date: string; note: string };
@@ -18,33 +19,6 @@ const value = (k: KeyDate) => ({ name: k.name, date: k.date, note: k.note ?? nul
 /** fix4 qa-simple-roadmap-28: "Nov 14", with its year when not this year's ("Jan 9, 2027"). */
 const dayWords = (day: string, today: string) =>
   day.slice(0, 4) === today.slice(0, 4) ? shortDay(day) : `${shortDay(day)}, ${day.slice(0, 4)}`;
-
-/** #1751: the day in words, month first ("Nov 14, 2026"), a native date picker laid over it,
- * as the milestone card's date field: the browser's own format (dd.mm.yyyy) never shows. */
-function DayField({
-  value,
-  label,
-  onChange,
-}: {
-  value: string;
-  label: string;
-  onChange: (d: string) => void;
-}) {
-  return (
-    <span className="relative flex h-8 min-w-[8.5rem] items-center rounded-lg border border-line bg-bg px-2 text-base font-normal text-text focus-within:border-accent">
-      <span data-testid="key-date-day-words" className={value ? '' : 'text-text2'}>
-        {value ? `${shortDay(value)}, ${value.slice(0, 4)}` : 'Pick a day'}
-      </span>
-      <input
-        aria-label={label}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0"
-      />
-    </span>
-  );
-}
 
 /**
  * Roadmap-plus: the roadmap header's small "Key dates" editor (a conference, a product launch,

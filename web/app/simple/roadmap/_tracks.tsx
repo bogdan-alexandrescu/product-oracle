@@ -313,10 +313,10 @@ export function TracksButton({
                           : owned &&
                             (canChange ? (
                               <>
-                                <button
-                                  type="button"
+                                <Button
+                                  variant="ghost"
                                   data-testid="track-no-owner"
-                                  className="text-accent-ink hover:underline"
+                                  className="!h-auto !min-h-0 !p-0 !text-sm text-accent-ink hover:underline"
                                   onClick={() => {
                                     settle();
                                     setOpened(t.id);
@@ -331,7 +331,7 @@ export function TracksButton({
                                   }}
                                 >
                                   No owner
-                                </button>
+                                </Button>
                                 {' · '}
                               </>
                             ) : (
