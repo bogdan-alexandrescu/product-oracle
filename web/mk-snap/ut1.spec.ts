@@ -4,10 +4,10 @@ import { signIn, snap, theme } from './snap';
 
 const A = ['Removed the dependency of F-140 Usage-based alert thresholds for enterprise workspaces on F-70 Alert rules engine', 'Undo'];
 const B = ['Set F-79 Weekly alert digest to At risk', 'Undo'];
-const C = ['Moved F-131 Self-serve plan downgrade with prorated credit for annual teams from Feb 2 – Mar 17 to Mar 2 – Apr 17', 'Undo'];
+const C = ['Moved F-79 Weekly alert digest from Oct 31 – Dec 10 to Nov 28 – Jan 7', 'Undo'];
 const MORE = [
   ['Set F-88 Quiet hours for alerts to At risk', 'Undo'],
-  ['Moved F-70 Alert rules engine from Jan 5 – Feb 20 to Feb 2 – Mar 20', 'Undo'],
+  ['Moved F-131 Self-serve plan downgrade with prorated credit for annual teams from Feb 2 – Mar 17 to Mar 2 – Apr 17', 'Undo'],
   ['Cut F-64 In-app tour from the roadmap', 'Undo'],
 ];
 async function real(page: Page) { // the one real change: the broken link's Remove the dependency
@@ -33,6 +33,16 @@ for (const v of ['a', 'b', 'c', 'd']) {
       await open(page, `ut1=${v}${v === 'c' ? '&open=1' : ''}`, w, h);
       await real(page);
       await push(page, [B, C, ...MORE]);
+      if (v === 'c') { // the open list is tall: the person has scrolled to the timeline, the broken links above it stay clear
+        await page.evaluate(() => {
+          const b = document.querySelector('[data-testid="conflicts"]')!;
+          let sc: Element | null = b.parentElement;
+          while (sc && !(/auto|scroll/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
+          const dy = b.getBoundingClientRect().top - 110;
+          if (sc) sc.scrollTop += dy; else scrollBy(0, dy);
+        });
+        await page.waitForTimeout(900);
+      }
       await snap(page, `ut1-${v}-hard${sfx}`);
     });
   }
@@ -105,5 +115,12 @@ test('ut1 a story', async ({ page }) => {
   await page.locator('[data-mk-line] button', { hasText: 'Undo' }).last().focus();
   await snap(page, 'ut1-a-mid');
   await page.keyboard.press('Enter');
+  await page.evaluate(() => { // the draft banner at the top, so its count and the F-79 bar on the timeline are both in view
+    const b = document.querySelector('[data-testid="draft-count"]')!;
+    let sc: Element | null = b.parentElement;
+    while (sc && !(/auto|scroll/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
+    const dy = b.getBoundingClientRect().top - 24;
+    if (sc) sc.scrollTop += dy; else scrollBy(0, dy);
+  });
   await snap(page, 'ut1-a-result');
 });

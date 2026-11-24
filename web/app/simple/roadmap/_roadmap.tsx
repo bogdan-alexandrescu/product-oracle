@@ -167,7 +167,7 @@ import {
   warmRoadmapPage,
 } from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
-import { mkUt2, useMkExtra } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { mkOn, mkUt2, useMkExtra } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import { withdraw as mkWithdraw } from './_tracks'; // MOCK-HOOK
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -897,7 +897,7 @@ function DraftBanner({
           disabled={!last}
           onClick={() => last && onUndo(last.id)}
         >
-          Undo
+          {mkOn() ? 'Undo whole draft' : 'Undo'} {/* MOCK-HOOK: its scope, beside a toast's Undo of one change */}
         </Button>
         <Button
           variant="ghost"

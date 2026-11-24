@@ -23,8 +23,10 @@ let log: Entry[] = []; // MOCK-HOOK
 let seq = 0; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK
 const emit = () => subs.forEach((f) => f()); // MOCK-HOOK
+const CODES: Record<string, string> = { 'Welcome video': 'F-63', 'In-app tour': 'F-64' }; // MOCK-HOOK: the mock's two uncoded names get one invented code each
+const words = (m: string) => m.replace(/[‘'"]([^’'"]+)[’'"]/g, (_, n: string) => (CODES[n] ? `${CODES[n]} ${n}` : n)).replace(/ in your working draft$/, ''); // MOCK-HOOK
 export function mkPush(ask: ToastAsk & { kind?: 'tick'; anchor?: string; quick?: boolean }) { // MOCK-HOOK
-  log = [...log, { ...ask, id: ++seq, at: Date.now() }]; // MOCK-HOOK
+  log = [...log, { ...ask, message: typeof ask.message === 'string' ? words(ask.message) : ask.message, id: ++seq, at: Date.now() }]; // MOCK-HOOK
   emit(); // MOCK-HOOK
 } // MOCK-HOOK
 if (typeof window !== 'undefined') // MOCK-HOOK
@@ -88,31 +90,36 @@ function Dismiss({ on }: { on: () => void }) { // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-const CONTROLS = 'main button, main a[href], main [role="tab"], main [role="radio"], main input, main select'; // MOCK-HOOK
-function hits(top: number, box: DOMRect) { // MOCK-HOOK
+const CONTROLS = 'button, a[href], [role="tab"], [role="radio"], input, select'; // MOCK-HOOK: every control on the page and in an open panel
+function inChart(el: Element) { // MOCK-HOOK: a control inside the timeline's sideways-scrolling chart (its bars and chips)
+  for (let a = el.parentElement; a && a.tagName !== 'MAIN'; a = a.parentElement) if (/auto|scroll/.test(getComputedStyle(a).overflowX) && a.scrollWidth > a.clientWidth + 4) return true; // MOCK-HOOK
+  return false; // MOCK-HOOK
+} // MOCK-HOOK
+function hits(top: number, box: DOMRect, els: [DOMRect, number][]) { // MOCK-HOOK: a real button weighs 20, a chart chip 1
   let n = 0; // MOCK-HOOK
-  for (const el of document.querySelectorAll(CONTROLS)) { // MOCK-HOOK
-    const r = el.getBoundingClientRect(); // MOCK-HOOK
-    if (r.width > 1 && r.right > box.left && r.left < box.right && r.bottom > top && r.top < top + box.height) n++; // MOCK-HOOK
-  } // MOCK-HOOK
+  for (const [r, w] of els) if (r.right > box.left - 8 && r.left < box.right + 8 && r.bottom > top - 6 && r.top < top + box.height + 6) n += w; // MOCK-HOOK
   return n; // MOCK-HOOK
 } // MOCK-HOOK
-function useClear(key: number) { // MOCK-HOOK: at the bottom unless it would cover a control there and not at the top
-  const [up, setUp] = useState(false); // MOCK-HOOK
+const controls = () => [...document.querySelectorAll(CONTROLS)].filter((el) => !el.closest('[data-testid="toasts"]')).map((el) => [el.getBoundingClientRect(), inChart(el) ? 1 : 20] as [DOMRect, number]).filter(([r]) => r.width > 1 && r.bottom > 0 && r.top < window.innerHeight); // MOCK-HOOK
+function useClear(key: number) { // MOCK-HOOK: as today's clearSpot: at the bottom when clear, else the first spot from the top that covers no control
+  const [top, setTop] = useState<number | null>(null); // MOCK-HOOK
   useEffect(() => { // MOCK-HOOK
     const check = () => { // MOCK-HOOK
       const box = document.querySelector('[data-mk-stack]')?.getBoundingClientRect(); // MOCK-HOOK
       if (!box || !box.height) return; // MOCK-HOOK
       const phone = window.innerWidth <= 600; // MOCK-HOOK
-      const low = window.innerHeight - (phone ? 80 : 16) - box.height; // MOCK-HOOK
+      const low = Math.max(0, window.innerHeight - (phone ? 80 : 16) - box.height); // MOCK-HOOK
       const high = phone ? 72 : 16; // MOCK-HOOK
-      setUp(hits(low, box) > hits(high, box)); // MOCK-HOOK
+      const els = controls(); // MOCK-HOOK
+      let best = low, most = hits(low, box, els); // MOCK-HOOK
+      for (let t = high; t < low && most > 0; t += 8) { const n = hits(t, box, els); if (n < most) { most = n; best = t; } } // MOCK-HOOK
+      setTop((o) => (o === best ? o : best)); // MOCK-HOOK
     }; // MOCK-HOOK
     check(); // MOCK-HOOK
     const t = window.setInterval(check, 300); // MOCK-HOOK
     return () => window.clearInterval(t); // MOCK-HOOK
   }, [key]); // MOCK-HOOK
-  return up; // MOCK-HOOK
+  return top; // MOCK-HOOK
 } // MOCK-HOOK
 
 /** Replaces ToastHost while a mock-up switch is on. */ // MOCK-HOOK
@@ -137,18 +144,20 @@ export function MkToastHost() { // MOCK-HOOK
     const r = t.anchor ? document.querySelector(t.anchor)?.getBoundingClientRect() : null; // MOCK-HOOK
     if (!r) return null; // MOCK-HOOK
     return ( // MOCK-HOOK
-      <span key={t.id} role="status" className="fixed z-[61] inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-pass shadow-sm" style={{ left: r.right + 6, top: r.top + r.height / 2 - 11 }}> {/* MOCK-HOOK */}
-        <Icon name="check" size={16} /> Saved {/* MOCK-HOOK */}
+      <span key={t.id} role="status" className="pointer-events-auto fixed z-[61] inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-pass shadow-sm" style={{ left: r.right + 6, top: r.top + r.height / 2 - 11 }}> {/* MOCK-HOOK */}
+        <Icon name="check" size={16} /> {t.message} {/* MOCK-HOOK */}
+        {t.action && <button type="button" className="ml-1 font-semibold text-accent-ink underline underline-offset-2" onClick={() => undo(t)}>{t.action.label}</button>} {/* MOCK-HOOK */}
       </span> // MOCK-HOOK
     ); // MOCK-HOOK
   }); // MOCK-HOOK
   const newest = shown.at(-1); // MOCK-HOOK
-  const up = useClear(shown.length + (open ? 100 : 0)); // MOCK-HOOK: as today's toast, never over a control
-  const corner = (up ? 'top-4 max-[600px]:top-[72px] ' : 'bottom-4 max-[600px]:bottom-20 ') + 'pointer-events-none fixed right-4 z-[60] flex max-w-[min(560px,calc(100vw-24px))] flex-col items-end gap-2 max-[600px]:left-3 max-[600px]:right-3 max-[600px]:items-stretch'; // MOCK-HOOK
+  const top = useClear(shown.length + (open ? 100 : 0)); // MOCK-HOOK: as today's toast, never over a control
+  const at = top === null ? undefined : { top }; // MOCK-HOOK
+  const corner = (top === null ? 'bottom-4 max-[600px]:bottom-20 ' : '') + 'pointer-events-none fixed right-4 z-[60] flex max-w-[min(560px,calc(100vw-24px))] flex-col items-end gap-2 max-[600px]:left-3 max-[600px]:right-3 max-[600px]:items-stretch'; // MOCK-HOOK
   let body = null; // MOCK-HOOK
   if (newest && v === 'a') // MOCK-HOOK
     body = ( // MOCK-HOOK
-      <div data-mk-stack="" className={corner}> {/* MOCK-HOOK */}
+      <div data-mk-stack="" className={corner} style={at}> {/* MOCK-HOOK */}
         <div role="status" aria-live="polite" className={`${CARD} flex items-center`}> {/* MOCK-HOOK */}
           <Line e={newest} kbd bar /> <Dismiss on={() => { newest.done = 'undone'; setOpen(false); }} /> {/* MOCK-HOOK */}
         </div> {/* MOCK-HOOK */}
@@ -159,17 +168,19 @@ export function MkToastHost() { // MOCK-HOOK
     const top3 = stack.slice(-3); // MOCK-HOOK
     const more = stack.length - top3.length; // MOCK-HOOK
     body = ( // MOCK-HOOK
-      <div data-mk-stack="" className={corner} role="region" aria-label="Changes you can undo"> {/* MOCK-HOOK */}
+      <div data-mk-stack="" className={corner} style={at} role="region" aria-label="Changes you can undo"> {/* MOCK-HOOK */}
         {more > 0 && (open ? stack.slice(0, more) : []).map((e) => ( // MOCK-HOOK
           <div key={e.id} className={`${CARD} flex items-center opacity-90`}><Line e={e} bar /><Dismiss on={() => undo({ ...e, action: undefined })} /></div> // MOCK-HOOK
         ))} {/* MOCK-HOOK */}
-        {more > 0 && ( // MOCK-HOOK
-          <button type="button" onClick={() => setOpen(!open)} className="pointer-events-auto rounded-full border border-line bg-hero px-3 py-1 text-sm font-semibold text-hero-text shadow-tip"> {/* MOCK-HOOK */}
-            {open ? 'Show fewer' : `${more} more`} {/* MOCK-HOOK */}
-          </button> // MOCK-HOOK
-        )} {/* MOCK-HOOK */}
-        {top3.map((e) => ( // MOCK-HOOK
-          <div key={e.id} role="status" aria-live="polite" className={`${CARD} flex items-center`}><Line e={e} bar /><Dismiss on={() => { e.done = 'undone'; setOpen(open); }} /></div> // MOCK-HOOK
+        {top3.map((e, i) => ( // MOCK-HOOK: the 'N more' pill sits in the oldest shown toast, so the stack is no taller than three
+          <div key={e.id} role="status" aria-live="polite" className={`${CARD} flex items-center`}> {/* MOCK-HOOK */}
+            {i === 0 && more > 0 && ( // MOCK-HOOK
+              <button type="button" onClick={() => setOpen(!open)} className="ml-3 flex-none rounded-full border border-hero-line px-2.5 py-0.5 text-sm font-semibold text-hero-text hover:bg-hero-2"> {/* MOCK-HOOK */}
+                {open ? 'Show fewer' : `${more} more`} {/* MOCK-HOOK */}
+              </button> // MOCK-HOOK
+            )} {/* MOCK-HOOK */}
+            <Line e={e} bar /><Dismiss on={() => { e.done = 'undone'; setOpen(open); }} /> {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
         ))} {/* MOCK-HOOK */}
       </div> // MOCK-HOOK
     ); // MOCK-HOOK
@@ -177,7 +188,7 @@ export function MkToastHost() { // MOCK-HOOK
   if (newest && v === 'c') { // MOCK-HOOK
     const earlier = shown.slice(0, -1).filter((e) => e.action).reverse(); // MOCK-HOOK
     body = ( // MOCK-HOOK
-      <div data-mk-stack="" className={corner}> {/* MOCK-HOOK */}
+      <div data-mk-stack="" className={corner} style={at}> {/* MOCK-HOOK */}
         <div role="status" aria-live="polite" className={`${CARD} flex w-full flex-col min-[601px]:w-auto`}> {/* MOCK-HOOK */}
           <div className="flex items-center"><Line e={newest} kbd bar /><Dismiss on={() => { shown.forEach((e) => (e.done = 'undone')); setOpen(false); }} /></div> {/* MOCK-HOOK */}
           {earlier.length > 0 && ( // MOCK-HOOK
@@ -307,8 +318,16 @@ export function mkUt2( // MOCK-HOOK
     push({ message, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
-  if ((mk === 'b' || mk === 'd') && !applied) { // MOCK-HOOK: no button, but it says where to take it back
-    push({ message: `${message} · Withdraw it there` }); // MOCK-HOOK
+  const said = message.replace(/ in Needs a decision\.?$/, ''); // MOCK-HOOK: a commenter has no Needs a decision
+  if (mk === 'b' && !applied) { // MOCK-HOOK: b: no toast for a small change; the mark beside the field says Proposed, with Withdraw
+    const f = body.op === 'set_status' ? 'status' : body.op === 'set_dates' ? 'dates' : 'confidence'; // MOCK-HOOK
+    mkPush({ message: 'Proposed', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]`, action: { label: 'Withdraw', onClick: () => void wd(r.change.id).then(() => (mkPush({ message: 'Withdrawn', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }), reload())) } }); // MOCK-HOOK
+    reload(); // MOCK-HOOK
+    return true; // MOCK-HOOK
+  } // MOCK-HOOK
+  if (mk === 'd' && !applied) { // MOCK-HOOK: d: a plain toast that names the panel's own Proposals on it, where Withdraw is
+    push({ message: `${said} · Withdraw it under Proposals on it, below` }); // MOCK-HOOK
+    reload(); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
   if (mk === 'd' && !small && applied) { // MOCK-HOOK

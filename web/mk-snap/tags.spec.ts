@@ -21,9 +21,10 @@ const FOCUS: Record<string, string> = {
   'ut2-c-mid': '[data-mk-line] button',
   'ut3-a-mid': '[data-mk-history] li button',
   'ut3-b-mid': '[aria-label="Your changes today"] button',
+  'ut3-c-mid': 'main button',
 };
 const SAY = 'Status changed proposed: it waits for Avery Stone in Needs a decision'; // UT2 b and d: the commenter's toast says where to take it back
-const TEXT: Record<string, string> = Object.fromEntries(['ut2-b-hard', 'ut2-b-hard-1512', 'ut2-d-hard', 'ut2-d-hard-1512'].map((n) => [n, SAY]));
+const TEXT: Record<string, string> = {}; // UT2 b and d hard frames are now snapped live as a commenter (ut2.spec.ts)
 const SHOW: Record<string, string> = { // scroll what the caption names into the frame
   'ut3-a-rest': '[data-mk-history]',
   'ut3-a-open': '[data-mk-history]',
@@ -57,7 +58,7 @@ for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(TEXT), ...Obje
         const t = document.createElement('div');
         t.setAttribute('data-mk-note', '');
         t.textContent = cost;
-        t.style.cssText = 'position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:99;padding:2px 10px;border:1px dashed #b45309;border-radius:999px;background:#fffbeb;color:#92400e;font:600 13px/20px "Inter Tight",sans-serif';
+        t.style.cssText = 'position:fixed;left:16px;top:630px;width:200px;z-index:99;padding:4px 10px;border:1px dashed #b45309;border-radius:12px;background:#fffbeb;color:#92400e;font:600 13px/20px "Inter Tight",sans-serif'; // a margin note in the rail's empty middle, over no control
         document.body.append(t);
       }
       if (focus) {
