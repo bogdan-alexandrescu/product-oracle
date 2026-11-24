@@ -1,5 +1,6 @@
 import { GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO } from '../lib/api/mock/goal-map-tracks';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
 import { expect, test, type Page } from './test';
 

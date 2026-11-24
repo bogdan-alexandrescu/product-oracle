@@ -516,15 +516,15 @@ function NoTarget({ m, c }: { m: M; c: Ctx }) {
       </span>
     );
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       data-testid="gm-strip-target"
       title="Set the number this milestone must reach"
       onClick={(e) => (e.stopPropagation(), c.onEdit({ kind: 'gate', milestone: m.id }))}
-      className="cursor-pointer rounded-full border border-dashed border-accent px-1.5 text-xs font-semibold whitespace-nowrap text-accent-ink hover:bg-accent-soft"
+      className="h-auto! min-h-0! cursor-pointer gap-0! rounded-full! border! border-dashed! border-accent! px-1.5! py-0! text-xs! leading-[18px]! font-semibold! whitespace-nowrap text-accent-ink! hover:bg-accent-soft!"
     >
       + Target
-    </button>
+    </Button>
   );
 }
 
