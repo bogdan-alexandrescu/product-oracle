@@ -34,6 +34,12 @@ const shown = new Set<Linked>();
 let want: string | null = null;
 let swap = false;
 let timer = 0;
+// The value the panels last wrote: the address may catch up after a panel has already switched,
+// and the link must not open that old value again. Back and Forward (history moving) clear it.
+let written: string | null = null;
+if (typeof window !== 'undefined') window.addEventListener('popstate', () => (written = null));
+/** Whether ?feature=<value> is the address a shown panel wrote, not a link or the history. */
+export const panelWrote = (value: string): boolean => value === written;
 function settle(go: (href: string, replace: boolean) => void) {
   window.clearTimeout(timer);
   timer = window.setTimeout(() => {
@@ -43,6 +49,7 @@ function settle(go: (href: string, replace: boolean) => void) {
     if (url.searchParams.get('feature') === want) return;
     if (want) url.searchParams.set('feature', want);
     else url.searchParams.delete('feature');
+    written = want;
     go(`${url.pathname}${url.search}${url.hash}`, replace);
   }, 0);
 }

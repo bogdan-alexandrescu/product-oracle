@@ -35,7 +35,7 @@ import {
   type Change,
   type Item,
 } from './_lib';
-import { featureShown, InLinked, namesFeature, onPageOpen } from './_link';
+import { featureShown, InLinked, namesFeature, onPageOpen, panelWrote } from './_link';
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -301,7 +301,7 @@ export function LinkedFeature() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!param) return setOpen(null);
     if (open === param || closing.current === param) return;
-    if (featureShown(param)) return;
+    if (featureShown(param) || panelWrote(param)) return;
     setOpen(param);
   }, [param, open]);
   // A page's own panel (a bar, a row) takes the link's place: one panel at a time.
