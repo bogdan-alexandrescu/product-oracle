@@ -1262,7 +1262,7 @@ export function FloatingCard({
         <Icon d={ICONS.close} size={18} width={1.7} />
       </button>
     </div>
-    <WatchLineMk itemKey={item.key} canChange={canChange} /> {/* MOCK-HOOK */}
+    <WatchLineMk itemKey={item.key} canChange={canChange} deciders={item.deciders} /> {/* MOCK-HOOK */}
     </> // MOCK-HOOK
   );
 

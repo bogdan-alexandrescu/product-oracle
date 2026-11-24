@@ -32,7 +32,7 @@ async function snap(page: Page, name: string, opts: { dark?: boolean; cost?: str
       const d = document.createElement('div'); // MOCK-HOOK
       d.setAttribute('data-mk-note', ''); // MOCK-HOOK
       d.textContent = c; // MOCK-HOOK
-      d.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;background:#7c3aed;color:#fff;font:600 13px/18px system-ui;padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgb(0 0 0/.25)'; // MOCK-HOOK
+      d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:9999;background:#7c3aed;color:#fff;font:600 13px/18px system-ui;padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgb(0 0 0/.25)'; // MOCK-HOOK
       document.body.appendChild(d); // MOCK-HOOK
     }, opts.cost); // MOCK-HOOK
   await page.screenshot({ path: path.join(FR, `${name}.png`) }); // MOCK-HOOK
@@ -140,8 +140,11 @@ test('wd1d', async ({ page }) => { // MOCK-HOOK
   await size(page, 'd'); await roadmap(page, 'wd1=d', 'alert-digest'); // MOCK-HOOK
   await snap(page, 'wd1-d-rest', { cost: 'Cost: 0 clicks for your own items' }); // MOCK-HOOK
   await mkx(page, 'mute').click(); await snap(page, 'wd1-d-result'); // MOCK-HOOK
-  await roadmap(page, 'wd1=d', 'setup-checklist'); await snap(page, 'wd1-d-open', { cost: 'No way to follow an item you do not own' }); // MOCK-HOOK
   await phonePanel(page, 'wd1=d', f01); await snap(page, 'wd1-d-phone-390'); // MOCK-HOOK
+  // Not yours: Priya Raman (an approver) on F-01, which Avery Stone decides and owns
+  await page.context().clearCookies(); await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); }); // MOCK-HOOK
+  await size(page, 'd'); await login(page, 'approver@example.com'); // MOCK-HOOK
+  await roadmap(page, 'wd1=d&role=other', 'setup-checklist'); await snap(page, 'wd1-d-other', { cost: 'No way to follow an item you do not own' }); // MOCK-HOOK
   // Hard case by role: a viewer at 1512
   await page.context().clearCookies(); await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); }); // MOCK-HOOK
   await size(page, 'w'); await login(page, 'viewer@example.com'); // MOCK-HOOK
@@ -158,7 +161,7 @@ test('wd2', async ({ page }) => { // MOCK-HOOK
     await snap(page, `wd2-${v}-rest`, { dark: v === 'a' }); // MOCK-HOOK
     await mkx(page, 'sample-slack').click(); await snap(page, `wd2-${v}-open`, { dark: v === 'a' }); // MOCK-HOOK
     if (v !== 'b') { await page.goto(`/account?wd2=${v}&msg=slack&step=mid`); await mkx(page, 'digest').waitFor(); await snap(page, `wd2-${v}-mid`); } // MOCK-HOOK
-    await mkx(page, 'sample-email').click(); await snap(page, `wd2-${v}-result`, { dark: v === 'a' }); // MOCK-HOOK
+    await mkx(page, 'sample-email').click(); await snap(page, `wd2-${v}-result`, { dark: v === 'a', cost: { a: 'Cost: 1 change to pick the time; today no message', b: 'Cost: 12 slips = 12 messages', c: 'Cost: a Tuesday slip is told next Monday' }[v] }); // MOCK-HOOK
     await size(page, 'w'); await page.goto(`/account?wd2=${v}&msg=slack&n=many`); await mkx(page, 'digest').waitFor(); // MOCK-HOOK
     await mkx(page, 'sample').scrollIntoViewIfNeeded(); await snap(page, `wd2-${v}-hard-1512`); // MOCK-HOOK
     await size(page, 'p'); await page.goto(`/account?wd2=${v}&msg=email`); await mkx(page, 'sample').waitFor(); // MOCK-HOOK
@@ -176,13 +179,15 @@ test('wd3', async ({ page }) => { // MOCK-HOOK
     await size(page, 'd'); // MOCK-HOOK
     await go(`wd3=${v}`, main); await snap(page, `wd3-${v}-rest`, { dark: v === 'a' }); // MOCK-HOOK
     if (v !== 'b') { await go(`wd3=${v}&state=quiet`, main); await snap(page, `wd3-${v}-quiet`); } // MOCK-HOOK
-    await go(`wd3=${v}&state=stopped`, main); await snap(page, `wd3-${v}-result`, { cost: v === 'c' ? 'Cost: reply “stop” in Slack, no page' : 'Cost: 1 click in the message, 1 to turn back on' }); // MOCK-HOOK
+    await go(`wd3=${v}&state=stopped`, main); await snap(page, `wd3-${v}-result`, { cost: v === 'c' ? 'Cost: reply “stop” in Slack, no page' : v === 'b' ? 'Cost: 1 stop per item: 12 items, 12 stops' : 'Cost: 1 click in the message, 1 to turn back on' }); // MOCK-HOOK
     await size(page, 'w'); await page.goto(`/settings/notifications?wd3=${v}&state=owner`); await mkx(page, 'company-defaults').waitFor(); await snap(page, `wd3-${v}-hard-1512`); // MOCK-HOOK
     await size(page, 'p'); await go(`wd3=${v}`, main); await snap(page, `wd3-${v}-phone-390`); // MOCK-HOOK
   } // MOCK-HOOK
   // A's stop starts in the email: the footer link, then the page it lands on (above, wd3-a-result)
   await size(page, 'd'); await page.goto('/account?wd3=a&wd2=a&msg=email'); await mkx(page, 'stop-link').scrollIntoViewIfNeeded(); // MOCK-HOOK
   await mkx(page, 'stop-link').hover(); await snap(page, 'wd3-a-stop'); // MOCK-HOOK
+  // C's stop is a reply in Slack (above, wd3-c-result is the page after it)
+  await page.goto('/account?wd3=c&wd2=a&msg=slack&reply=stop'); await mkx(page, 'reply').scrollIntoViewIfNeeded(); await snap(page, 'wd3-c-stop'); // MOCK-HOOK
 }); // MOCK-HOOK
 
 test('wd3m', async ({ page }) => { // MOCK-HOOK
@@ -192,7 +197,7 @@ test('wd3m', async ({ page }) => { // MOCK-HOOK
     const main = v === 'c' ? 'delivery' : 'my-digests'; // MOCK-HOOK
     await page.goto(`/account?wd3=${v}&state=noslack`); await mkx(page, main).waitFor(); // MOCK-HOOK
     await snap(page, `wd3-${v}-open`); // MOCK-HOOK
-    if (v !== 'c') { await mkx(page, 'ask-owner').click(); await snap(page, `wd3-${v}-mid`, { cost: 'Cost: 1 click to ask an owner for Slack' }); } // MOCK-HOOK
+    { await mkx(page, 'ask-owner').click(); await snap(page, `wd3-${v}-mid`, { cost: 'Cost: 1 click to ask an owner for Slack' }); } // MOCK-HOOK
   } // MOCK-HOOK
 }); // MOCK-HOOK
 

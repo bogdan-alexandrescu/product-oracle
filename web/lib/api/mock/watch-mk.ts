@@ -1,6 +1,6 @@
 // MOCK-HOOK: mk-watch mock-ups only (decisions WD1..WD3). Invented people, items and dates.
 
-export type MkSlip = {
+export type MkSlip = { // MOCK-HOOK
   code: string; // MOCK-HOOK
   name: string; // MOCK-HOOK
   kind: 'Feature' | 'Milestone' | 'Goal' | 'PRD'; // MOCK-HOOK
@@ -12,8 +12,8 @@ export type MkSlip = {
   past?: string; // MOCK-HOOK
 }; // MOCK-HOOK
 
-export const MK_SLIPS: MkSlip[] = [
-  {
+export const MK_SLIPS: MkSlip[] = [ // MOCK-HOOK
+  { // MOCK-HOOK
     code: 'F-79', // MOCK-HOOK
     name: 'Weekly alert digest', // MOCK-HOOK
     kind: 'Feature', // MOCK-HOOK
@@ -22,9 +22,9 @@ export const MK_SLIPS: MkSlip[] = [
     days: 8, // MOCK-HOOK
     why: 'Alert rules engine, which it needs, now ends Nov 18', // MOCK-HOOK
     goal: 'Grow retention', // MOCK-HOOK
-    past: 'M6 Beta, Nov 30', // MOCK-HOOK
+    past: 'Milestone Beta', // MOCK-HOOK
   }, // MOCK-HOOK
-  {
+  { // MOCK-HOOK
     code: 'F-01', // MOCK-HOOK
     name: 'Setup checklist', // MOCK-HOOK
     kind: 'Feature', // MOCK-HOOK
@@ -34,7 +34,7 @@ export const MK_SLIPS: MkSlip[] = [
     why: 'Rae Okafor set it At risk: “Waiting on the import design”', // MOCK-HOOK
     goal: 'Faster activation', // MOCK-HOOK
   }, // MOCK-HOOK
-  {
+  { // MOCK-HOOK
     code: 'M6', // MOCK-HOOK
     name: 'Beta', // MOCK-HOOK
     kind: 'Milestone', // MOCK-HOOK
@@ -46,7 +46,7 @@ export const MK_SLIPS: MkSlip[] = [
   }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
-const LONG = [
+const LONG = [ // MOCK-HOOK
   ['F-112', 'Rep daily scoreboard with team and region breakdowns for managers'], // MOCK-HOOK
   ['F-104', 'Complaint early warning from support tickets and app store reviews'], // MOCK-HOOK
   ['F-109', 'Guided first week'], // MOCK-HOOK
@@ -57,17 +57,17 @@ const LONG = [
   ['F-105', 'Refund in one step'], // MOCK-HOOK
   ['F-102', 'Rep call script hints'], // MOCK-HOOK
 ]; // MOCK-HOOK
-const WHY = [
+const WHY = [ // MOCK-HOOK
   'Its estimate grew from 3 to 5 weeks', // MOCK-HOOK
   'Sample data import, which it needs, moved 6 days', // MOCK-HOOK
   'Mira Castell moved it: “Design review slipped a week”', // MOCK-HOOK
   'Status changed to Blocked by Dev Anand', // MOCK-HOOK
 ]; // MOCK-HOOK
 
-/** The hard case: many slips in one digest, long names. */
-export const MK_SLIPS_MANY: MkSlip[] = [
+/** The hard case: many slips in one digest, long names. */ // MOCK-HOOK
+export const MK_SLIPS_MANY: MkSlip[] = [ // MOCK-HOOK
   ...MK_SLIPS, // MOCK-HOOK
-  ...LONG.map(([code, name], k) => ({
+  ...LONG.map(([code, name], k) => ({ // MOCK-HOOK
     code, // MOCK-HOOK
     name, // MOCK-HOOK
     kind: 'Feature' as const, // MOCK-HOOK
@@ -81,8 +81,8 @@ export const MK_SLIPS_MANY: MkSlip[] = [
 
 export type MkWatched = { code: string; name: string; kind: string; reason: string; tells: string }; // MOCK-HOOK
 
-/** What the signed-in owner watches (Avery Stone): theirs by default, plus a few they picked. */
-export const MK_WATCHED: MkWatched[] = [
+/** What the signed-in owner watches (Avery Stone): theirs by default, plus a few they picked. */ // MOCK-HOOK
+export const MK_WATCHED: MkWatched[] = [ // MOCK-HOOK
   { code: 'F-79', name: 'Weekly alert digest', kind: 'Feature', reason: 'You decide it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'M6', name: 'Beta', kind: 'Milestone', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'G-2', name: 'Faster activation', kind: 'Goal', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
@@ -98,3 +98,5 @@ export const MK_WATCHED: MkWatched[] = [
 ]; // MOCK-HOOK
 
 export const MK_WATCHERS = ['Avery Stone', 'Rae Okafor', 'Jonah Prell', 'Mira Castell', 'Dev Anand', 'Lena Hartwig']; // MOCK-HOOK
+/** Everyone who could be asked to watch (watchers plus a few who do not watch yet). */ // MOCK-HOOK
+export const MK_PEOPLE = [...MK_WATCHERS.slice(1), 'Rafael Moss', 'Noor Haddad', 'Sam Whitlow']; // MOCK-HOOK

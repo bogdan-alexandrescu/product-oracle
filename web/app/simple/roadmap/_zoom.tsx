@@ -1874,7 +1874,7 @@ const TimelineRow = memo(function TimelineRow({
             {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
             <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
             {order?.pending(i) && <PendingMark />}
-            <WatchRowMk itemKey={i.key} /> {/* MOCK-HOOK */}
+            <WatchRowMk itemKey={i.key} label={`${i.code ?? ''} ${i.title}`} /> {/* MOCK-HOOK */}
           </button>
         )}
         <div className="relative" style={{ width: trackW }}>

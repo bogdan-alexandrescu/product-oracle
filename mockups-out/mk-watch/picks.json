@@ -1,369 +1,377 @@
 {
- "title": "Watch items and get Slack or email digests when they slip",
- "subtitle": "Mock-ups for the owner to pick from (issue #1803). Invented company, people and features. Open any .html with ?theme=light or ?theme=dark; PNGs beside each. The purple tag in some frames is the cost note, not part of the app.",
- "decisions": [
-  {
-   "code": "WD1",
-   "name": "How a person watches",
-   "question": "How does a person watch a feature, goal or milestone, and where do they see and manage what they watch?",
-   "common": "Watching is personal, so every role can watch (viewers and commenters too). Owners and deciders watch their own items unless they stop. Every feature keeps its code with its name and opens the one feature panel. Today there is no way to follow an item: people learn about a slip only by opening Oracle.",
-   "proposals": [
+  "title": "Watch items and get Slack or email digests when they slip",
+  "subtitle": "Mock-ups for the owner to pick from (issue #1803). Invented company, people and features. Open any .html with ?theme=light or ?theme=dark; PNGs beside each. The purple tag in some frames is the cost note, not part of the app.",
+  "decisions": [
     {
-     "letter": "A",
-     "name": "Bell in the panel",
-     "recommended": true,
-     "what": "A Watch button sits in the feature panel's head, beside ⋯ and Close. It opens a short menu: what to be told about (dates move, past its milestone, status changes, mentions, a suggestion waiting), all on by default, then Watch. The button then reads Watching, a note offers Undo, and the row on the roadmap gets a small bell. Everything you watch is listed at the top of the Inbox under Watching, with why you watch it, what it tells you and a Stop button.",
-     "why": "It sits where people already read and change a feature. One clear place in the panel works the same on every page and on a phone. The Inbox list gives one place to stop things, so nobody needs a separate settings hunt.",
-     "plus": "Picking what to be told about stops the noise early. Row bells show what you follow without opening anything.",
-     "cost": "2 clicks to watch (Watch, then Watch in the menu); 1 click to stop from the Inbox. Today: no way to watch.",
-     "frames": [
-      {
-       "file": "wd1-a-rest.png",
-       "caption": "At rest: Priya Raman (an approver) has F-01 Setup checklist open. A Watch button sits by ⋯. F-79 already has a bell because she watches it."
-      },
-      {
-       "file": "wd1-a-open.png",
-       "caption": "She clicks Watch: the menu shows what she can be told about. All five are on, and the daily email time is shown."
-      },
-      {
-       "file": "wd1-a-mid.png",
-       "caption": "She turns off mentions and suggestions, so only dates, milestone and status remain."
-      },
-      {
-       "file": "wd1-a-result.png",
-       "caption": "She clicks Watch: the button reads Watching, the F-01 row gets a bell, and a note offers Undo. Cost: 2 clicks."
-      },
-      {
-       "file": "wd1-a-hard-1512.png",
-       "caption": "Hard case at 1512: twelve watched items with long names, in the Inbox's Watching list. Each shows why it is watched, what it tells and Stop."
-      },
-      {
-       "file": "wd1-a-phone-390.png",
-       "caption": "Phone 390: the same Watch menu opens in the panel's bottom sheet."
-      }
-     ]
+      "code": "WD1",
+      "name": "How a person watches",
+      "question": "How does a person watch a feature, goal or milestone, and where do they see and manage what they watch?",
+      "common": "Watching is personal, so every role can watch (viewers and commenters too). Owners and deciders watch their own items unless they stop. Every feature keeps its code with its name and opens the one feature panel. Today there is no way to follow an item: people learn about a slip only by opening Oracle. The Inbox keeps today's track alerts (Date slip, Overdue); watching adds items to them and the digest sends the same slips outside Oracle, so a slip shows once in the Inbox, never twice.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Bell in the panel",
+          "recommended": true,
+          "what": "A Watch button sits in the feature panel's head, beside ⋯ and Close. It opens a short menu: what to be told about (dates move, past its milestone, status changes, mentions, a suggestion waiting), all on by default, then Watch. The button then reads Watching, a note offers Undo, and the row on the roadmap gets a small bell. Everything you watch is listed at the top of the Inbox under Watching, with why you watch it, what it tells you and a Stop button.",
+          "why": "It sits where people already read and change a feature. One clear place in the panel works the same on every page and on a phone. The Inbox list gives one place to stop things, so nobody needs a separate settings hunt.",
+          "plus": "Picking what to be told about stops the noise early. Row bells show what you follow without opening anything.",
+          "cost": "2 clicks to watch (Watch, then Watch in the menu); 1 click to stop from the Inbox. Today: no way to watch.",
+          "frames": [
+            {
+              "file": "wd1-a-rest.png",
+              "caption": "At rest: Priya Raman (an approver) has F-01 Setup checklist open. A Watch button sits by ⋯. F-79 already has a bell because she watches it."
+            },
+            {
+              "file": "wd1-a-open.png",
+              "caption": "She clicks Watch: the menu shows what she can be told about. All five are on, and the daily email time is shown."
+            },
+            {
+              "file": "wd1-a-mid.png",
+              "caption": "She turns off mentions and suggestions, so only dates, milestone and status remain."
+            },
+            {
+              "file": "wd1-a-result.png",
+              "caption": "She clicks Watch: the button reads Watching, the F-01 row gets a bell, and a note says what she will hear: dates, milestone, status, with Undo. Cost: 2 clicks."
+            },
+            {
+              "file": "wd1-a-hard-1512.png",
+              "caption": "Hard case at 1512: twelve watched items with long names, in the Inbox's Watching list. Each shows why it is watched, what it tells and Stop."
+            },
+            {
+              "file": "wd1-a-phone-390.png",
+              "caption": "Phone 390: the same Watch menu opens in the panel's bottom sheet."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Eye on every row",
+          "recommended": false,
+          "what": "Every roadmap row gets an eye at the end of its name. One click watches or stops watching without opening the panel. The panel's head has the same eye. There is no menu, so you are told about everything on a watched item. The list lives in the same Inbox Watching place as A.",
+          "plus": "Fastest: one click from the list, with no panel to open. Quick for following a whole track.",
+          "cost": "1 click on the row to watch or stop. Today: no way to watch.",
+          "frames": [
+            {
+              "file": "wd1-b-rest.png",
+              "caption": "At rest: every row has an eye after its name; F-79's is filled because Priya watches it."
+            },
+            {
+              "file": "wd1-b-open.png",
+              "caption": "She points at the eye on F-01 Setup checklist."
+            },
+            {
+              "file": "wd1-b-result.png",
+              "caption": "One click: F-01's eye fills and a note says she watches everything on it, with Undo. No menu, so she cannot pick what to hear. Cost: 1 click."
+            },
+            {
+              "file": "wd1-b-hard-1512.png",
+              "caption": "Hard case at 1512 with a panel open: the eyes take room from names, so 'Alert rules engine' and others are cut short. Several rows are watched."
+            },
+            {
+              "file": "wd1-b-phone-390.png",
+              "caption": "Phone 390: rows have no room for an eye, so it is only in the panel's head."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Watchers in the panel",
+          "recommended": false,
+          "what": "The panel shows a Watchers line under its head: who watches this item, a Watch button, and Add someone. An owner or approver can add a teammate, who watches from then on. A commenter can only ask someone to watch. The list of what you watch is the same Inbox Watching list as A.",
+          "plus": "Everyone sees who follows an item, and a lead can make sure the right person hears about a slip.",
+          "cost": "1 click to watch; 3 clicks and a name to add a teammate. Today: no way to watch.",
+          "frames": [
+            {
+              "file": "wd1-c-rest.png",
+              "caption": "At rest: F-79 Weekly alert digest's panel shows Watchers: you and Jonah Prell, with Watching on."
+            },
+            {
+              "file": "wd1-c-open.png",
+              "caption": "Priya clicks Add someone: a name box and people who do not watch it yet."
+            },
+            {
+              "file": "wd1-c-mid.png",
+              "caption": "She types 'Ra': Rae Okafor and Rafael Moss are left. Watchers still reads You, Jonah Prell."
+            },
+            {
+              "file": "wd1-c-result.png",
+              "caption": "She picks Rae Okafor: Watchers now reads You, Rae Okafor, Jonah Prell. Cost: 3 clicks and a name."
+            },
+            {
+              "file": "wd1-c-hard-1512.png",
+              "caption": "Hard case at 1512, a commenter (Theo Brandt) with six watchers: the list shows three names and '+3'. A tick says he can watch and can ask others to watch; each name reads 'asks them'."
+            },
+            {
+              "file": "wd1-c-phone-390.png",
+              "caption": "Phone 390: the Watchers line takes a full row in the bottom sheet, above the tabs' content."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Only what you own",
+          "recommended": false,
+          "what": "No Watch button. You hear about the items you own, decide or approve, and nothing else. The panel says why you hear about an item and offers Mute. This is tenable and the simplest to build, but people cannot follow work they depend on.",
+          "plus": "No setup at all, and no extra control on any page.",
+          "cost": "0 clicks for your own items; you cannot follow anything else.",
+          "frames": [
+            {
+              "file": "wd1-d-rest.png",
+              "caption": "At rest: Avery Stone decides F-79, so its panel says 'You hear about it: you decide it' with Mute. Cost: 0 clicks."
+            },
+            {
+              "file": "wd1-d-result.png",
+              "caption": "Avery clicks Mute: the line reads 'Muted: you hear nothing about it', with Unmute."
+            },
+            {
+              "file": "wd1-d-other.png",
+              "caption": "Priya Raman (an approver) opens F-01 Setup checklist, which Avery Stone decides: the line says it is not hers, so she is not told about it, and there is no button."
+            },
+            {
+              "file": "wd1-d-hard-1512.png",
+              "caption": "Hard case at 1512, a viewer (Lena Ortiz): the line says she owns nothing here, so she is not told about slips."
+            },
+            {
+              "file": "wd1-d-phone-390.png",
+              "caption": "Phone 390: the same line sits under the panel's head."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "B",
-     "name": "Eye on every row",
-     "recommended": false,
-     "what": "Every roadmap row gets an eye at the end of its name. One click watches or stops watching without opening the panel. The panel's head has the same eye. There is no menu, so you are told about everything on a watched item. The list lives in the same Inbox Watching place as A.",
-     "plus": "Fastest: one click from the list, with no panel to open. Quick for following a whole track.",
-     "cost": "1 click on the row to watch or stop. Today: no way to watch.",
-     "frames": [
-      {
-       "file": "wd1-b-rest.png",
-       "caption": "At rest: every row has an eye after its name; F-79's is filled because Priya watches it."
-      },
-      {
-       "file": "wd1-b-open.png",
-       "caption": "She points at the eye on F-01 Setup checklist."
-      },
-      {
-       "file": "wd1-b-result.png",
-       "caption": "One click: F-01's eye fills and it is watched. No menu, so it tells her about everything. Cost: 1 click."
-      },
-      {
-       "file": "wd1-b-hard-1512.png",
-       "caption": "Hard case at 1512 with a panel open: the eyes take room from names, so 'Alert rules engine' and others are cut short. Several rows are watched."
-      },
-      {
-       "file": "wd1-b-phone-390.png",
-       "caption": "Phone 390: rows have no room for an eye, so it is only in the panel's head."
-      }
-     ]
+      "code": "WD2",
+      "name": "The digest",
+      "question": "How often does the digest come, and what does one say in Slack and in email?",
+      "common": "Each digest names the item by code and name, says by how much it slipped (old date → new date, in days) and why, with a link back to Oracle. Dates read month first. Slack is a direct message from Oracle's own Slack app; email comes from Oracle. The digest settings and a sample sit on My account, beside today's Slack pings. The sample's time and day follow the setting picked above it.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Daily, only on slips",
+          "recommended": true,
+          "what": "One message each weekday at a time the person picks (8:00 AM by default), sent only on days something they watch slipped. It lists each slip: code and name, old → new date, how many days later, why, and if it is now past its milestone. Slack adds Open in Oracle and Mute for a week; the email ends with Change what you get and Stop these digests.",
+          "why": "Daily catches a slip while there is still time to act, and quiet days send nothing, so it never becomes noise. One message per day keeps several slips together.",
+          "plus": "The why line saves opening Oracle just to learn the cause.",
+          "cost": "0 clicks to get it; 1 change to pick the time. Today: no message at all.",
+          "frames": [
+            {
+              "file": "wd2-a-rest.png",
+              "caption": "At rest: My account shows 'Digest of what I watch': every weekday at 8:00 AM, only on days something slipped, by email and Slack."
+            },
+            {
+              "file": "wd2-a-open.png",
+              "caption": "Avery clicks See the Slack message: three slips since yesterday, each with old → new date, days later and why."
+            },
+            {
+              "file": "wd2-a-mid.png",
+              "caption": "She changes the time to 7:30 AM: a tick says the next digest comes Fri, Oct 23 at 7:30 AM."
+            },
+            {
+              "file": "wd2-a-result.png",
+              "caption": "She clicks See the email: the same three slips, sent Thu, Oct 22 at 7:30 AM, with links and the stop line at the foot. Cost: 1 change to pick the time."
+            },
+            {
+              "file": "wd2-a-hard-1512.png",
+              "caption": "Hard case at 1512: twelve slips in one Slack message, with long names. It is long but still one message."
+            },
+            {
+              "file": "wd2-a-phone-390.png",
+              "caption": "Phone 390: the email as it reads on a phone; dates wrap but stay month first."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Right away, one each",
+          "recommended": false,
+          "what": "No digest: each slip sends its own Slack message or email as it happens, with Open and Stop watching buttons. There is no time to set.",
+          "plus": "The fastest news. Each message is short and has its own Stop.",
+          "cost": "0 clicks to get it, but one message per slip: twelve slips make twelve messages.",
+          "frames": [
+            {
+              "file": "wd2-b-rest.png",
+              "caption": "At rest: 'How often: Right away, one message per change'. No time to pick."
+            },
+            {
+              "file": "wd2-b-open.png",
+              "caption": "See the Slack message: one short message for F-79 with Open and Stop watching."
+            },
+            {
+              "file": "wd2-b-result.png",
+              "caption": "See the email: one email for that one slip at 9:10 AM, the same time as its Slack message. Cost: 12 slips = 12 messages."
+            },
+            {
+              "file": "wd2-b-hard-1512.png",
+              "caption": "Hard case at 1512: a busy morning sends a separate message for every slip; the first six of twelve fit the screen."
+            },
+            {
+              "file": "wd2-b-phone-390.png",
+              "caption": "Phone 390: the single-slip email."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Weekly by goal",
+          "recommended": false,
+          "what": "One message on Monday morning, grouped by goal. Each goal says whether it is now at risk or behind, then lists the watched items that slipped under it, with days and new dates, and the week's total.",
+          "plus": "Reads like a short status report, and leads with what matters most: the goals.",
+          "cost": "0 clicks to get it, but a slip on Tuesday is told almost a week later.",
+          "frames": [
+            {
+              "file": "wd2-c-rest.png",
+              "caption": "At rest: 'Mondays at 8:00 AM, one message for the week, by goal'."
+            },
+            {
+              "file": "wd2-c-open.png",
+              "caption": "See the Slack message: the week's three slips under Grow retention (at risk: 2 days to spare) and Faster activation (behind), each with old → new date and why."
+            },
+            {
+              "file": "wd2-c-mid.png",
+              "caption": "The time changes to 7:30 AM: a tick says the next digest comes Mon, Oct 26 at 7:30 AM."
+            },
+            {
+              "file": "wd2-c-result.png",
+              "caption": "See the email, dated Mon, Oct 26 at 7:30 AM: the same week by goal. Cost: a Tuesday slip is told next Monday."
+            },
+            {
+              "file": "wd2-c-hard-1512.png",
+              "caption": "Hard case at 1512: twelve slips across four goals, each goal with its own state, in one long message."
+            },
+            {
+              "file": "wd2-c-phone-390.png",
+              "caption": "Phone 390: the weekly email."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "C",
-     "name": "Watchers in the panel",
-     "recommended": false,
-     "what": "The panel shows a Watchers line under its head: who watches this item, a Watch button, and Add someone. An owner or approver can add a teammate, who watches from then on. A commenter can only ask someone to watch. The list of what you watch is the same Inbox Watching list as A.",
-     "plus": "Everyone sees who follows an item, and a lead can make sure the right person hears about a slip.",
-     "cost": "1 click to watch; 3 clicks and a name to add a teammate. Today: no way to watch.",
-     "frames": [
-      {
-       "file": "wd1-c-rest.png",
-       "caption": "At rest: F-79 Weekly alert digest's panel shows Watchers: you and Jonah Prell, with Watching on."
-      },
-      {
-       "file": "wd1-c-open.png",
-       "caption": "Priya clicks Add someone: a name box and a short list of people open."
-      },
-      {
-       "file": "wd1-c-mid.png",
-       "caption": "She types 'Ra': only Rae Okafor is left."
-      },
-      {
-       "file": "wd1-c-result.png",
-       "caption": "She picks Rae Okafor: Watchers now reads You, Rae Okafor, Jonah Prell. Cost: 3 clicks and a name."
-      },
-      {
-       "file": "wd1-c-hard-1512.png",
-       "caption": "Hard case at 1512, a commenter (Theo Brandt) with six watchers: the list is cut to three names and '+3', and he can only ask people to watch."
-      },
-      {
-       "file": "wd1-c-phone-390.png",
-       "caption": "Phone 390: the Watchers line takes a full row in the bottom sheet, above the tabs' content."
-      }
-     ]
-    },
-    {
-     "letter": "D",
-     "name": "Only what you own",
-     "recommended": false,
-     "what": "No Watch button. You hear about the items you own, decide or approve, and nothing else. The panel says why you hear about an item and offers Mute. This is tenable and the simplest to build, but people cannot follow work they depend on.",
-     "plus": "No setup at all, and no extra control on any page.",
-     "cost": "0 clicks for your own items; you cannot follow anything else.",
-     "frames": [
-      {
-       "file": "wd1-d-rest.png",
-       "caption": "At rest: Avery Stone decides F-79, so its panel says 'You hear about it: you decide it' with Mute. Cost: 0 clicks."
-      },
-      {
-       "file": "wd1-d-result.png",
-       "caption": "Avery clicks Mute: the line reads 'Muted: you hear nothing about it', with Unmute."
-      },
-      {
-       "file": "wd1-d-open.png",
-       "caption": "On F-01 Setup checklist the same line has no button: you cannot follow an item you do not own."
-      },
-      {
-       "file": "wd1-d-hard-1512.png",
-       "caption": "Hard case at 1512, a viewer (Lena Ortiz): she owns nothing, so she can never hear about any slip."
-      },
-      {
-       "file": "wd1-d-phone-390.png",
-       "caption": "Phone 390: the same line sits under the panel's head."
-      }
-     ]
+      "code": "WD3",
+      "name": "Settings and states",
+      "question": "Where does each person set their digest, and how do Slack not connected, nothing slipped, the company's defaults and stopping from the message work?",
+      "common": "Every role sets their own digest (Settings is for owners, so the personal part lives on My account, beside today's Slack pings). Only an owner connects Slack for the company (Settings > Notifications, as today) and sets company defaults there. A person always keeps the Inbox; stopping a digest never hides slips in Oracle.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "My digests panel",
+          "recommended": true,
+          "what": "My account gets a My digests panel: Inbox (always on), Email and Slack switches, each with when it sends. With Slack not connected, Slack is off and says so, with Ask an owner. On a quiet day a tick says nothing slipped and no digest went out. Stop these digests in any message lands here with 'Digests stopped', Turn back on and Less often instead. Owners get Company defaults on Settings > Notifications.",
+          "why": "One small panel answers 'what will I get, and where' at a glance, sits beside the Slack pings people already set, and every state has a one-click way out.",
+          "plus": "Stop works from the message in one click, and turning it back on is one more.",
+          "cost": "1 click to stop from a message, 1 to turn back on, 1 to ask for Slack. Today: none of these exist.",
+          "frames": [
+            {
+              "file": "wd3-a-rest.png",
+              "caption": "At rest: My digests on Avery's My account: Inbox always, Email and Slack on, with when each sends."
+            },
+            {
+              "file": "wd3-a-open.png",
+              "caption": "Slack not connected, seen by Priya Raman (an approver): Slack is off and says why, with Ask an owner."
+            },
+            {
+              "file": "wd3-a-mid.png",
+              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click."
+            },
+            {
+              "file": "wd3-a-quiet.png",
+              "caption": "Nothing slipped: a tick says no digest was sent today."
+            },
+            {
+              "file": "wd3-a-stop.png",
+              "caption": "A preview of the email, drawn below My account's digest settings: its foot has Stop these digests, the link she clicks."
+            },
+            {
+              "file": "wd3-a-result.png",
+              "caption": "After that click: My account says Digests stopped, slips still show in the Inbox, with Turn back on and Less often instead."
+            },
+            {
+              "file": "wd3-a-hard-1512.png",
+              "caption": "Hard case at 1512, an owner: Company defaults on Settings > Notifications, with an option to apply them to the 31 people who never changed theirs. Slack's channel stays as today."
+            },
+            {
+              "file": "wd3-a-phone-390.png",
+              "caption": "Phone 390: My digests at the top of My account."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Set per item",
+          "recommended": false,
+          "what": "Each watched item keeps its own way to tell you (Slack or email, right away or daily), set from its Watch menu. My account lists them in a table. Stop from a message stops that one item only.",
+          "plus": "Fine control: loud for the items that matter, quiet for the rest.",
+          "cost": "1 change per item; stopping from a message stops one item, so twelve items need twelve stops.",
+          "frames": [
+            {
+              "file": "wd3-b-rest.png",
+              "caption": "At rest: My account lists each watched item with its own channel and timing: five shown, and 7 more."
+            },
+            {
+              "file": "wd3-b-open.png",
+              "caption": "Slack not connected, seen by Priya: Slack items read 'Email (Slack not connected)', with Ask an owner."
+            },
+            {
+              "file": "wd3-b-mid.png",
+              "caption": "She asks an owner: a tick confirms it."
+            },
+            {
+              "file": "wd3-b-result.png",
+              "caption": "Stopping from a message: only F-79 Weekly alert digest stops; its row reads Stopped with Watch again, and the other eleven still send. Cost: 1 stop per item: 12 items, 12 stops."
+            },
+            {
+              "file": "wd3-b-hard-1512.png",
+              "caption": "Hard case at 1512, an owner: Company defaults set how a new watch starts for each kind of item (feature, milestone, goal, PRD), with an option to apply them to the 140 items nobody changed."
+            },
+            {
+              "file": "wd3-b-phone-390.png",
+              "caption": "Phone 390: the per-item table is cramped on a phone."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Set from the message",
+          "recommended": false,
+          "what": "No settings panel: My account shows one line saying what you get. You change it by replying to any digest ('weekly', 'email only', 'stop'). Slack goes first; email follows only if Slack is still unread by noon.",
+          "plus": "Nothing to find in Oracle; people change it where they read it.",
+          "cost": "1 reply to change or stop; nothing to click in Oracle, but nothing to see there either.",
+          "frames": [
+            {
+              "file": "wd3-c-rest.png",
+              "caption": "At rest: one line on My account: daily on Slack at 8:00 AM, email if unread by noon. Reply to change it."
+            },
+            {
+              "file": "wd3-c-open.png",
+              "caption": "Slack not connected, seen by Priya: the line says it sends a daily email instead, with Ask an owner."
+            },
+            {
+              "file": "wd3-c-mid.png",
+              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click."
+            },
+            {
+              "file": "wd3-c-quiet.png",
+              "caption": "Nothing slipped: a tick under the line says nothing was sent today."
+            },
+            {
+              "file": "wd3-c-stop.png",
+              "caption": "A preview of the Slack message: Avery replies 'stop' and Oracle answers that digests stopped, slips still show in the Inbox, and 'start' turns them back on."
+            },
+            {
+              "file": "wd3-c-result.png",
+              "caption": "After replying 'stop': the line says Stopped, with Turn back on."
+            },
+            {
+              "file": "wd3-c-hard-1512.png",
+              "caption": "Hard case at 1512, an owner: Company defaults, with Slack first and email if unread. Digests go to each person, so the company channel stays as today."
+            },
+            {
+              "file": "wd3-c-phone-390.png",
+              "caption": "Phone 390: the one line on My account."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "WD2",
-   "name": "The digest",
-   "question": "How often does the digest come, and what does one say in Slack and in email?",
-   "common": "Each digest names the item by code and name, says by how much it slipped (old date → new date, in days) and why, with a link back to Oracle. Dates read month first. Slack is a direct message from Oracle's own Slack app; email comes from Oracle. The digest settings and a sample sit on My account, beside today's Slack pings.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "Daily, only on slips",
-     "recommended": true,
-     "what": "One message each weekday at a time the person picks (8:00 AM by default), sent only on days something they watch slipped. It lists each slip: code and name, old → new date, how many days later, why, and if it is now past its milestone. Slack adds Open in Oracle and Mute for a week; the email ends with Change what you get and Stop these digests.",
-     "why": "Daily catches a slip while there is still time to act, and quiet days send nothing, so it never becomes noise. One message per day keeps several slips together.",
-     "plus": "The why line saves opening Oracle just to learn the cause.",
-     "cost": "0 clicks to get it; 1 change to pick the time. Today: no message at all.",
-     "frames": [
-      {
-       "file": "wd2-a-rest.png",
-       "caption": "At rest: My account shows 'Digest of what I watch': every weekday at 8:00 AM, only on days something slipped, by email and Slack."
-      },
-      {
-       "file": "wd2-a-open.png",
-       "caption": "Avery clicks See the Slack message: three slips since yesterday, each with old → new date, days later and why."
-      },
-      {
-       "file": "wd2-a-mid.png",
-       "caption": "She changes the time to 7:30 AM: a tick says the next digest comes Fri, Oct 23 at 7:30 AM."
-      },
-      {
-       "file": "wd2-a-result.png",
-       "caption": "She clicks See the email: the same three slips as an email, with links and the stop line at the foot."
-      },
-      {
-       "file": "wd2-a-hard-1512.png",
-       "caption": "Hard case at 1512: twelve slips in one Slack message, with long names. It is long but still one message."
-      },
-      {
-       "file": "wd2-a-phone-390.png",
-       "caption": "Phone 390: the email as it reads on a phone; dates wrap but stay month first."
-      }
-     ]
-    },
-    {
-     "letter": "B",
-     "name": "Right away, one each",
-     "recommended": false,
-     "what": "No digest: each slip sends its own Slack message or email as it happens, with Open and Stop watching buttons. There is no time to set.",
-     "plus": "The fastest news. Each message is short and has its own Stop.",
-     "cost": "0 clicks to get it, but one message per slip: twelve slips make twelve messages.",
-     "frames": [
-      {
-       "file": "wd2-b-rest.png",
-       "caption": "At rest: 'How often: Right away, one message per change'. No time to pick."
-      },
-      {
-       "file": "wd2-b-open.png",
-       "caption": "See the Slack message: one short message for F-79 with Open and Stop watching."
-      },
-      {
-       "file": "wd2-b-result.png",
-       "caption": "See the email: one email for that one slip, its subject says what moved and by how much."
-      },
-      {
-       "file": "wd2-b-hard-1512.png",
-       "caption": "Hard case at 1512: a busy morning sends a separate message for every slip, which is noisy."
-      },
-      {
-       "file": "wd2-b-phone-390.png",
-       "caption": "Phone 390: the single-slip email."
-      }
-     ]
-    },
-    {
-     "letter": "C",
-     "name": "Weekly by goal",
-     "recommended": false,
-     "what": "One message on Monday morning, grouped by goal. Each goal says whether it is now at risk or behind, then lists the watched items that slipped under it, with days and new dates, and the week's total.",
-     "plus": "Reads like a short status report, and leads with what matters most: the goals.",
-     "cost": "0 clicks to get it, but a slip on Tuesday is told almost a week later.",
-     "frames": [
-      {
-       "file": "wd2-c-rest.png",
-       "caption": "At rest: 'Mondays at 8:00 AM, one message for the week, by goal'."
-      },
-      {
-       "file": "wd2-c-open.png",
-       "caption": "See the Slack message: the week's three slips, under Grow retention (at risk) and Faster activation (behind)."
-      },
-      {
-       "file": "wd2-c-mid.png",
-       "caption": "The time changes to 7:30 AM and is saved."
-      },
-      {
-       "file": "wd2-c-result.png",
-       "caption": "See the email: the same week by goal, with the stop line at the foot."
-      },
-      {
-       "file": "wd2-c-hard-1512.png",
-       "caption": "Hard case at 1512: twelve slips across three goals still fit one short message."
-      },
-      {
-       "file": "wd2-c-phone-390.png",
-       "caption": "Phone 390: the weekly email."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "WD3",
-   "name": "Settings and states",
-   "question": "Where does each person set their digest, and how do Slack not connected, nothing slipped, the company's defaults and stopping from the message work?",
-   "common": "Every role sets their own digest (Settings is for owners, so the personal part lives on My account, beside today's Slack pings). Only an owner connects Slack for the company (Settings > Notifications, as today) and sets company defaults there. A person always keeps the Inbox; stopping a digest never hides slips in Oracle.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "My digests panel",
-     "recommended": true,
-     "what": "My account gets a My digests panel: Inbox (always on), Email and Slack switches, each with when it sends. With Slack not connected, Slack is off and says so, with Ask an owner. On a quiet day a tick says nothing slipped and no digest went out. Stop these digests in any message lands here with 'Digests stopped', Turn back on and Less often instead. Owners get Company defaults on Settings > Notifications.",
-     "why": "One small panel answers 'what will I get, and where' at a glance, sits beside the Slack pings people already set, and every state has a one-click way out.",
-     "plus": "Stop works from the message in one click, and turning it back on is one more.",
-     "cost": "1 click to stop from a message, 1 to turn back on, 1 to ask for Slack. Today: none of these exist.",
-     "frames": [
-      {
-       "file": "wd3-a-rest.png",
-       "caption": "At rest: My digests on Avery's My account: Inbox always, Email and Slack on, with when each sends."
-      },
-      {
-       "file": "wd3-a-open.png",
-       "caption": "Slack not connected, seen by Priya Raman (an approver): Slack is off and says why, with Ask an owner."
-      },
-      {
-       "file": "wd3-a-mid.png",
-       "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click."
-      },
-      {
-       "file": "wd3-a-quiet.png",
-       "caption": "Nothing slipped: a tick says no digest was sent today."
-      },
-      {
-       "file": "wd3-a-stop.png",
-       "caption": "Stopping from the message: the email's foot has Stop these digests."
-      },
-      {
-       "file": "wd3-a-result.png",
-       "caption": "After that click: My account says Digests stopped, slips still show in the Inbox, with Turn back on and Less often instead."
-      },
-      {
-       "file": "wd3-a-hard-1512.png",
-       "caption": "Hard case at 1512, an owner: Company defaults on Settings > Notifications, with an option to apply them to the 31 people who never changed theirs."
-      },
-      {
-       "file": "wd3-a-phone-390.png",
-       "caption": "Phone 390: My digests at the top of My account."
-      }
-     ]
-    },
-    {
-     "letter": "B",
-     "name": "Set per item",
-     "recommended": false,
-     "what": "Each watched item keeps its own way to tell you (Slack or email, right away or daily), set from its Watch menu. My account lists them in a table. Stop from a message stops that one item only.",
-     "plus": "Fine control: loud for the items that matter, quiet for the rest.",
-     "cost": "1 change per item; stopping from a message stops one item, so twelve items need twelve stops.",
-     "frames": [
-      {
-       "file": "wd3-b-rest.png",
-       "caption": "At rest: My account lists each watched item with its own channel and timing."
-      },
-      {
-       "file": "wd3-b-open.png",
-       "caption": "Slack not connected, seen by Priya: Slack items send email instead, with Ask an owner."
-      },
-      {
-       "file": "wd3-b-mid.png",
-       "caption": "She asks an owner: a tick confirms it."
-      },
-      {
-       "file": "wd3-b-result.png",
-       "caption": "Stopping from a message: only F-79 Weekly alert digest stops; the other eleven still send, with Watch again."
-      },
-      {
-       "file": "wd3-b-hard-1512.png",
-       "caption": "Hard case at 1512, an owner: Company defaults on Settings > Notifications."
-      },
-      {
-       "file": "wd3-b-phone-390.png",
-       "caption": "Phone 390: the per-item table is cramped on a phone."
-      }
-     ]
-    },
-    {
-     "letter": "C",
-     "name": "Set from the message",
-     "recommended": false,
-     "what": "No settings panel: My account shows one line saying what you get. You change it by replying to any digest ('weekly', 'email only', 'stop'). Slack goes first; email follows only if Slack is still unread by noon.",
-     "plus": "Nothing to find in Oracle; people change it where they read it.",
-     "cost": "1 reply to change or stop; nothing to click in Oracle, but nothing to see there either.",
-     "frames": [
-      {
-       "file": "wd3-c-rest.png",
-       "caption": "At rest: one line on My account: daily on Slack at 8:00 AM, email if unread by noon. Reply to change it."
-      },
-      {
-       "file": "wd3-c-open.png",
-       "caption": "Slack not connected, seen by Priya: the line says it sends a daily email instead."
-      },
-      {
-       "file": "wd3-c-quiet.png",
-       "caption": "Nothing slipped: a tick under the line says nothing was sent today."
-      },
-      {
-       "file": "wd3-c-result.png",
-       "caption": "After replying 'stop': the line says Stopped, with Turn back on."
-      },
-      {
-       "file": "wd3-c-hard-1512.png",
-       "caption": "Hard case at 1512, an owner: Company defaults, with Slack first and email if unread."
-      },
-      {
-       "file": "wd3-c-phone-390.png",
-       "caption": "Phone 390: the one line on My account."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }
