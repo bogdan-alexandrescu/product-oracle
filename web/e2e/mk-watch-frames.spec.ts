@@ -48,6 +48,8 @@ async function snap(page: Page, name: string, opts: { dark?: boolean; cost?: str
       else if (el.tagName === 'SELECT') [...(el as HTMLSelectElement).options].forEach((o) => (o.selected ? o.setAttribute('selected', '') : o.removeAttribute('selected'))); // MOCK-HOOK
       else e.setAttribute('value', e.value); // MOCK-HOOK
     }); // MOCK-HOOK
+    document.querySelectorAll('*').forEach((el) => { if (el.scrollTop > 0 || el.scrollLeft > 0) el.setAttribute('data-mk-st', `${el.scrollTop},${el.scrollLeft}`); }); // MOCK-HOOK
+    document.documentElement.setAttribute('data-mk-win', `${window.scrollY},${window.scrollX}`); // MOCK-HOOK
     let css = ''; // MOCK-HOOK
     for (const sh of [...document.styleSheets]) { try { css += [...sh.cssRules].map((r) => r.cssText).join('\n') + '\n'; } catch { /* cross-origin */ } } // MOCK-HOOK
     const fonts = [...new Set([...css.matchAll(/url\(["']?([^"')]+\.(?:woff2?|ttf))["']?\)/g)].map((m) => m[1]))]; // MOCK-HOOK
@@ -63,7 +65,7 @@ async function snap(page: Page, name: string, opts: { dark?: boolean; cost?: str
       if (!fs.existsSync(dest)) { const res = await page.request.get(new URL(f, page.url()).toString()); fs.writeFileSync(dest, await res.body()); } // MOCK-HOOK
       css = css.split(f).join(`../assets/${base}`); // MOCK-HOOK
     } // MOCK-HOOK
-    return { html: r.html.replace('<head>', `<head><meta charset="utf-8"><meta name="mockup-viewport" content="${vp.width}x${vp.height}"><script>(function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)})()</script><style>${css.replace(/<\/style/g, '<\\/style')}</style>`), fonts: r.fonts }; // MOCK-HOOK
+    return { html: r.html.replace('<head>', `<head><meta charset="utf-8"><meta name="mockup-viewport" content="${vp.width}x${vp.height}"><script>(function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);addEventListener('load',function(){document.querySelectorAll('[data-mk-st]').forEach(function(e){var v=e.getAttribute('data-mk-st').split(',');e.scrollTop=+v[0];e.scrollLeft=+v[1]});var w=document.documentElement.getAttribute('data-mk-win').split(',');scrollTo(+w[1],+w[0])})})()</script><style>${css.replace(/<\/style/g, '<\\/style')}</style>`), fonts: r.fonts }; // MOCK-HOOK
   }); // MOCK-HOOK
   void fonts; // MOCK-HOOK
   fs.writeFileSync(path.join(FR, `${name}.html`), '<!doctype html>\n' + html); // MOCK-HOOK
@@ -203,4 +205,13 @@ test('probe', async ({ page }) => { // MOCK-HOOK
   await size(page, 'p'); await page.goto(`/simple/roadmap?wd1=a&item=${id}`); await page.waitForTimeout(4000); // MOCK-HOOK
   await page.screenshot({ path: `${process.env.TMPDIR}/shots/phone.png` }); // MOCK-HOOK
   console.log('ID', id, await page.getByTestId('item-panel').count()); // MOCK-HOOK
+}); // MOCK-HOOK
+
+test('static', async ({ page }) => { // MOCK-HOOK
+  test.skip(!run('static')); // MOCK-HOOK
+  for (const [f, w, h] of [['wd1-a-result', 1440, 900], ['wd2-a-result', 1440, 900], ['wd1-a-phone-390', 390, 844]] as const) { // MOCK-HOOK
+    await page.setViewportSize({ width: w, height: h }); // MOCK-HOOK
+    await page.goto(`http://localhost:3399/frames/${f}.html?theme=dark`); await page.waitForTimeout(800); // MOCK-HOOK
+    await page.screenshot({ path: `${process.env.TMPDIR}/shots/static-${f}.png` }); // MOCK-HOOK
+  } // MOCK-HOOK
 }); // MOCK-HOOK
