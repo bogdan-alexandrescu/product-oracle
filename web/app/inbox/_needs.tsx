@@ -189,12 +189,11 @@ const BASE_COLUMNS: Column<Need>[] = [
         title={n.atTip ?? (n.at ? formatDateTime(n.at) : undefined)}
         data-testid="need-age"
       >
-        {/* inbox-ux (#1786): the age carries its label: a clock, and "Age" for a screen reader. */}
+        {/* inbox-ux (#1786): the age carries its label: a clock named "Age"; the text stays the age. */}
         {ageOf(n.at) && (
-          <>
+          <span role="img" aria-label="Age">
             <Icon name="clock" size={16} className="mr-0.5 inline-block align-[-3px]" />
-            <span className="sr-only">Age </span>
-          </>
+          </span>
         )}
         {ageOf(n.at)}
         {n.left && (

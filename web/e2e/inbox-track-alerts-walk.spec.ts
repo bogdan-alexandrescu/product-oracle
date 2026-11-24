@@ -1,4 +1,3 @@
-
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 
 import { login } from './helpers';

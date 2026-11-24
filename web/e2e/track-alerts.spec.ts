@@ -1,4 +1,3 @@
-
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 
 import { login } from './helpers';
