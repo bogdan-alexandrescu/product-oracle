@@ -1,3 +1,34 @@
+# codes-at-write handoff (PR #1811, fix round 3)
+
+## Write paths that number an item at write (file:line, at this branch)
+- Every flush of a roadmap item: `api/oracle/tenancy.py:144` calls `codes.check_flush`
+  (`api/oracle/roadmap/codes.py:281`); Priorities add relies on it (`api/oracle/simple/targets.py:837`).
+- Link (merge_item with feature_id): `api/oracle/simple/changes.py:1414` (`_number_linked`, :1464), audited at
+  :1510 (`codes.numbered`, `api/oracle/roadmap/codes.py:538`); the response's `change.numbered` at
+  `api/oracle/simple/changes_router.py:157`.
+- Restore: `api/oracle/trash/service.py:908` (`trash_items.coming_back`, `api/oracle/simple/trash_items.py:409`)
+  then :916 (`codes.claim`, `api/oracle/roadmap/codes.py:352`); `_codes_free` (trash_items.py:420) refuses only a
+  typed title code.
+- The mock's twins: link in `web/lib/api/mock/simple-changes.ts` (planS7, merge_item with feature_id; applyS7;
+  createS7's `numbered`), restore in `web/lib/api/mock/trash.ts` (restoreFromTrash -> `claimBack`) and
+  `web/lib/api/mock/simple-roadmap.ts` (`nextCode`, `claimBack`); `restoreCodeTaken` refuses only a typed code.
+
+## Part 3's choice
+- "part" goes away as a code source: a copy of an item (a version row, a working draft) keeps its code through
+  `copied_from` / `_held` in `api/oracle/roadmap/codes.py`, so no separate rule for parts is needed.
+
+## This round (re-review NOT_YET, one major)
+- Major fixed: the mock numbers on Merge into a feature and on Restore, as the API. Red specs first
+  (`web/e2e/codes-at-write.spec.ts`, two tests on the new "codes-at-write" mock scenario), then the fix.
+  The mock's look-alikes may now name a Ground Truth feature by id (kind "feature"), as additions.reconcile.
+- Minor fixed: `api/tests/test_stale_settled_on_approval.py::test_approving_a_version_settles_what_it_keeps`
+  reads the kept note's day in the company's time zone (`company_time.day_in_words`), so it passes after
+  midnight UTC. Its sibling `test_the_migration_settles_todays_flags` keeps the UTC day: the migration writes it.
+- Minors handoff (write paths, Part 3): this section.
+- Minors left (not one-line or test-only): Restore's response does not carry the new code (the page reads it on
+  its next roadmap read); a commenter's link fixes its number at proposal time; the lock test's
+  `asyncio.sleep(0.3)` in `api/tests/test_codes_at_write.py`.
+
 # prioritize handoff (owner's Nov 23 order: prioritize in place)
 
 Built on d62c215d5 (the direct-edit merge below). Parts 1 to 3 are built; part 4 is NOT built.
