@@ -254,7 +254,7 @@
             },
             {
               "file": "ut2-b-hard.html",
-              "caption": "A commenter sets the status: a plain toast says it waits for Avery Stone; no way back from the toast"
+              "caption": "A commenter sets the status: a plain toast says it waits for Avery Stone and to withdraw it in Needs a decision; no button on the toast"
             },
             {
               "file": "ut2-b-hard-1512.html",
@@ -292,7 +292,7 @@
             },
             {
               "file": "ut2-c-hard.html",
-              "caption": "A commenter's proposal: the toast offers Undo, though nothing changed on the roadmap yet"
+              "caption": "A commenter's proposal: the toast offers Undo, which withdraws the proposal; the panel still reads Planned, as nothing changed yet"
             },
             {
               "file": "ut2-c-hard-1512.html",
@@ -330,7 +330,7 @@
             },
             {
               "file": "ut2-d-hard.html",
-              "caption": "A commenter's proposal: a plain toast"
+              "caption": "A commenter's proposal: a plain toast says it waits for Avery Stone and to withdraw it in Needs a decision"
             },
             {
               "file": "ut2-d-hard-1512.html",

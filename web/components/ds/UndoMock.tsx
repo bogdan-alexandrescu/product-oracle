@@ -307,6 +307,10 @@ export function mkUt2( // MOCK-HOOK
     push({ message, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
+  if ((mk === 'b' || mk === 'd') && !applied) { // MOCK-HOOK: no button, but it says where to take it back
+    push({ message: `${message} · Withdraw it there` }); // MOCK-HOOK
+    return true; // MOCK-HOOK
+  } // MOCK-HOOK
   if (mk === 'd' && !small && applied) { // MOCK-HOOK
     push({ message }); // MOCK-HOOK
     return true; // MOCK-HOOK

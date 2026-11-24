@@ -22,6 +22,8 @@ const FOCUS: Record<string, string> = {
   'ut3-a-mid': '[data-mk-history] li button',
   'ut3-b-mid': '[aria-label="Your changes today"] button',
 };
+const SAY = 'Status changed proposed: it waits for Avery Stone in Needs a decision'; // UT2 b and d: the commenter's toast says where to take it back
+const TEXT: Record<string, string> = Object.fromEntries(['ut2-b-hard', 'ut2-b-hard-1512', 'ut2-d-hard', 'ut2-d-hard-1512'].map((n) => [n, SAY]));
 const SHOW: Record<string, string> = { // scroll what the caption names into the frame
   'ut3-a-rest': '[data-mk-history]',
   'ut3-a-open': '[data-mk-history]',
@@ -29,14 +31,19 @@ const SHOW: Record<string, string> = { // scroll what the caption names into the
   'ut3-a-mid': '[data-mk-history]',
   'ut3-c-rest': 'TOP',
 };
-for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(COST), ...Object.keys(FOCUS)])])
+for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(TEXT), ...Object.keys(COST), ...Object.keys(FOCUS)])])
   test(n, async ({ page }) => {
     const file = path.join(OUT, n + '.html');
     const [w, h] = (fs.readFileSync(file, 'utf8').match(/mockup-viewport" content="(\d+)x(\d+)"/) ?? ['', '1440', '900']).slice(1).map(Number);
     await page.setViewportSize({ width: w, height: h });
     await page.goto('file://' + file);
     await page.waitForTimeout(700);
-    const ok = await page.evaluate(({ cost, focus, show }) => {
+    const ok = await page.evaluate(({ cost, focus, show, say }) => {
+      if (say) {
+        const sp = [...document.querySelectorAll('[data-mk-line] span')].find((e) => e.textContent === say);
+        if (!sp) return false;
+        sp.textContent = say + ' · Withdraw it there';
+      }
       if (show === 'TOP') { scrollTo(0, 0); document.documentElement.setAttribute('data-mk-win', '0,0'); }
       else if (show) {
         const el = document.querySelector(show);
@@ -60,7 +67,7 @@ for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(COST), ...Obje
         b.style.outlineOffset = '2px';
       }
       return true;
-    }, { cost: COST[n], focus: FOCUS[n], show: SHOW[n] });
+    }, { cost: COST[n], focus: FOCUS[n], show: SHOW[n], say: TEXT[n] });
     if (!ok) throw new Error('no button in ' + n);
     await page.screenshot({ path: path.join(OUT, n + '.png') });
     fs.writeFileSync(file, '<!DOCTYPE html>\n' + (await page.evaluate(() => document.documentElement.outerHTML)));
