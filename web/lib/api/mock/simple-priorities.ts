@@ -937,11 +937,12 @@ export function prioritiesOut(
   });
   const line = pickLine(lineKey, lines, same);
   const readItems = new Map(read.items.map((i) => [i.id, i]));
-  // prio-ux (#1739, priorities.plan_quarter / above): "this quarter" with a plan is its PRD's items in its span, else
-  // the Now horizon's; the Now line and the goal buckets read it alike.
-  const span = read.span;
+  // prio-ux (#1739, priorities.plan_quarter / above): "this quarter" is the Now horizon's items (their dates put
+  // them in Now) and, with a dated plan, its PRD's items in its span; the Now line and the goal buckets read it alike.
+  const span = planOf(db, read, ctx.role) ? read.span : null;
   const thisQuarter = (id: string, horizon: string | null | undefined): boolean => {
-    if (!span) return horizon === 'now';
+    if (horizon === 'now') return true;
+    if (!span) return false;
     const x = readItems.get(id);
     return (
       !!x?.start.date &&

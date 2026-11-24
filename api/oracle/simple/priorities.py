@@ -105,18 +105,22 @@ async def plan_quarter(
 ) -> tuple[SimpleQuarter, set[uuid.UUID] | None]:
     """plan-model: "this quarter" is the plan's span (the plan running today, else the next
     to start) of the PRDs on the roadmap; the calendar quarter only with no dated plan.
-    With the plan's span, also the items it places in that span (a slice overlapping it);
-    None: the calendar quarter, whose items are the Now horizon's."""
+    With the plan's span, also the items in it: the Now horizon's and those the plan places
+    in that span (a slice overlapping it); None: the calendar quarter, whose items are the
+    Now horizon's."""
     from oracle.simple import plan
 
     views = await plan.views(db, {e.prd.id for e in read_.entries if e.prd})
     span = plan.current_span(list(views.values()), read_.today)
     if span is None:
         return quarter(read_.today), None
+    # prio-ux (#1739): what the dates put in Now is this quarter too, so a feature a person
+    # dates into it on the Roadmap makes the line and its bucket beside the plan's own.
     inside = {
         e.row.id
         for e in read_.entries
-        if e.prd is not None
+        if e.horizon == "now"
+        or e.prd is not None
         and e.prd.id in views
         and any(
             x.start_date is not None
@@ -595,7 +599,7 @@ def _buckets(
     inside: set[uuid.UUID] | None = None,
     order: dict[str, int] | None = None,
 ) -> tuple[list[SimpleGoalBucket], float]:
-    """Engineer-weeks per goal this quarter: the plan's items in its span (``inside``), else
+    """Engineer-weeks per goal this quarter: ``inside`` (plan_quarter), else
     the Now horizon's. Goals come in the one goal order (``order``: goal key -> place),
     "No goal" last."""
     goals: dict[str, SimpleGoalBucket] = {}
@@ -765,8 +769,8 @@ def pick_line(
 
 def above(e: service.Entry | None, line: SimpleLine, inside: set[uuid.UUID] | None = None) -> bool:
     """Whether ``e`` makes ``line``. The Now line is "this quarter" as the goal buckets count
-    it (prio-ux #1739: one rule for the three tabs): the plan's items in its span
-    (``inside``), else the Now horizon's."""
+    it (prio-ux #1739: one rule for the three tabs): ``inside`` (the Now horizon's and the
+    plan's items in its span), else the Now horizon's."""
     if e is None:
         return False
     if line.date is None:
