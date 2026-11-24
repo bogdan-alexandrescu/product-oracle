@@ -1,8 +1,8 @@
 'use client';
 
 import { Outlet, createFileRoute } from '@tanstack/react-router';
-import { usePathname } from '@/lib/nav';
-import { Suspense, useEffect, useRef, type ReactNode } from 'react';
+import { usePathname, useSearchParams } from '@/lib/nav';
+import { Suspense, lazy, useEffect, useRef, type ReactNode } from 'react';
 
 import { HomeSkeleton } from '@/app/simple/_home/skeleton';
 import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
@@ -17,8 +17,14 @@ import { warmSimple } from './roadmap/_warm';
  * Home draws its frame and skeleton until then (#723 production walk: no blank first paint),
  * the other pages a page skeleton (qa-shell-20), and Home's queries start only once Simple is
  * on; nothing once Simple is known to be off. A discussion link (`?discussion=`, the Inbox's
- * Review changes) opens its thread on any Simple page (ask-phone QA row 3).
+ * Review changes) opens its thread on any Simple page (ask-phone QA row 3); a feature link
+ * (`?feature=`) opens its panel (#1796).
  */
+// Read only when a page's address names a feature, so no other page loads the panel for it.
+const LinkedFeature = lazy(() =>
+  import('./roadmap/_panel').then((m) => ({ default: m.LinkedFeature })),
+);
+
 function SimpleLayout() {
   // The pathname is read on the client only (a prerender draws nothing, as before).
   return (
@@ -35,6 +41,7 @@ function Gate({ children }: { children: ReactNode }) {
   const { me, loading, capsReady, simpleMode } = useMe();
   const pathname = usePathname();
   const home = pathname === SIMPLE_HOME;
+  const linked = !!useSearchParams().get('feature');
   // simple-speed: once, and only while who is signed in is not known yet (a cold load).
   const cold = useRef(loading);
   useEffect(() => {
@@ -45,6 +52,11 @@ function Gate({ children }: { children: ReactNode }) {
       <>
         {children}
         <LinkedDiscussion />
+        {linked && (
+          <Suspense fallback={null}>
+            <LinkedFeature />
+          </Suspense>
+        )}
       </>
     );
   if (me && capsReady && !simpleMode) return null;

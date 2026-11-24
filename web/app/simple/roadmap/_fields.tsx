@@ -22,6 +22,7 @@ import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 import {
   confidenceWord,
   datesFrom,
+  codedMilestone,
   goalMilestoneWords,
   milestoneWords,
   nextQuarter,
@@ -262,11 +263,9 @@ function milestoneShown(
     const own =
       planned.find((m) => m.item_ids.includes(item.id) && m.name === name) ??
       planned.find((m) => m.name === name);
-    return milestoneWords(
-      own?.roadmap_code && !name.startsWith(own.roadmap_code)
-        ? `${own.roadmap_code} ${name}`
-        : name,
-    );
+    return own?.roadmap_code && !name.startsWith(own.roadmap_code)
+      ? codedMilestone(own.roadmap_code, name)
+      : milestoneWords(name);
   }
   return served ?? '';
 }
@@ -953,6 +952,8 @@ export function PanelFields({
                   <button
                     type="button"
                     className={REMOVE}
+                    // panel-ux #1755: the bare × says what it does on hover; Undo is in its note.
+                    title="Remove link"
                     aria-label={`Remove ${d.title} from what it depends on`}
                     onClick={() =>
                       void change(
@@ -981,6 +982,8 @@ export function PanelFields({
                   <button
                     type="button"
                     className={REMOVE}
+                    // panel-ux #1755: the bare × says what it does on hover; Undo is in its note.
+                    title="Remove link"
                     aria-label={`Remove ${found?.title ?? k} from what it depends on`}
                     onClick={() =>
                       void change(
@@ -1067,6 +1070,8 @@ export function PanelFields({
                       <button
                         type="button"
                         className={REMOVE}
+                        // panel-ux #1755: the bare × says what it does on hover; Undo is in its note.
+                        title="Remove link"
                         aria-label={`Remove ${i.title} from what needs it`}
                         onClick={() =>
                           void change(

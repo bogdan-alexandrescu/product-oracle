@@ -38,6 +38,7 @@ import { errorMessage } from '@/lib/use-query';
 import { HORIZONS, type Horizon } from './_board';
 import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
+import { featureHref, useFeatureUrl, useOutsideClose } from './_link';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
 import {
@@ -991,6 +992,10 @@ export function FloatingCard({
   // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
   const about = item.title;
   const ref = useRef<HTMLDivElement>(null);
+  // panel-ux #1796: the address names the shown feature; Back closes it.
+  useFeatureUrl(item, onClose);
+  // panel-ux #1747: a side panel (it dims nothing) closes on a click in the page's empty space.
+  useOutsideClose(ref, onClose, !phone && style.position === 'relative' && !flowOpen);
   // home-waiting-one-list: the card opened from a waiting row (?item=): scroll its fix into view.
   useEffect(() => {
     if (focus) ref.current?.querySelector('[data-waits]')?.scrollIntoView({ block: 'center' });
@@ -1147,6 +1152,14 @@ export function FloatingCard({
         after: { status: 'planned' },
       },
     );
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(featureHref(item));
+      cornerToast({ message: 'Link copied' });
+    } catch {
+      cornerToast({ message: 'Oracle could not copy the link' });
+    }
+  };
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
@@ -1199,28 +1212,31 @@ export function FloatingCard({
           Hide the talk
         </button>
       )}
-      {canChange && (
-        <div className="relative flex-none">
-          <button
-            type="button"
-            aria-label="More actions"
-            aria-expanded={menu}
-            onClick={() => setMenu(!menu)}
-            className="grid h-7 w-7 place-items-center rounded-md text-text2 hover:bg-surface2"
+      <div className="relative flex-none">
+        <button
+          type="button"
+          aria-label="More actions"
+          aria-expanded={menu}
+          onClick={() => setMenu(!menu)}
+          className="grid h-7 w-7 place-items-center rounded-md text-text2 hover:bg-surface2"
+        >
+          ⋯
+        </button>
+        {menu && (
+          <div
+            role="menu"
+            className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip"
           >
-            ⋯
-          </button>
-          {menu && (
-            <div
-              role="menu"
-              className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip"
-            >
-              {menuItem('Rename', () => setRenaming(true))}
-              {/* A cut feature stays a part, and can still be taken out (or put under another). */}
-              {item.status !== 'merged' && menuItem('Part of…', () => setPick('parent'))}
-              {!closedItem(item) && menuItem('Merge into…', () => setPick('merge'))}
-              {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
-              {item.status === 'cut'
+            {/* panel-ux #1796: the address that opens this panel, for anyone who reads it. */}
+            {menuItem('Copy link', () => void copyLink())}
+            {canChange && menuItem('Rename', () => setRenaming(true))}
+            {/* A cut feature stays a part, and can still be taken out (or put under another). */}
+            {canChange && item.status !== 'merged' && menuItem('Part of…', () => setPick('parent'))}
+            {canChange && !closedItem(item) && menuItem('Merge into…', () => setPick('merge'))}
+            {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
+            {!canChange
+              ? null
+              : item.status === 'cut'
                 ? menuItem(
                     item.can_decide ? 'Restore to the roadmap' : 'Propose: restore',
                     () => void restore(),
@@ -1230,9 +1246,10 @@ export function FloatingCard({
                     item.can_decide ? 'Cut from the roadmap' : 'Propose: cut',
                     () => void cutIt(),
                   )}
-              {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
-              {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
-              {menuItem(
+            {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
+            {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
+            {canChange &&
+              menuItem(
                 item.can_decide ? 'Move to Trash' : 'Propose: move to Trash…',
                 () =>
                   void remove({
@@ -1246,10 +1263,9 @@ export function FloatingCard({
                   }),
                 true,
               )}
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
       <button
         type="button"
         aria-label="Close"
@@ -1784,10 +1800,16 @@ export function FloatingCard({
           </>
         ) : (
           <>
-            <div className="flex-none px-4 pt-4">{head}</div>
+            {/* panel-ux #1754: the details scroll under a ruled head, never into its last line. */}
+            <div
+              data-testid="card-head"
+              className="flex-none border-b border-line px-4 pt-4 pb-2.5"
+            >
+              {head}
+            </div>
             <div
               data-fit-body=""
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4"
             >
               {details}
             </div>
