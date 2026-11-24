@@ -664,8 +664,9 @@ function Preview({ b, max: cap, grow }: { b: Bulk; max: number; grow?: boolean }
               {k === 'none' ? (
                 <ul>
                   {rs.map((r) => (
-                    <li key={r.feature_id} className="py-1 text-text2 text-balance" /* MOCK-HOOK: no lone last word */>
-                      {bulkTitle(b, r)} · {BULK_WHY[r.title] ?? 'Read only'}
+                    <li key={r.feature_id} className="py-1 text-text2" /* MOCK-HOOK: the reason on its own line, no lone word */>
+                      <span className="block text-text">{bulkTitle(b, r)}</span>
+                      <span className="block text-balance">{BULK_WHY[r.title] ?? 'Read only'}</span>
                     </li>
                   ))}
                 </ul>
