@@ -1002,9 +1002,6 @@
   "app/oauth/consent/ConsentScreen.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 2
-    },
-    "import-x/order": {
-      "count": 4
     }
   },
   "app/page.tsx": {
@@ -1682,9 +1679,6 @@
   "app/settings/connections/ConnectionsSettings.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 5
-    },
-    "import-x/order": {
-      "count": 2
     },
     "max-lines": {
       "count": 1
@@ -2715,13 +2709,10 @@
   },
   "components/MyAccount.tsx": {
     "@typescript-eslint/no-misused-promises": {
-      "count": 8
+      "count": 7
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 8
     },
     "max-lines": {
       "count": 1
@@ -3115,9 +3106,6 @@
     },
     "import-x/no-cycle": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 11
     },
     "max-lines": {
       "count": 1
@@ -8766,9 +8754,6 @@
     }
   },
   "lib/api/mock/account.ts": {
-    "import-x/order": {
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "count": 1
     }

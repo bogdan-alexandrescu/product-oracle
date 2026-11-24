@@ -66,9 +66,11 @@ function CopyChip({ text, testId }: { text: string; testId?: string }) {
       <Button
         icon={copied ? 'check' : undefined}
         variant={copied ? 'solid' : 'secondary'}
-        onClick={async () => {
-          await navigator.clipboard?.writeText(text).catch(() => undefined);
-          setCopied(true);
+        onClick={() => {
+          void navigator.clipboard
+            ?.writeText(text)
+            .catch(() => undefined)
+            .then(() => setCopied(true));
         }}
       >
         {copied ? 'Copied' : 'Copy'}

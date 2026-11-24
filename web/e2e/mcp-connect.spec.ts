@@ -1,6 +1,5 @@
-import { expect, test, type Page } from './test';
-
 import { ADMIN, login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 // Owner's order (Nov 23): connecting an AI tool over MCP, from the app.
 const ADDRESS = 'https://oracle.example.com/mcp';

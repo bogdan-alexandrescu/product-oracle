@@ -146,7 +146,7 @@ export function ConnectedClients({ query, tokens }: { query: ClientsQuery; token
         pending={revoking}
         error={error}
         onClose={() => setConfirming(null)}
-        onConfirm={() => confirming && revoke(confirming)}
+        onConfirm={() => void (confirming && revoke(confirming))}
         consequences={[
           { icon: 'lock', text: 'It stops working at once.' },
           { icon: 'link', text: 'To use it again, connect it again.' },
