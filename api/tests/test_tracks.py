@@ -210,19 +210,23 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     assert resp.status_code == 201
 
 
-async def test_schedule_bases_list_in_the_order_they_were_recorded(client, owner):  # noqa: F811
-    """Schedule bases list in the order they were recorded, not by today's date."""
-    # sched-order: one order whatever today is (it was supports_date then reference, so a
-    # basis dated today + n swapped places with ENG-412's fixed Nov 30 as the days went by).
+async def test_schedule_bases_list_in_date_order(client, owner):  # noqa: F811
+    """#1717: schedule bases list by the date they support, then reference: never in uuid
+    order, as bases written in one transaction share their created time."""
+    # protects=#1717 Plan > Dates (which does not sort) is in date order;
+    # fails_when=the list is in recording (created_at, uuid) order; no_claim=ENG-412's fixed day.
     _, auth = owner
     await approved_prd(client, auth)
-    for reference, days in (("Zeta plan", 60), ("Alpha plan", 3)):
+    for reference, days in (("Zeta plan", 60), ("Beta plan", 3), ("Alpha plan", 3)):
         day = (TODAY + timedelta(days=days)).isoformat()
         body = {"kind": "commitment", "reference": reference, "supports_date": day, "prd": PRD}
         resp = await client.post("/v1/schedule-bases", json=body, headers=auth)
         assert resp.status_code == 201, resp.text
     listed = (await client.get("/v1/schedule-bases", params={"prd": PRD}, headers=auth)).json()
-    assert [b["reference"] for b in listed] == ["ENG-412", "Zeta plan", "Alpha plan"]
+    ours = [b["reference"] for b in listed if b["reference"] != "ENG-412"]
+    assert ours == ["Alpha plan", "Beta plan", "Zeta plan"]
+    days = [b["supports_date"] for b in listed]
+    assert days == sorted(days)
 
 
 async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F811
