@@ -20,7 +20,7 @@ UT1 b/c open, UT1 a phone, the whole UT1 d story (strip now in the page flow und
 wraps on phone; count leaves out Undone lines), UT3 b hard, hard-1512, phone (a commenter's list says Withdraw).
 
 ## Findings left open (not done in this round's time)
-- UT1 a/d result frames still change only the toast, not the page; the draft banner count does not follow the toasts.
+- (Done: UT1 starts from a real change; the draft banner counts the quick changes too, so after Undo both read 2. Re-snapped UT1 a story, b/c open, all UT1 hard and dark frames.)
 - (Done: the UT2 and UT3 a/c 1512 frames were re-laid from their static frames in a real 1512x945 window, `web/mk-snap/wide.spec.ts`.)
 - UT2 commenter frames (b, c, d hard; phone frames on the commenter), UT3 b/c phone on the panel.
 - Drawn-twice items (Restore bar beside the toast's Undo; UT3 a History beside Decided/Proposals; draft Undo vs toast Undo).

@@ -167,7 +167,7 @@ import {
   warmRoadmapPage,
 } from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
-import { mkUt2 } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { mkUt2, useMkExtra } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import { withdraw as mkWithdraw } from './_tracks'; // MOCK-HOOK
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -795,6 +795,7 @@ function DraftBanner({
   const [open, setOpen] = useState(false);
   const byPrd = byPrdOrderOf(usePrdOrder());
   // Review: Home's "Open draft to approve" (?draft=<id>) lands on that draft: in sight, its button focused, once.
+  const mkExtra = useMkExtra(); // MOCK-HOOK
   const focused = useRef(false);
   const onFocus = useCallback((el: HTMLElement | null) => {
     if (!el || focused.current) return;
@@ -817,7 +818,7 @@ function DraftBanner({
       </Notice>
     );
   }
-  const changes = working.reduce((n, d) => n + d.changes, 0);
+  const changes = working.reduce((n, d) => n + d.changes, 0) + mkExtra; // MOCK-HOOK: the mock-ups' quick changes count too
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);

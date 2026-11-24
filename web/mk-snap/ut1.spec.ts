@@ -10,6 +10,12 @@ const MORE = [
   ['Moved F-70 Alert rules engine from Jan 5 – Feb 20 to Feb 2 – Mar 20', 'Undo'],
   ['Cut F-64 In-app tour from the roadmap', 'Undo'],
 ];
+async function real(page: Page) { // the one real change: the broken link's Remove the dependency
+  await page.getByRole('button', { name: 'Remove the dependency' }).first().click();
+  await page.locator('[data-testid="draft-count"]').waitFor();
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForTimeout(800);
+}
 const push = (page: Page, list: string[][]) =>
   page.evaluate((l) => l.forEach(([m, b]) => (window as unknown as { __mk: { push: (m: string, b: string) => void } }).__mk.push(m, b)), list);
 
@@ -25,34 +31,37 @@ for (const v of ['a', 'b', 'c', 'd']) {
     if (v === 'd' && !sfx) continue; // d's hard frame is in its story
     test(`ut1 ${v} hard${sfx}`, async ({ page }) => {
       await open(page, `ut1=${v}${v === 'c' ? '&open=1' : ''}`, w, h);
-      await push(page, [A, B, C, ...MORE]);
+      await real(page);
+      await push(page, [B, C, ...MORE]);
       await snap(page, `ut1-${v}-hard${sfx}`);
     });
   }
   if (v === 'b' || v === 'c')
     test(`ut1 ${v} open`, async ({ page }) => {
       await open(page, `ut1=${v}${v === 'c' ? '&open=1' : ''}`);
-      await push(page, [A, B, C]);
+      await real(page);
+    await push(page, [B, C]);
       await snap(page, `ut1-${v}-open`);
     });
   test(`ut1 ${v} dark`, async ({ page }) => {
     await open(page, `ut1=${v}${v === 'b' || v === 'c' ? '&open=1' : ''}`);
     await theme(page, 'dark');
     await page.waitForTimeout(800);
-    await push(page, [A, B, C]);
+    await real(page);
+    await push(page, [B, C]);
     await snap(page, `ut1-${v}-open-dark`);
   });
 }
 
 test('ut1 a phone', async ({ page }) => {
   await open(page, 'ut1=a', 390, 844);
-  await push(page, [A]);
+  await real(page);
   await snap(page, 'ut1-a-phone-390');
 });
 
 test('ut1 d story', async ({ page }) => {
   await open(page, 'ut1=d');
-  await push(page, [A]);
+  await real(page);
   await snap(page, 'ut1-d-rest');
   await push(page, [B, C]);
   await snap(page, 'ut1-d-open');
@@ -67,7 +76,8 @@ test('ut1 d story', async ({ page }) => {
 
 test('ut1 d phone', async ({ page }) => {
   await open(page, 'ut1=d', 390, 844);
-  await push(page, [A, B, C]);
+  await real(page);
+    await push(page, [B, C]);
   await snap(page, 'ut1-d-phone-390');
 });
 
@@ -84,3 +94,16 @@ for (const [name, w, h, q] of [
     await snap(page, name);
   });
 }
+
+test('ut1 a story', async ({ page }) => {
+  await open(page, 'ut1=a');
+  await real(page);
+  await snap(page, 'ut1-a-rest');
+  await push(page, [B, C]);
+  await snap(page, 'ut1-a-open');
+  await page.keyboard.press('Shift');
+  await page.locator('[data-mk-line] button', { hasText: 'Undo' }).last().focus();
+  await snap(page, 'ut1-a-mid');
+  await page.keyboard.press('Enter');
+  await snap(page, 'ut1-a-result');
+});

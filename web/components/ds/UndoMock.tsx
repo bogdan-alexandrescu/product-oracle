@@ -18,23 +18,29 @@ export const mkParam = (k: string) => q().get(k); // MOCK-HOOK
 export const mkOn = () => !!(mkParam('ut1') || mkParam('ut2') || mkParam('ut3')); // MOCK-HOOK
 const ut1 = () => mkParam('ut1') ?? 'c'; // MOCK-HOOK: UT2 and UT3 frames draw the toast the recommended way
 
-type Entry = ToastAsk & { id: number; at: number; done?: 'undone'; kind?: 'tick'; anchor?: string; who?: string }; // MOCK-HOOK
+type Entry = ToastAsk & { id: number; at: number; done?: 'undone'; kind?: 'tick'; anchor?: string; who?: string; quick?: boolean }; // MOCK-HOOK
 let log: Entry[] = []; // MOCK-HOOK
 let seq = 0; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK
 const emit = () => subs.forEach((f) => f()); // MOCK-HOOK
-export function mkPush(ask: ToastAsk & { kind?: 'tick'; anchor?: string }) { // MOCK-HOOK
+export function mkPush(ask: ToastAsk & { kind?: 'tick'; anchor?: string; quick?: boolean }) { // MOCK-HOOK
   log = [...log, { ...ask, id: ++seq, at: Date.now() }]; // MOCK-HOOK
   emit(); // MOCK-HOOK
 } // MOCK-HOOK
 if (typeof window !== 'undefined') // MOCK-HOOK
   (window as unknown as { __mk: unknown }).__mk = { // MOCK-HOOK
     push: (m: string, label?: string, kind?: 'tick', anchor?: string) => // MOCK-HOOK
-      mkPush({ message: m, kind, anchor, action: label ? { label, onClick: () => mkPush({ message: `Undone: ${m.replace(/^\S+/, (w) => w.toLowerCase())}` }) } : undefined }), // MOCK-HOOK
+      mkPush({ message: m, kind, anchor, quick: !!label, action: label ? { label, onClick: () => mkPush({ message: `Undone: ${m.replace(/^\S+/, (w) => w.toLowerCase())}` }) } : undefined }), // MOCK-HOOK
     clear: () => ((log = []), emit()), // MOCK-HOOK
   }; // MOCK-HOOK
 
 const LIFE = 8000; // MOCK-HOOK
+/** The mock-ups' quick changes still in the draft, so the working draft banner counts them. */ // MOCK-HOOK
+export function useMkExtra() { // MOCK-HOOK
+  const [, set] = useState(0); // MOCK-HOOK
+  useEffect(() => { const f = () => set((n) => n + 1); subs.add(f); return () => void subs.delete(f); }, []); // MOCK-HOOK
+  return log.filter((e) => e.quick && !e.done).length; // MOCK-HOOK
+} // MOCK-HOOK
 function stripSlot() { // MOCK-HOOK: UT1 d's place, right after the page's title row
   const h = document.querySelector('main header'); // MOCK-HOOK
   if (!h) return null; // MOCK-HOOK

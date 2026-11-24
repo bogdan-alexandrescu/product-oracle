@@ -18,11 +18,11 @@
           "frames": [
             {
               "file": "ut1-a-rest.html",
-              "caption": "One real change: the dependency of Welcome video on In-app tour is removed; the toast shows it with Undo and Ctrl Z, the bar shows time left"
+              "caption": "One real change: the dependency of Welcome video on In-app tour is removed; the toast shows it with Undo and Ctrl Z, the draft counts 1 change"
             },
             {
               "file": "ut1-a-open.html",
-              "caption": "Two more changes come fast: the newest replaces the toast; the first change can no longer be undone here"
+              "caption": "Two more changes come fast: the newest replaces the toast and the draft counts 3; the first change can no longer be undone here"
             },
             {
               "file": "ut1-a-open-dark.html",
@@ -30,11 +30,11 @@
             },
             {
               "file": "ut1-a-mid.html",
-              "caption": "Undo has the keyboard focus; Ctrl Z would do the same"
+              "caption": "Undo has the keyboard focus (its focus ring); Ctrl Z would do the same"
             },
             {
               "file": "ut1-a-result.html",
-              "caption": "Undo pressed: the newest change is taken back and the toast says Undone. Cost: 1 click; the earlier ones are gone"
+              "caption": "Undo pressed: the move of F-131 is taken back, the draft now counts 2 changes and the toast says Undone. Cost: 1 click; the earlier ones are gone"
             },
             {
               "file": "ut1-a-hard.html",
@@ -145,11 +145,11 @@
           "frames": [
             {
               "file": "ut1-d-rest.html",
-              "caption": "One change: the strip appears under the title and the view switch, with Undo"
+              "caption": "One real change: the dependency of Welcome video on In-app tour is removed; the strip appears under the title and the view switch, with Undo"
             },
             {
               "file": "ut1-d-open.html",
-              "caption": "Three changes: the strip shows the newest and '3 changes on this page'"
+              "caption": "Two more changes: the strip shows the newest and '3 changes on this page'; the draft counts 3"
             },
             {
               "file": "ut1-d-open-dark.html",
@@ -161,7 +161,7 @@
             },
             {
               "file": "ut1-d-result.html",
-              "caption": "Undo pressed: the strip says Undone and now counts 2 changes on this page. Cost: 1 click"
+              "caption": "Undo pressed: the move is taken back; the strip says Undone and the strip and the draft both count 2. Cost: 1 click"
             },
             {
               "file": "ut1-d-hard.html",
