@@ -71,7 +71,7 @@ export function BoardBar({ bp }: { bp: BoardPick | null }) {
     <style>{'tr[data-bulk-picked="true"] > td { background: var(--color-accent-soft); }'}</style>
     <div
       data-testid="bulk-bar"
-      className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg max-sm:grid max-sm:grid-cols-4 max-sm:px-3 md:left-[calc(240px+1rem)]"
+      className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg max-sm:grid max-sm:grid-cols-4 max-sm:px-3 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] md:left-[calc(240px+1rem)]"
     >
       <span className="font-semibold max-sm:col-span-2">{bp.picked.size} picked</span>
       <button type="button" className="text-accent underline max-sm:col-span-2 max-sm:text-right" onClick={bp.clear}>

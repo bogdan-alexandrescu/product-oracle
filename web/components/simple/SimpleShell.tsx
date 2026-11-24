@@ -376,6 +376,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
   const pathname = usePathname();
   const router = useRouter();
   const { me, role, capsReady, capsError, simpleMode } = useMe();
+  const mkCommenter = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'commenter' && !!new URLSearchParams(window.location.search).get('be3'); // MOCK-HOOK
   const read = useSimpleCounts(!!me);
   const counts = read?.counts ?? null;
   // counts-wait review: a count missing a part whose read failed shows the could-not-load mark (no number) or says it.
@@ -571,9 +572,9 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
               className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? 'truncate text-xs' : 'text-base [overflow-wrap:break-word]'}`}
             >
               {/* qa4-simple-home-20: an email stays on one line, a size smaller so a short one shows whole; a long one is cut with an ellipsis (whole in its tooltip). */}
-              {personLine(me)}
+              {mkCommenter ? 'Mei Arden' /* MOCK-HOOK */ : personLine(me)}
             </span>
-            <span className="text-sm text-rail-text capitalize">{role ?? ''}</span>
+            <span className="text-sm text-rail-text capitalize">{mkCommenter ? 'Commenter' /* MOCK-HOOK */ : (role ?? '')}</span>
           </span>
         </div>
       </nav>

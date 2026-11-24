@@ -6,7 +6,7 @@
 // Never merged: the owner picks one proposal per decision from the frames.
 'use client';
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { useSearchParams } from '@/lib/nav';
 import { InfoTip, toast } from '@/components/ds';
@@ -24,7 +24,7 @@ import {
 
 type R = { feature_id: string; title: string; rank: number; own_key?: string | null; end_date?: string | null };
 type Field = 'owner' | 'status' | 'dates' | 'track';
-type Draft = { owner?: string; status?: string; shift?: number; track?: string };
+type Draft = { owner?: string; status?: string; shift?: number; end?: string; track?: string };
 type Right = 'edit' | 'propose' | 'none';
 type Result = { changed: string[]; proposed: string[]; skipped: string[]; words: string };
 
@@ -54,6 +54,9 @@ type Bulk = {
   long: boolean;
   shown: string | null;
   setShown: (s: string | null) => void;
+  open2: Field | null;
+  setOpen2: (f: Field | null) => void;
+  commenter: boolean;
 };
 
 const Ctx = createContext<Bulk | null>(null);
@@ -75,6 +78,32 @@ const statusOf = (r: R) => MARK_WORD[marksNow?.get(r.feature_id)?.mark ?? ''] ??
 const ownerOf = (r: R) => BULK_OWNER[r.title] ?? '';
 
 export const BulkCtx = Ctx;
+
+// A status set in bulk shows in the product's own pill and in the Show counts.
+const WORD_MARK: Record<string, string> = { New: 'new', 'In progress': 'in_progress', Exists: 'exists' };
+let over: Record<string, string> = {};
+const subs = new Set<() => void>();
+function setOver(o: Record<string, string>) {
+  over = o;
+  subs.forEach((f) => f());
+}
+export function useBulkMarks<T extends { mark: string }>(m: Map<string, T> | null): Map<string, T> | null {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const f = () => force((x) => x + 1);
+    subs.add(f);
+    return () => {
+      subs.delete(f);
+    };
+  }, []);
+  if (!m || !Object.keys(over).length) return m;
+  const n = new Map(m);
+  for (const [id, w] of Object.entries(over)) {
+    const f = n.get(id);
+    if (f) n.set(id, { ...f, mark: w });
+  }
+  return n;
+}
 
 export function useBulkState(rows: R[]): Bulk | null {
   const p = useSearchParams();
@@ -101,6 +130,7 @@ export function useBulkState(rows: R[]): Bulk | null {
   const [applied, setApplied] = useState<Record<string, Draft & { proposed?: boolean }>>({});
   const [result, setResult] = useState<Result | null>(null);
   const [shown, setShown] = useState<string | null>(null);
+  const [open2, setOpen2] = useState<Field | null>(null);
   marksNow = useContext(FeatureMarks) as Map<string, { mark: string }> | null;
   if (!on) return null;
   const be3 = p.get('be3') ?? 'a';
@@ -127,14 +157,23 @@ export function useBulkState(rows: R[]): Bulk | null {
     changed.forEach((id) => (next[id] = { ...draft }));
     proposed.forEach((id) => (next[id] = { ...draft, proposed: true }));
     setApplied(next);
+    const before = over;
+    if (draft.status) {
+      const o = { ...over };
+      changed.forEach((id) => (o[id] = WORD_MARK[draft.status!]));
+      setOver(o);
+    }
+    const moved = draft.status && !draft.owner && !draft.shift && !draft.end && !draft.track
+      ? got.filter((r) => right(r) === 'edit' && statusOf(r) !== draft.status).length
+      : changed.length;
     const words = draftWords(draft);
     const res = { changed, proposed, skipped, words };
     setOpen(null);
     setPicked(new Set());
     setMode(false);
-    const undo = { label: 'Undo', onClick: () => setApplied(applied) };
+    const undo = { label: 'Undo', onClick: () => { setApplied(applied); setOver(before); } };
     if (!mixed && !commenter) {
-      toast({ message: `${changed.length} features: ${words}`, action: undo, place: 'corner' });
+      toast({ message: `${moved} features: ${words}`, action: undo, place: 'corner' });
     } else if (be3 === 'b') {
       toast({
         message: proposed.length
@@ -173,6 +212,9 @@ export function useBulkState(rows: R[]): Bulk | null {
     long: p.get('long') === '1',
     shown,
     setShown,
+    open2,
+    setOpen2,
+    commenter,
   };
   return v;
 }
@@ -181,7 +223,8 @@ function draftWords(d: Draft): string {
   const w: string[] = [];
   if (d.status) w.push(`status ${d.status}`);
   if (d.owner) w.push(`owner ${d.owner}`);
-  if (d.shift) w.push(`dates ${d.shift > 0 ? '+' : ''}${d.shift} weeks`);
+  if (d.shift) w.push(`end dates ${d.shift > 0 ? '+' : ''}${d.shift} weeks`);
+  if (d.end) w.push(`end date ${d.end}`);
   if (d.track) w.push(`moved to ${d.track}`);
   const t = w.join(', ') || 'no change';
   return t[0].toUpperCase() + t.slice(1);
@@ -275,10 +318,10 @@ export function BulkChips({ r }: { r: R }) {
   if (b.long || on || got) {
     const owner = ownerOf(r);
     out.push(
-      <span key="o" className="text-[length:var(--simple-small)] text-text2">
+      <span key="o" className="whitespace-nowrap text-[length:var(--simple-small)] text-text2">
         {d?.owner && !got?.proposed ? (
           <>
-            {owner && <s className="mr-1">{owner}</s>}
+            {owner && !got && <s className="mr-1">{owner}</s>}
             <b className="text-text">{d.owner}</b>
           </>
         ) : (
@@ -287,18 +330,24 @@ export function BulkChips({ r }: { r: R }) {
       </span>,
     );
   }
-  if (d?.status && !got?.proposed)
+  if (d?.status && !got)
     out.push(
-      <span key="s" className={`${chip} bg-[var(--simple-edited)] uppercase text-text`}>
-        {!got && <s className="mr-1 text-text2">{statusOf(r)}</s>}
+      <span key="s" className={`${chip} whitespace-nowrap bg-[var(--simple-edited)] uppercase text-text`}>
+        <s className="mr-1 text-text2">{statusOf(r)}</s>
         {d.status}
       </span>,
     );
-  if (d?.shift && !got?.proposed)
+  if (got && !got.proposed)
     out.push(
-      <span key="d" className={`${chip} bg-[var(--simple-edited)] text-text`}>
-        {!got && <s className="mr-1 text-text2">{day(r.end_date)}</s>}
-        {day(r.end_date, d.shift)}
+      <span key="t" aria-label="Just changed" title="Just changed" className="font-semibold text-accent">
+        ✓
+      </span>,
+    );
+  if ((d?.shift || d?.end) && !got?.proposed)
+    out.push(
+      <span key="d" className={`${chip} whitespace-nowrap bg-[var(--simple-edited)] text-text`}>
+        End {!got && <s className="mr-1 text-text2">{day(r.end_date)}</s>}
+        {d.end ?? day(r.end_date, d.shift)}
       </span>,
     );
   if (got?.proposed)
@@ -317,8 +366,8 @@ export function BulkChips({ r }: { r: R }) {
 }
 
 /** Hides today's status pill once a new status is applied (the chip says it). */
-export function bulkHidesMark(b: Bulk | null, r: R): boolean {
-  return !!b?.applied[r.feature_id]?.status && !b.applied[r.feature_id]?.proposed;
+export function bulkHidesMark(_b: Bulk | null, _r: R): boolean {
+  return false;
 }
 
 /** Over the list: BE1 b's "Pick several" switch, BE1 c's tip, BE1 a's "pick all shown". */
@@ -345,6 +394,9 @@ export function BulkTop() {
         <label className="flex items-center gap-2 text-text2">
           <input
             type="checkbox"
+            ref={(el) => {
+              if (el) el.indeterminate = !all && b.picked.size > 0;
+            }}
             className="h-5 w-5 accent-[var(--color-accent)]"
             checked={all}
             onChange={() =>
@@ -364,7 +416,7 @@ export function BulkTop() {
       )}
       {b.be1 === 'c' && (
         <span className="flex items-center gap-1 text-text2">
-          {b.picked.size ? `${b.picked.size} picked` : 'Pick several'}
+          {b.picked.size ? null : 'Pick several'}
           <InfoTip label="How to pick several">
             1. Ctrl-click (⌘-click on a Mac) a row. 2. Shift-click another to pick all between.
           </InfoTip>
@@ -392,7 +444,24 @@ function FieldPick({ f, b }: { f: Field; b: Bulk }) {
   if (f === 'dates')
     return (
       <div className="flex flex-col gap-2">
-        <span className="text-text2">Shift by</span>
+        <span className="text-text2">Set end date</span>
+        <div className="flex flex-wrap gap-2">
+          {['Dec 15', 'Jan 12', 'Feb 9'].map((d) => (
+            <button
+              key={d}
+              type="button"
+              data-testid={`bulk-end-${d.replace(' ', '-')}`}
+              className={`${btn} ${b.draft.end === d ? '!border-accent !bg-accent-soft' : ''}`}
+              onClick={() => {
+                b.setDraft({ ...b.draft, end: d, shift: undefined });
+                if (b.be2 === 'c') b.setOpen(null);
+              }}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <span className="text-text2">Or shift end dates by</span>
         <div className="flex flex-wrap gap-2">
           {[-2, -1, 1, 2, 4].map((w) => (
             <button
@@ -401,7 +470,7 @@ function FieldPick({ f, b }: { f: Field; b: Bulk }) {
               data-testid={`bulk-shift-${w}`}
               className={`${btn} ${b.draft.shift === w ? '!border-accent !bg-accent-soft' : ''}`}
               onClick={() => {
-                b.setDraft({ ...b.draft, shift: w });
+                b.setDraft({ ...b.draft, shift: w, end: undefined });
                 if (b.be2 === 'c') b.setOpen(null);
               }}
             >
@@ -458,14 +527,14 @@ function Preview({ b, max }: { b: Bulk; max: number }) {
             <s>{ownerOf(r) || 'No owner'}</s> → <b className="text-text">{b.draft.owner}</b>{' '}
           </>
         )}
-        {b.draft.shift ? (
-          <>
-            <s>{day(r.end_date)}</s> → <b className="text-text">{day(r.end_date, b.draft.shift)}</b>
-          </>
+        {b.draft.shift || b.draft.end ? (
+          <span className="whitespace-nowrap">
+            End <s>{day(r.end_date)}</s> → <b className="text-text">{b.draft.end ?? day(r.end_date, b.draft.shift)}</b>
+          </span>
         ) : null}
         {b.draft.track && (
           <>
-            → <b className="text-text">{b.draft.track}</b>
+            Track → <b className="text-text">{b.draft.track}</b>
           </>
         )}
       </span>
@@ -500,7 +569,7 @@ function Preview({ b, max }: { b: Bulk; max: number }) {
                 <ul>
                   {rs.map((r) => (
                     <li key={r.feature_id} className="py-1 text-text2">
-                      {bulkTitle(b, r)}
+                      {bulkTitle(b, r)} · {BULK_WHY[r.title] ?? 'Read only'}
                     </li>
                   ))}
                 </ul>
@@ -586,7 +655,7 @@ export function BulkBar() {
           </span>
         </div>
       )}
-      {n > 0 && (
+      {n > 0 && b.open !== 'sheet' && (
         <div
           data-testid="bulk-bar"
           className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
@@ -598,6 +667,11 @@ export function BulkBar() {
             Clear
           </button>
           <span className="mx-1 h-6 w-px bg-line max-sm:hidden" aria-hidden />
+          {b.commenter && (
+            <span className="text-text2 max-sm:col-span-4 max-sm:order-last" data-testid="bulk-commenter">
+              Your changes go to {BULK_APPROVER} to approve
+            </span>
+          )}
           {b.be2 === 'b' ? (
             <button type="button" className={`${primary} max-sm:col-span-4`} data-testid="bulk-edit" onClick={() => b.setOpen('sheet')}>
               Edit {n} features
@@ -609,7 +683,7 @@ export function BulkBar() {
                   type="button"
                   data-testid={`bulk-field-${f}`}
                   aria-expanded={b.open === f}
-                  className={`${btn} max-sm:w-full max-sm:px-1 ${b.open === f || (b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] ? '!border-accent !bg-accent-soft' : ''}`}
+                  className={`${btn} max-sm:w-full max-sm:px-1 ${b.open === f || ((b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] || (f === 'dates' && b.draft.end)) ? '!border-accent !bg-accent-soft' : ''}`}
                   onClick={() => b.setOpen(b.open === f ? null : f)}
                 >
                   {label} ▾
@@ -661,21 +735,18 @@ export function BulkBar() {
         >
           <header className="flex items-center justify-between">
             <h2 className="text-[length:var(--simple-h2)] font-semibold">Edit {n} features</h2>
-            <button type="button" aria-label="Close" className={btn} onClick={() => b.setOpen(null)}>
-              ✕
-            </button>
           </header>
           {FIELDS.map(([f, label]) => (
             <details
               key={f}
-              open={f === 'dates' ? b.draft.shift !== undefined || !!b.draft.owner : f === 'owner' && !b.draft.owner}
+              open={b.open2 === f || (f === 'dates' ? b.draft.shift !== undefined || !!b.draft.owner : f === 'owner' && !b.draft.owner && !b.open2)}
               className="rounded-md border border-line p-3"
             >
-              <summary className="cursor-pointer font-semibold">
+              <summary className="cursor-pointer font-semibold" data-testid={`bulk-sum-${f}`} onClick={(e) => { e.preventDefault(); b.setOpen2(b.open2 === f ? null : f); }}>
                 {label}
-                {(b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] ? (
+                {(b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] || (f === 'dates' && b.draft.end) ? (
                   <span className="ml-2 font-normal text-accent">
-                    {f === 'dates' ? `${b.draft.shift} weeks` : String((b.draft as Record<string, unknown>)[f])}
+                    {f === 'dates' ? (b.draft.end ? `End ${b.draft.end}` : `${b.draft.shift} weeks`) : String((b.draft as Record<string, unknown>)[f])}
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-text2">keep</span>
@@ -687,12 +758,12 @@ export function BulkBar() {
             </details>
           ))}
           {has && (
-            <section>
+            <section className="pb-4">
               <h3 className="mb-1 font-semibold">What changes</h3>
               <Preview b={b} max={8} />
             </section>
           )}
-          <footer className="sticky bottom-0 mt-auto flex justify-end gap-2 bg-surface pt-3">
+          <footer className="sticky -bottom-5 -mx-5 -mb-5 mt-auto flex justify-end gap-2 border-t border-line bg-surface px-5 py-3">
             <button type="button" className={btn} onClick={() => b.setOpen(null)}>
               Cancel
             </button>

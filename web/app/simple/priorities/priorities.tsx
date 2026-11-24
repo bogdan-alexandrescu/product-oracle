@@ -82,7 +82,7 @@ import {
   type PriorityKeyResults,
 } from './key-results';
 import { useCodedMilestone } from './milestone-codes';
-import { BulkBar, BulkBox, BulkChips, BulkCtx, BulkTop, bulkHidesMark, bulkRow, bulkTitle, useBulkState } from './_bulk-mock'; // MOCK-HOOK
+import { BulkBar, BulkBox, BulkChips, BulkCtx, BulkTop, bulkHidesMark, bulkRow, bulkTitle, useBulkMarks, useBulkState } from './_bulk-mock'; // MOCK-HOOK
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
 import {
@@ -319,7 +319,7 @@ export function Priorities() {
   const kr = usePriorityKeyResults();
   const data = useMemo(() => topGoalPriorities(q.data, kr.krs), [q.data, kr.krs]);
   // Running today: each feature's word pill, and the Show filter that counts each kind.
-  const marks = useFeatureMarks();
+  const marks = useBulkMarks(useFeatureMarks()); // MOCK-HOOK
   const [show, setShow] = useState<ShowKind | null>(null);
   const showCounts = useMemo(() => {
     const c = { new: 0, in_progress: 0, exists: 0 };
@@ -869,6 +869,7 @@ function YourList({
     (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName),
   );
   const bulk = useBulkState(rows); // MOCK-HOOK
+  const mkMarks = useBulkMarks(useContext(FeatureMarks)); // MOCK-HOOK
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -977,6 +978,7 @@ function YourList({
       {goal
         ? rows.length > 0 && <LineCaption data={{ ...data, rows }} />
         : !apart && <LineCaption data={data} />}
+      <FeatureMarks.Provider value={mkMarks /* MOCK-HOOK */}>
       <BulkCtx.Provider value={bulk /* MOCK-HOOK */}>
       <BulkTop /* MOCK-HOOK */ />
       <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
@@ -1093,11 +1095,11 @@ function YourList({
                       </span>
                     )}
                     <OwnKey r={r} />
-                    {!bulkHidesMark(bulk, r) /* MOCK-HOOK */ && (
+                    {!bulkHidesMark(bulk, r) /* MOCK-HOOK */ && ( // MOCK-HOOK
                     <span className="flex flex-none items-center">
                       <MarkFor featureId={r.feature_id} checked />
                     </span>
-                    )}
+                    )}{/* MOCK-HOOK */}
                     <BulkChips r={r} /* MOCK-HOOK */ />
                   </span>
                   {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
@@ -1242,7 +1244,8 @@ function YourList({
         })}
       </ol>
       <BulkBar /* MOCK-HOOK */ />
-      </BulkCtx.Provider>
+      </BulkCtx.Provider>{/* MOCK-HOOK */}
+      </FeatureMarks.Provider>{/* MOCK-HOOK */}
     </>
   );
 }

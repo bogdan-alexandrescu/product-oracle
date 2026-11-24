@@ -6,7 +6,7 @@
       "code": "BE1",
       "name": "Picking several features",
       "question": "How does a person pick several features on a list without losing drag to reorder or click to open the panel?",
-      "common": "Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. Proposal A is also drawn on the Roadmap Now / Next / Later board and the Detailed plan table; Goal buckets and Inbox take the same picking. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).",
+      "common": "Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. Proposal A is also drawn on the Roadmap Now / Next / Later board and the Detailed plan table. Not drawn: B and C on the board, and any proposal on Goal buckets, Inbox or the Roadmap timeline; each would pick the same way as on Priorities. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).",
       "proposals": [
         {
           "letter": "A",
@@ -31,7 +31,7 @@
             },
             {
               "file": "frames/be1-a-result.html",
-              "caption": "After the Shift-click: 5 rows picked, every box shows, the bar says \"5 picked\". Cost: 2 clicks (today: no way to pick)."
+              "caption": "After the Shift-click: 5 rows picked, every box shows, \"Pick all 22 shown\" shows part-picked, the bar says \"5 picked\". The note top right gives the clicks against today."
             },
             {
               "file": "frames/be1-a-result-dark.html",
@@ -46,6 +46,10 @@
               "caption": "Phone 390: no hover, so every row shows its box; 3 rows picked by tapping their boxes, the bar sits under the list."
             },
             {
+              "file": "frames/be1-a-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
+            },
+            {
               "file": "frames/be1-a-board-open.html",
               "caption": "The same on Roadmap, Now / Next / Later: the pointer on a card shows its box in the top-right corner; the rest of the card still drags and opens the panel."
             },
@@ -55,19 +59,23 @@
             },
             {
               "file": "frames/be1-a-board-result.html",
-              "caption": "Shift-click on a later card picks the run down the column: 4 picked, the same bar. Cost: 2 clicks."
+              "caption": "Shift-click on a card further down Now picks the run down the column: 4 picked, the same bar. Cost: 2 clicks."
             },
             {
               "file": "frames/be1-a-board-result-1512.html",
-              "caption": "Board at 1512 wide: a card in Later added with one more click; picks can span columns."
+              "caption": "Board at 1512 wide: a card in Later added with one more click, so picks span columns; the page scrolled to it, so the Next cards sit above, out of view."
             },
             {
               "file": "frames/be1-a-board-phone.html",
-              "caption": "Board on a phone 390: boxes always show; 2 cards picked by tapping."
+              "caption": "Board on a phone 390: boxes always show; 2 cards picked by tapping; the bar sits above the bottom tabs with all its fields."
+            },
+            {
+              "file": "frames/be1-a-board-phone-dark.html",
+              "caption": "The same board phone frame in dark mode."
             },
             {
               "file": "frames/be1-a-detailed-rest.html",
-              "caption": "Detailed, the plan table: a box column first, as tables do; boxes always show here, the header box picks all shown."
+              "caption": "Detailed, scrolled to the plan table: a box column first, as tables do; boxes always show here, the header box picks all shown. The Detailed page has its own example plan, so names differ from Priorities; the item open on the right keeps its own tint."
             },
             {
               "file": "frames/be1-a-detailed-result.html",
@@ -105,15 +113,23 @@
             },
             {
               "file": "frames/be1-b-result.html",
-              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked and the bar shows. Cost: 1 + 3 clicks, then 1 to leave the mode."
+              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked and the bar shows. The note top right gives the clicks against today."
+            },
+            {
+              "file": "frames/be1-b-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be1-b-hard-1512.html",
-              "caption": "Hard case, 1512 wide with long names: a click on a feature's name picks it instead of opening its panel, so the panel is two clicks away while picking."
+              "caption": "Hard case, 1512 wide with long names: the pointer is still on Mobile alert push's name, just clicked; the row got picked and no panel opened, so the panel is two clicks away while picking."
             },
             {
               "file": "frames/be1-b-phone.html",
-              "caption": "Phone 390: pick mode with 2 rows picked; the handle space holds the box."
+              "caption": "Phone 390: \"Done picking\" at the top shows the mode is on; 2 rows picked, the handle space holds the box."
+            },
+            {
+              "file": "frames/be1-b-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         },
@@ -131,7 +147,7 @@
             },
             {
               "file": "frames/be1-c-open.html",
-              "caption": "Ctrl-click on Alert rules engine picks it; the count reads \"1 picked\" and the bar shows."
+              "caption": "Ctrl-click on Alert rules engine picks it; the bar shows \"1 picked\"."
             },
             {
               "file": "frames/be1-c-mid.html",
@@ -139,15 +155,23 @@
             },
             {
               "file": "frames/be1-c-result.html",
-              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked. Cost: 3 clicks with keys held (today: no way to pick)."
+              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked. The note top right gives the clicks against today."
+            },
+            {
+              "file": "frames/be1-c-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be1-c-hard-1512.html",
-              "caption": "Hard case, 1512 wide with long names: picks work, but nothing on a row says it can be picked; a person who has not read the (i) never finds it."
+              "caption": "Hard case, 1512 wide with long names, the pointer on Mobile alert push: nothing on the row says it can be picked; a person who has not read the (i) never finds it."
             },
             {
               "file": "frames/be1-c-phone.html",
               "caption": "Phone 390: a tap has no Ctrl or Shift, so nothing can be picked; this proposal needs a second way for touch."
+            },
+            {
+              "file": "frames/be1-c-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         }
@@ -157,7 +181,7 @@
       "code": "BE2",
       "name": "The bulk bar",
       "question": "Where does a person set owner, status, dates or track for the picked features, and see what will change before it does?",
-      "common": "Every proposal: owner (people), status (New, In progress, Exists: the product's own words), dates shifted by weeks, track; a before -> after preview; one button that applies all, one history entry per feature, one toast with Undo. 4 features picked (ranks 2, 4, 6, 7) on Priorities. Today: 4 panel opens, about 16 steps.",
+      "common": "Every proposal: owner (people), status (New, In progress, Exists: the product's own words), end date set to a day or shifted by weeks, track; a before -> after preview; one button that applies all, one history entry per feature, one toast with Undo. 4 features picked (ranks 2, 4, 6, 7) on Priorities. Today: 4 panel opens, about 16 steps.",
       "proposals": [
         {
           "letter": "A",
@@ -181,12 +205,20 @@
               "caption": "Exists picked: the menu lists the 4 features before -> after, \"already Exists\" where nothing changes, and \"Change 4\"."
             },
             {
-              "file": "frames/be2-a-mid-dark.html",
-              "caption": "The same preview in dark mode."
+              "file": "frames/be2-a-dates.html",
+              "caption": "Dates opened instead: set the end date to a day, or shift it by weeks; Dec 15 picked, the preview lists each end date before -> after."
+            },
+            {
+              "file": "frames/be2-a-track.html",
+              "caption": "Track opened: the tracks to move the 4 features to."
             },
             {
               "file": "frames/be2-a-result.html",
-              "caption": "\"Change 4\" pressed: each row shows its new status, the picks clear, a toast says what changed with Undo. Cost: 5 clicks (today about 16)."
+              "caption": "\"Change 4\" pressed with Exists: the 3 that changed show the product's Exists pill with a tick, the Show counts update, the picks clear, a toast says 3 changed with Undo. The note top right gives the clicks against today."
+            },
+            {
+              "file": "frames/be2-a-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be2-a-hard-1512.html",
@@ -195,6 +227,10 @@
             {
               "file": "frames/be2-a-phone.html",
               "caption": "Phone 390: the bar takes two rows (count, then the 4 fields); the menu opens full width above it."
+            },
+            {
+              "file": "frames/be2-a-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         },
@@ -212,7 +248,11 @@
             },
             {
               "file": "frames/be2-b-open.html",
-              "caption": "The sheet opened on the right: Owner open, Status, Dates and Track on \"keep\"."
+              "caption": "The sheet opened on the right: Owner open, Status, Dates and Track on \"keep\"; the bar hides while the sheet is open."
+            },
+            {
+              "file": "frames/be2-b-track.html",
+              "caption": "Track opened in the sheet: the tracks to move the 4 features to."
             },
             {
               "file": "frames/be2-b-mid.html",
@@ -220,15 +260,23 @@
             },
             {
               "file": "frames/be2-b-result.html",
-              "caption": "\"Change 4\" pressed: rows show Rosa Lind and their new dates, the sheet closes, a toast offers Undo. Cost: 8 clicks for two fields."
+              "caption": "\"Change 4\" pressed: rows show Rosa Lind and their new end dates, the sheet closes, a toast offers Undo. The note top right gives the clicks against today."
+            },
+            {
+              "file": "frames/be2-b-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be2-b-hard-1512.html",
-              "caption": "Hard case, 1512 wide, 14 picked with long names: the preview is long and scrolls under the sheet's buttons; the list behind the sheet is hidden."
+              "caption": "Hard case, 1512 wide, 14 picked with long names: the preview is long and scrolls above the sheet's buttons; the list stays in view on the left, the bar is hidden."
             },
             {
               "file": "frames/be2-b-phone.html",
               "caption": "Phone 390: the sheet covers the whole screen; Owner set to Rosa Lind."
+            },
+            {
+              "file": "frames/be2-b-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         },
@@ -246,7 +294,11 @@
             },
             {
               "file": "frames/be2-c-open.html",
-              "caption": "Dates opened: shift by -2, -1, +1, +2 or +4 weeks."
+              "caption": "Dates opened: set the end date to a day, or shift it by -2, -1, +1, +2 or +4 weeks."
+            },
+            {
+              "file": "frames/be2-c-track.html",
+              "caption": "Track opened: the tracks to move the 4 features to."
             },
             {
               "file": "frames/be2-c-mid.html",
@@ -254,7 +306,11 @@
             },
             {
               "file": "frames/be2-c-result.html",
-              "caption": "\"Change 4\" pressed: rows keep the new date in the edited colour, a toast offers Undo. Cost: 5 clicks."
+              "caption": "\"Change 4\" pressed: rows keep the new end date in the edited colour, a toast offers Undo. The note top right gives the clicks against today."
+            },
+            {
+              "file": "frames/be2-c-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be2-c-hard-1512.html",
@@ -262,7 +318,11 @@
             },
             {
               "file": "frames/be2-c-phone.html",
-              "caption": "Phone 390: the preview is in each card; with long cards only one or two picks are on screen at a time."
+              "caption": "Phone 390: the preview is in each card (Alert rules engine: end Nov 10 struck, Nov 24); with long cards only one or two picks are on screen at a time."
+            },
+            {
+              "file": "frames/be2-c-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         }
@@ -285,7 +345,7 @@
           "frames": [
             {
               "file": "frames/be3-a-rest.html",
-              "caption": "At rest: 4 picked; Weekly alert digest is tagged \"Proposal\", Alert routing by team \"Cannot change\"."
+              "caption": "At rest: 4 picked, scrolled to Alert routing by team, tagged \"Cannot change\"; Weekly alert digest above it is tagged \"Proposal\"."
             },
             {
               "file": "frames/be3-a-open.html",
@@ -293,11 +353,11 @@
             },
             {
               "file": "frames/be3-a-mid.html",
-              "caption": "Rosa Lind picked: the preview splits into Changes now 2, Sent to Avery Stone 1, Not changed 1; the button says \"Change 2, propose 1\"."
+              "caption": "Rosa Lind picked: the preview splits into Changes now 2, Sent to Avery Stone 1, Not changed 1 with its reason (\"Locked by Jonah Pike for the Dec 15 board meeting\"); the button says \"Change 2, propose 1\"."
             },
             {
               "file": "frames/be3-a-result.html",
-              "caption": "Applied: two rows show Rosa Lind, Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. Cost: 5 clicks."
+              "caption": "Applied: Alert routing by team keeps its owner, Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. The note top right gives the clicks."
             },
             {
               "file": "frames/be3-a-result-dark.html",
@@ -305,11 +365,15 @@
             },
             {
               "file": "frames/be3-a-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as a commenter: every pick becomes a proposal, so the preview has one group and the button says \"Propose 4 changes\"."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: the bar says her changes go to Avery Stone to approve, the preview has one group and the button says \"Propose 4 changes\"."
             },
             {
               "file": "frames/be3-a-phone.html",
               "caption": "Phone 390: the result strip with its three counts above the list."
+            },
+            {
+              "file": "frames/be3-a-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         },
@@ -335,15 +399,23 @@
             },
             {
               "file": "frames/be3-b-result.html",
-              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\". Cost: 5 clicks."
+              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\". The note top right gives the clicks."
+            },
+            {
+              "file": "frames/be3-b-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be3-b-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as a commenter: every box stays (all can be proposed) and the button says \"Propose 4 changes\"."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: every box stays (all can be proposed), the bar says her changes go to Avery Stone, the button says \"Propose 4 changes\"."
             },
             {
               "file": "frames/be3-b-phone.html",
               "caption": "Phone 390: the result as a toast."
+            },
+            {
+              "file": "frames/be3-b-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         },
@@ -369,15 +441,23 @@
             },
             {
               "file": "frames/be3-c-result.html",
-              "caption": "Applied: the strip counts 2 changed, 1 sent, 1 not changed and lists Alert routing by team, \"Locked by Jonah Pike for the Dec 15 board meeting\", with \"Ask Jonah Pike\". Cost: 5 clicks + 1 to ask."
+              "caption": "Applied: the strip counts 2 changed, 1 sent, 1 not changed and lists Alert routing by team, \"Locked by Jonah Pike for the Dec 15 board meeting\", with \"Ask Jonah Pike\". The note top right gives the clicks."
+            },
+            {
+              "file": "frames/be3-c-result-dark.html",
+              "caption": "The same result in dark mode."
             },
             {
               "file": "frames/be3-c-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as a commenter: the button still says \"Change 4\"; only after pressing does the person learn all 4 went for approval."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: only the bar's line says her changes go to Avery Stone; the button still says \"Change 4\"."
             },
             {
               "file": "frames/be3-c-phone.html",
               "caption": "Phone 390: the report strip with the Ask button."
+            },
+            {
+              "file": "frames/be3-c-phone-dark.html",
+              "caption": "The same phone frame in dark mode."
             }
           ]
         }

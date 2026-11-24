@@ -74,6 +74,18 @@ test('snap', async ({ browser }) => {
     try {
     for (const [kind, sel, mods] of f.do) {
       if (kind === 'scroll') await page.evaluate((y) => window.scrollTo(0, Number(y)), sel);
+      else if (kind === 'scrollto')
+        await page.locator(sel).first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      else if (kind === 'note')
+        // A mock-up note, not product UI: what the proposal costs in clicks against today.
+        await page.evaluate((t) => {
+          const d = document.createElement('div');
+          d.setAttribute('data-mockup-note', '');
+          d.textContent = 'Clicks: ' + t;
+          d.style.cssText =
+            'position:fixed;top:12px;right:12px;z-index:9999;padding:6px 10px;border:2px dashed #b45309;border-radius:8px;background:#fffbeb;color:#78350f;font:600 13px/1.3 system-ui,sans-serif';
+          document.body.appendChild(d);
+        }, sel);
       else {
         const loc = page.locator(sel).first();
         if (kind === 'click')
