@@ -2,7 +2,7 @@
  * Mock replies typed against the API schema (#1587): `reply("/v1/goals/{goal_id}", "get", body)`
  * only compiles when `body` fits that route's success response in schema.d.ts, so a mock
  * field that drifts from the API fails `tsc`. The path names the route as openapi.json does;
- * e2e/mock-route-coverage.spec.ts reads these names to check every route a page reads is mocked.
+ * guards/mock-route-coverage.test.ts reads these names to check every route a page reads is mocked.
  */
 import type { paths } from '@/lib/api/schema';
 

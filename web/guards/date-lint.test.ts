@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { expect, test } from './test';
+import { expect, test } from 'vitest';
 
 /**
  * #447: `npm run lint` refuses a date shown outside lib/dates.ts (toLocaleString and its

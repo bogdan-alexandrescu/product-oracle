@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { expect, test } from 'vitest';
+
 import { codeLeftOut } from '../lib/api/mock/code-left-out';
 import { CONTRACTS, contract } from '../lib/ownTreeOnly';
-import { expect, test } from './test';
 
 /**
  * #1570: the values the API's tests check against the web are published by the web as JSON
