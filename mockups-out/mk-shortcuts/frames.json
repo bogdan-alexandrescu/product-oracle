@@ -1,0 +1,864 @@
+[
+ {
+  "file": "ks1-a-rest",
+  "path": "/simple/priorities?ks1=a&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-a-open",
+  "path": "/simple/priorities?ks1=a&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-a-mid",
+  "path": "/simple/priorities?ks1=a&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-a-result",
+  "path": "/simple/priorities?ks1=a&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-a-hard-1512",
+  "path": "/priorities?ks1=a&open=1",
+  "steps": [],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks1-b-rest",
+  "path": "/simple/priorities?ks1=b&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-b-open",
+  "path": "/simple/priorities?ks1=b&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-b-mid",
+  "path": "/simple/priorities?ks1=b&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ],
+   [
+    "type",
+    "road"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-b-result",
+  "path": "/simple/priorities?ks1=b&row=0&today=1%20click%20in%20the%20rail",
+  "steps": [
+   [
+    "key",
+    "g"
+   ],
+   [
+    "key",
+    "r"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-b-hard-1512",
+  "path": "/priorities?ks1=b&open=1",
+  "steps": [],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks1-c-rest",
+  "path": "/simple/priorities?ks1=c&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-c-open",
+  "path": "/simple/priorities?ks1=c&row=0",
+  "steps": [
+   [
+    "press",
+    "Control+/"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-c-mid",
+  "path": "/simple/priorities?ks1=c&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "press",
+    "Alt+ArrowDown"
+   ],
+   [
+    "press",
+    "Alt+ArrowDown"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-c-result",
+  "path": "/simple/priorities?ks1=c&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "press",
+    "Alt+ArrowDown"
+   ],
+   [
+    "press",
+    "Alt+ArrowDown"
+   ],
+   [
+    "press",
+    "Alt+Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-c-hard-1512",
+  "path": "/priorities?ks1=c&open=1",
+  "steps": [],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks1-d-rest",
+  "path": "/simple/priorities?ks1=d&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-d-open",
+  "path": "/simple/priorities?ks1=d&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-d-mid",
+  "path": "/simple/priorities?ks1=d&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ],
+   [
+    "type",
+    "road"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-d-result",
+  "path": "/simple/priorities?ks1=d&row=0&today=1%20click%20in%20the%20rail",
+  "steps": [
+   [
+    "key",
+    "?"
+   ],
+   [
+    "type",
+    "road"
+   ],
+   [
+    "press",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks1-d-hard-1512",
+  "path": "/priorities?ks1=d&open=1",
+  "steps": [
+   [
+    "type",
+    "pl"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks2-a-rest",
+  "path": "/simple/priorities?ks2=a&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-a-open",
+  "path": "/simple/priorities?ks2=a&row=0&tip=rail",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-a-mid",
+  "path": "/simple/priorities?ks2=a&row=0&tip=row&hover=2&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-a-result",
+  "path": "/simple/priorities?ks2=a&row=0&tip=close&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-a-hard-1512",
+  "path": "/simple/priorities?ks2=a&row=1&tip=grip&hover=1",
+  "steps": [],
+  "width": 1512,
+  "theme": "dark",
+  "role": "commenter"
+ },
+ {
+  "file": "ks2-b-rest",
+  "path": "/simple/priorities?ks2=b&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-b-open",
+  "path": "/simple/priorities?ks2=b&row=0&hover=2",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-b-mid",
+  "path": "/simple/priorities?ks2=b&row=0&hover=2",
+  "steps": [
+   [
+    "key",
+    "j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-b-result",
+  "path": "/simple/priorities?ks2=b&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-b-hard-1512",
+  "path": "/simple/priorities?ks2=b&row=0&hover=0&long=1",
+  "steps": [],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks2-c-rest",
+  "path": "/simple/priorities?ks2=c",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-c-open",
+  "path": "/simple/priorities?ks2=c&nudge=1",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-c-mid",
+  "path": "/simple/priorities?ks2=c&nudge=1",
+  "steps": [
+   [
+    "key",
+    "j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-c-result",
+  "path": "/simple/priorities?ks2=c&nudge=1",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "click",
+    "text=Got it"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-c-hard-1512",
+  "path": "/simple/priorities?ks2=c&nudge=1",
+  "steps": [
+   [
+    "click",
+    "[data-testid=prio-title]"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks2-d-rest",
+  "path": "/simple/priorities?ks2=d&row=0",
+  "steps": [],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-d-open",
+  "path": "/simple/priorities?ks2=d&row=0",
+  "steps": [
+   [
+    "key",
+    "?"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-d-mid",
+  "path": "/simple/priorities?ks2=d&row=0",
+  "steps": [
+   [
+    "key",
+    "j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-d-result",
+  "path": "/simple/priorities?ks2=d&row=0&today=1%20click%20on%20the%20name",
+  "steps": [
+   [
+    "key",
+    "j"
+   ],
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks2-d-hard-1512",
+  "path": "/simple/priorities?ks2=d&row=0&long=1",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-rest",
+  "path": "/simple/priorities?ks3=a&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-open",
+  "path": "/simple/priorities?ks3=a&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-mid",
+  "path": "/simple/priorities?ks3=a&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-result",
+  "path": "/simple/priorities?ks3=a&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ],
+   [
+    "press",
+    "Escape"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-hard-1512",
+  "path": "/simple/priorities?ks3=a&row=0",
+  "steps": [
+   [
+    "eval",
+    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+   ],
+   [
+    "click",
+    "text=Delete feature"
+   ],
+   [
+    "press",
+    "j"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-rest",
+  "path": "/simple/priorities?ks3=b&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-open",
+  "path": "/simple/priorities?ks3=b&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-mid",
+  "path": "/simple/priorities?ks3=b&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-result",
+  "path": "/simple/priorities?ks3=b&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ],
+   [
+    "press",
+    "Control+j"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-hard-1512",
+  "path": "/simple/priorities?ks3=b&row=0",
+  "steps": [
+   [
+    "eval",
+    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+   ],
+   [
+    "click",
+    "text=Delete feature"
+   ],
+   [
+    "press",
+    "Control+j"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-rest",
+  "path": "/simple/priorities?ks3=c&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-open",
+  "path": "/simple/priorities?ks3=c&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-mid",
+  "path": "/simple/priorities?ks3=c&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-result",
+  "path": "/simple/priorities?ks3=c&row=2",
+  "steps": [
+   [
+    "key",
+    "Enter"
+   ],
+   [
+    "click",
+    "[data-testid=item-panel] button[aria-label=\"Change the notes\"]"
+   ],
+   [
+    "type",
+    "Ask two beta teams first"
+   ],
+   [
+    "type",
+    " jk"
+   ],
+   [
+    "press",
+    "Escape"
+   ]
+  ],
+  "width": 1440,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-hard-1512",
+  "path": "/simple/priorities?ks3=c&row=0",
+  "steps": [
+   [
+    "eval",
+    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+   ],
+   [
+    "click",
+    "text=Delete feature"
+   ],
+   [
+    "press",
+    "?"
+   ]
+  ],
+  "width": 1512,
+  "theme": "dark",
+  "role": ""
+ },
+ {
+  "file": "ks3-a-phone-390",
+  "path": "/simple/priorities?ks3=a",
+  "steps": [
+   [
+    "click",
+    "[data-testid=prio-title]"
+   ]
+  ],
+  "width": 390,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-b-phone-390",
+  "path": "/simple/priorities?ks3=b",
+  "steps": [
+   [
+    "click",
+    "[data-testid=prio-title]"
+   ]
+  ],
+  "width": 390,
+  "theme": "light",
+  "role": ""
+ },
+ {
+  "file": "ks3-c-phone-390",
+  "path": "/simple/priorities?ks3=c&swipe=1",
+  "steps": [
+   [
+    "click",
+    "[data-testid=prio-title]"
+   ]
+  ],
+  "width": 390,
+  "theme": "light",
+  "role": ""
+ }
+]

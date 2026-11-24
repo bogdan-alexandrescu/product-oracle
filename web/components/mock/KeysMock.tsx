@@ -3,11 +3,11 @@
 // MOCK-HOOK: place, row focus), ks3=a|b|c (typing, dialogs, phone); state: open=1 row=N hover=N tip=rail|row|close|grip
 // MOCK-HOOK: g=1 q=... trail=g,r today=... nudge=1 bar=1 paused=1 swipe=1 long=1.
 /* eslint-disable */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
-import { usePathname, useSearchParams } from '@/lib/nav';
+import { usePathname, useRouter, useSearchParams } from '@/lib/nav';
 
-type Key = { keys: string[]; label: string; then?: boolean; alt?: string[] };
+type Key = { keys: string[]; label: string; then?: boolean; alt?: string[]; href?: string };
 type Group = { name: string; keys: Key[]; open?: boolean };
 
 const K = ({ children, on }: { children: ReactNode; on?: boolean }) => (
@@ -41,17 +41,22 @@ function railPages(): { name: string; href: string }[] {
   document.querySelectorAll('nav a[href]').forEach((a) => {
     const name = (a.textContent || '').replace(/\d+$/, '').trim();
     const href = a.getAttribute('href') || '';
-    if (name && href.startsWith('/') && !out.some((o) => o.href === href) && name.length < 24) out.push({ name, href });
+    if (name && name !== 'Product Oracle' && href.startsWith('/') && !out.some((o) => o.href === href) && name.length < 24)
+      out.push({ name, href });
   });
   return out.slice(0, 26);
 }
 
 function letters(pages: { name: string }[]) {
-  const used = new Set<string>();
+  const pref: Record<string, string> = {
+    Home: 'h', 'One-pagers': 'o', Roadmap: 'r', 'Goal map': 'm', Priorities: 'p', Meetings: 'e', Decisions: 'd',
+    Inbox: 'i', Requests: 'q', 'Ground Truth': 't', PRDs: 'f', Plan: 'l', Runs: 'u', Company: 'c', Settings: 's',
+  };
+  const used = new Set<string>(pages.map((p) => pref[p.name]).filter(Boolean));
   return pages.map((p) => {
-    const ws = p.name.toLowerCase().replace(/[^a-z ]/g, '');
-    let l = ws.split('').find((c) => c !== ' ' && !used.has(c)) || '·';
-    if (p.name === 'Home') l = 'h';
+    if (pref[p.name]) return pref[p.name];
+    const ws = p.name.toLowerCase().replace(/[^a-z]/g, '');
+    const l = ws.split('').find((c) => !used.has(c)) || '·';
     used.add(l);
     return l;
   });
@@ -87,10 +92,10 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
   const ls = letters(pages);
   const go: Key[] = pages.map((p, i) =>
     ks1 === 'b'
-      ? { keys: ['g', ls[i]], label: p.name, then: true }
+      ? { keys: ['g', ls[i]], label: p.name, then: true, href: p.href }
       : mod
-        ? { keys: ['Ctrl', 'Alt', i < 9 ? String(i + 1) : '–'], label: p.name }
-        : { keys: [i < 9 ? String(i + 1) : '–'], label: p.name },
+        ? { keys: ['Ctrl', 'Alt', i < 9 ? String(i + 1) : '–'], label: p.name, href: p.href }
+        : { keys: [i < 9 ? String(i + 1) : '–'], label: p.name, href: p.href },
   );
   const every: Key[] = [
     { keys: mod ? ['Ctrl', '/'] : ['?'], label: 'Show the keys' },
@@ -147,6 +152,8 @@ function rectOf(el: Element | null | undefined) {
 
 export function KeysMock() {
   const pathname = usePathname();
+  const router = useRouter();
+  const goTo = (href: string) => router.push(href + window.location.search);
   const sp = useSearchParams();
   const p = (k: string) => sp.get(k) ?? '';
   const ks1 = p('ks1') || (p('ks2') || p('ks3') ? 'b' : '');
@@ -198,8 +205,8 @@ export function KeysMock() {
     });
   });
 
-  const pages = useMemo(() => (typeof document === 'undefined' ? [] : railPages()), [pathname, open, pending]);
-  const g = useMemo(() => grammar(ks1, pages, detailed), [ks1, pages, detailed]);
+  const pages = typeof document === 'undefined' ? [] : railPages();
+  const g = grammar(ks1, pages, detailed);
 
   useEffect(() => {
     if (!on) return;
@@ -225,26 +232,38 @@ export function KeysMock() {
         });
         return;
       }
-      if (inField || e.ctrlKey || e.metaKey) return;
+      const mod = ks1 === 'c';
+      const nice: Record<string, string> = { ArrowDown: '↓', ArrowUp: '↑' };
+      const push = (k: string) => setTrail((t) => [...t, (e.altKey ? 'Alt ' : '') + (nice[k] || k)].slice(-8));
+      if (inField) return;
+      if ((e.ctrlKey || e.metaKey) && !(ks1 === 'c' && (e.key === '/' || e.altKey))) return;
       if (open && document.activeElement?.closest('[data-keys-sheet]')) {
         if (e.key === 'Escape') setOpen(false);
         return;
       }
-      if (inDialog) return;
-      const mod = ks1 === 'c';
-      const push = (k: string) => setTrail((t) => [...t, k].slice(-4));
+      if (inDialog && !(ks3 === 'c' && e.key === '?')) return;
+      if ((ks1 === 'a' || ks1 === 'd') && /^[1-9]$/.test(e.key) && pages[Number(e.key) - 1]) {
+        push(e.key);
+        goTo(pages[Number(e.key) - 1].href);
+        return;
+      }
+      if (mod && e.ctrlKey && e.altKey && /^[1-9]$/.test(e.key) && pages[Number(e.key) - 1]) {
+        setTrail(['Ctrl', 'Alt', e.key]);
+        goTo(pages[Number(e.key) - 1].href);
+        return;
+      }
       if (pending) {
         setPending(false);
         const i = letters(pages).indexOf(e.key);
         if (i >= 0) {
           push(e.key);
-          window.history.pushState({}, '', pages[i].href + window.location.search);
-          window.dispatchEvent(new PopStateEvent('popstate'));
+          goTo(pages[i].href);
         }
         return;
       }
       if ((!mod && e.key === '?') || (mod && e.ctrlKey && e.key === '/')) {
         e.preventDefault();
+        if (mod) setTrail(['Ctrl', '/']);
         setOpen((o) => !o);
         return;
       }
@@ -275,8 +294,20 @@ export function KeysMock() {
         }
       }
     };
+    // KS3 a and c: Esc in a field leaves the field first; the panel stays (today it closes the panel).
+    const onEsc = (e: KeyboardEvent) => {
+      const a = document.activeElement as HTMLElement | null;
+      if (e.key !== 'Escape' || ks3 === 'b' || !a || !(a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+      if (!a.closest('[data-testid=item-panel]')) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      a.blur();
+      setTrail((t) => [...t, 'Esc'].slice(-8));
+    };
+    window.addEventListener('keydown', onEsc, true);
     window.addEventListener('keydown', onKey);
     return () => {
+      window.removeEventListener('keydown', onEsc, true);
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('focusin', onFocus);
     };
@@ -532,7 +563,16 @@ export function KeysMock() {
       sheet = (
         <div className="fixed inset-0 z-[80] bg-black/30">
           <div data-keys-sheet role="dialog" aria-label="Keys" className="mx-auto mt-[12vh] w-[640px] rounded-xl border border-line bg-surface shadow-tip">
-            <input autoFocus aria-label="Find a key or an action" placeholder="Find a key or an action" value={q} onChange={(e) => setQ(e.target.value)} className="w-full rounded-t-xl border-b border-line bg-surface px-4 py-3 text-lg text-text outline-none" />
+            <input autoFocus aria-label="Find a key or an action" placeholder="Find a key or an action" value={q} onChange={(e) => { setQ(e.target.value); setSel(0); }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') setSel((x) => Math.min(hits.length - 1, x + 1));
+                if (e.key === 'ArrowUp') setSel((x) => Math.max(0, x - 1));
+                if (e.key === 'Enter' && hits[sel]) {
+                  setTrail((t) => [...t, ...q.split(''), 'Enter'].slice(-8));
+                  setOpen(false);
+                  if (hits[sel].href) goTo(hits[sel].href!);
+                }
+              }} className="w-full rounded-t-xl border-b border-line bg-surface px-4 py-3 text-lg text-text outline-none" />
             <ul className="max-h-[56vh] overflow-y-auto p-2 text-base">
               {hits.map((k, i) => (
                 <li key={k.label} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${i === sel ? 'bg-accent-soft' : ''}`} onMouseEnter={() => setSel(i)}>

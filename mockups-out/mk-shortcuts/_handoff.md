@@ -17,3 +17,4 @@
 `/simple/priorities?ks1=a..d|ks2=a..d|ks3=a..c` plus state: `open=1` (help sheet), `q=` (sheet search), `row=N` (focused row),
 `hover=N`, `tip=rail|row|close`, `g=1` (g pressed), `trail=g,r` (keys pressed, the cost strip), `nudge=1`, `typing=1`, `dialog=1`.
 Component: `web/components/mock/KeysMock.tsx`, mounted in `web/components/ds/AppShell.tsx`.
+- Today: Esc inside the feature panel's Notes field closes the whole panel (the field and the panel go together).
