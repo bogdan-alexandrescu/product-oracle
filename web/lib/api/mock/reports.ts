@@ -373,6 +373,9 @@ export async function reportsRoute(
 
   if (p[1] === 'company-integrations') {
     if (!atLeast(me.role, 'owner')) return forbidden('owner');
+    const mkQs = typeof window === 'undefined' ? '' : window.location.search; // MOCK-HOOK
+    if (!db.integration && /[?&]wd[23]=/.test(mkQs) && !/state=(noslack|asked)/.test(mkQs)) db.integration = slackInstall(me.id, mockUuid(), now()); // MOCK-HOOK
+    if (/state=(noslack|asked)/.test(mkQs)) db.integration = null; // MOCK-HOOK
     if (!p[2] && m === 'GET')
       return reply('/v1/company-integrations', 'get', db.integration ? [db.integration] : []);
     if (p[2] === 'slack' && p[3] === 'install' && m === 'GET') {

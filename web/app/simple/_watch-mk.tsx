@@ -58,7 +58,7 @@ export function WatchHeadMk({ itemKey, title, code }: { itemKey: string; title: 
               <input type="checkbox" data-mk={`ev${k}`} checked={picked[k]} onChange={() => setPicked(picked.map((p, j) => (j === k ? !p : p)))} /> {e} {/* MOCK-HOOK */}
             </label> // MOCK-HOOK
           ))} {/* MOCK-HOOK */}
-          <p className="mt-2 text-xs text-text2">Daily email at 8:00 AM · <a className="font-semibold text-accent-ink underline" href="/settings/notifications?wd3=a">Change</a></p> {/* MOCK-HOOK */}
+          <p className="mt-2 text-xs text-text2">Daily email at 8:00 AM · <a className="font-semibold text-accent-ink underline" href="/account?wd3=a">Change</a></p> {/* MOCK-HOOK */}
           <div className="mt-3 flex gap-2"> {/* MOCK-HOOK */}
             <button type="button" data-mk="watch-save" onClick={() => { setWatched(itemKey, true); setOpen(false); setSaid(`Watching ${code ?? ''} ${title}`); }} className="h-8 rounded-md bg-accent px-3 text-sm font-semibold text-on-accent">{on ? 'Save' : 'Watch'}</button> {/* MOCK-HOOK */}
             {on && <button type="button" onClick={() => { setWatched(itemKey, false); setOpen(false); setSaid(null); }} className="h-8 rounded-md px-3 text-sm font-semibold text-accent-ink hover:bg-surface2">Stop watching</button>} {/* MOCK-HOOK */}
@@ -143,7 +143,7 @@ export function WatchInboxMk() { // MOCK-HOOK
   const list = MK_WATCHED.filter((x) => !gone.includes(x.code)); // MOCK-HOOK
   return ( // MOCK-HOOK
     <section data-mk="watching" className="mb-4 rounded-xl border border-line bg-surface"> {/* MOCK-HOOK */}
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3"><h2 className="text-base font-semibold">Watching <span className="text-accent-ink tnum">{list.length}</span></h2><span className="ml-auto text-sm text-text2">Daily email at 8:00 AM · Slack</span><a className="text-sm font-semibold text-accent-ink" href="/settings/notifications?wd3=a">Change</a></div> {/* MOCK-HOOK */}
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3"><h2 className="text-base font-semibold">Watching <span className="text-accent-ink tnum">{list.length}</span></h2><span className="ml-auto text-sm text-text2">Daily email at 8:00 AM · Slack</span><a className="text-sm font-semibold text-accent-ink" href="/account?wd3=a">Change</a></div> {/* MOCK-HOOK */}
       <ul> {/* MOCK-HOOK */}
         {list.map((x) => ( // MOCK-HOOK
           <li key={x.code} className="flex items-center gap-3 border-b border-line/60 px-4 py-2.5 text-sm last:border-0"> {/* MOCK-HOOK */}
@@ -192,7 +192,7 @@ function SlipLine({ s, link = true }: { s: MkSlip; link?: boolean }) { // MOCK-H
 } // MOCK-HOOK
 
 const Foot = ({ stop = 'Stop these digests' }: { stop?: string }) => ( // MOCK-HOOK
-  <p className="mt-3 border-t border-line pt-2 text-xs text-text2">You watch 12 items. <a href="#" className="text-accent-ink underline">Change what you get</a> · <a href="/settings/notifications?wd3=a&state=stopped" data-mk="stop-link" className="text-accent-ink underline">{stop}</a></p> // MOCK-HOOK
+  <p className="mt-3 border-t border-line pt-2 text-xs text-text2">You watch 12 items. <a href="#" className="text-accent-ink underline">Change what you get</a> · <a href="/account?wd3=a&state=stopped" data-mk="stop-link" className="text-accent-ink underline">{stop}</a></p> // MOCK-HOOK
 ); // MOCK-HOOK
 
 /** WD2: one digest, as Slack or email shows it. */
@@ -222,7 +222,7 @@ export function DigestMessageMk({ v, how }: { v: string; how: 'slack' | 'email' 
         <p className="text-sm">Week of Oct 19: <b>{total} items slipped</b>, {days} days in all.</p> {/* MOCK-HOOK */}
         {goals.map((g, k) => ( // MOCK-HOOK
           <div key={g} className="mt-3"> {/* MOCK-HOOK */}
-            <p className="text-sm font-semibold">{g} <span className={k ? 'text-crit' : 'text-warn'}>· {k ? 'Behind: misses Mar 31 by 9 days' : 'At risk: 2 days of slack left'}</span></p> {/* MOCK-HOOK */}
+            <p className="text-sm font-semibold">{g} <span className={k ? 'text-crit' : 'text-warn'}>· {k ? 'Behind: misses its date by 9 days' : 'At risk: 2 days of slack left'}</span></p> {/* MOCK-HOOK */}
             <ul className="mt-1 text-sm">{slips.filter((s) => s.goal === g).map((s) => <li key={s.code} className="py-0.5"><span className="simple-code mr-1">{s.code}</span>{s.name} <span className="text-crit">+{pluralDays(s.days)}</span> <span className="text-text2">· {s.to}</span></li>)}</ul> {/* MOCK-HOOK */}
           </div> // MOCK-HOOK
         ))} {/* MOCK-HOOK */}
@@ -260,7 +260,7 @@ export function DigestMk() { // MOCK-HOOK
     <section data-mk="digest" className="mb-4 rounded-xl border border-line bg-surface"> {/* MOCK-HOOK */}
       <div className="flex items-center gap-2 border-b border-line px-4 py-3"><h2 className="text-base font-semibold">Digest of what I watch</h2></div> {/* MOCK-HOOK */}
       <div className="flex flex-wrap items-end gap-4 px-4 py-3 text-sm"> {/* MOCK-HOOK */}
-        <div><p className="text-text2">How often</p><p className="font-semibold" data-mk="often">{often}</p><p className="text-xs text-text2">{sub}</p></div> {/* MOCK-HOOK */}
+        <div><p className="text-text2">How often</p><p className="font-semibold" data-mk="often">{often.replace('8:00 AM', time)}</p><p className="text-xs text-text2">{sub}</p></div> {/* MOCK-HOOK */}
         {v !== 'b' && <label className="flex flex-col text-text2">Time<select data-mk="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-9 rounded-md border border-line bg-surface px-2 text-text">{['7:00 AM', '7:30 AM', '8:00 AM', '9:00 AM'].map((t) => <option key={t}>{t}</option>)}</select></label>} {/* MOCK-HOOK */}
         <div><p className="text-text2">By</p><p className="font-semibold">Email and Slack</p></div> {/* MOCK-HOOK */}
         <div className="ml-auto flex gap-1" role="tablist" aria-label="Sample"> {/* MOCK-HOOK */}
@@ -280,9 +280,10 @@ function Toggle({ on, label, dis, onClick, mkId }: { on: boolean; label: string;
 } // MOCK-HOOK
 
 /** WD3: my digests, the company's defaults and the states (no Slack, quiet, stopped). */
-export function DigestSettingsMk() { // MOCK-HOOK
+export function DigestSettingsMk({ place = 'account' }: { place?: 'account' | 'company' }) { // MOCK-HOOK
   const v = mk.wd3(); // MOCK-HOOK
   const st = q('state'); // MOCK-HOOK
+  if (place === 'company') return v && st === 'owner' ? <CompanyDefaultsMk v={v} /> : null; // MOCK-HOOK
   const noSlack = st === 'noslack' || st === 'asked'; // MOCK-HOOK
   const [email, setEmail] = useState(st !== 'stopped'); // MOCK-HOOK
   const [slack, setSlack] = useState(!noSlack && st !== 'stopped'); // MOCK-HOOK
@@ -304,8 +305,8 @@ export function DigestSettingsMk() { // MOCK-HOOK
         <section data-mk="delivery" className="mb-4 rounded-xl border border-line bg-surface px-4 py-3 text-sm"> {/* MOCK-HOOK */}
           <p><b>My digest</b> <span className="text-text2">· {stopped ? 'Stopped' : noSlack ? 'Daily email at 8:00 AM (Slack is not connected)' : 'Daily, Slack at 8:00 AM, email if Slack is unread by noon'}</span></p> {/* MOCK-HOOK */}
           <p className="mt-1 text-text2">Change it from any digest: reply <b>weekly</b>, <b>email only</b> or <b>stop</b>.</p> {/* MOCK-HOOK */}
+          {st === 'quiet' && <p role="status" data-mk="quiet" className="mt-1 font-semibold text-pass">✓ Nothing you watch slipped since Oct 21: nothing sent today</p>} {/* MOCK-HOOK */}
         </section> {/* MOCK-HOOK */}
-        {st === 'owner' && <CompanyDefaultsMk v={v} />} {/* MOCK-HOOK */}
       </> // MOCK-HOOK
     ); // MOCK-HOOK
   const quiet = st === 'quiet' && ( // MOCK-HOOK
@@ -321,7 +322,7 @@ export function DigestSettingsMk() { // MOCK-HOOK
           {v === 'a' ? ( // MOCK-HOOK
             <> {/* MOCK-HOOK */}
               <div className="flex items-center gap-3"><Toggle on label="Inbox" dis /><span className="w-24 font-semibold">Inbox</span><span className="text-text2">Always, as it happens</span></div> {/* MOCK-HOOK */}
-              <div className="flex items-center gap-3"><Toggle on={email && !stopped} label="Email" mkId="email" onClick={() => setEmail(!email)} /><span className="w-24 font-semibold">Email</span><span className="text-text2">avery@example.com · every weekday at 8:00 AM, only when something slipped</span></div> {/* MOCK-HOOK */}
+              <div className="flex items-center gap-3"><Toggle on={email && !stopped} label="Email" mkId="email" onClick={() => setEmail(!email)} /><span className="w-24 font-semibold">Email</span><span className="text-text2">Every weekday at 8:00 AM, only when something slipped</span></div> {/* MOCK-HOOK */}
               <div className="flex items-center gap-3"><Toggle on={slack && !stopped} label="Slack" dis={noSlack} mkId="slack" onClick={() => setSlack(!slack)} /><span className="w-24 font-semibold">Slack</span>{noSlack ? <span className="text-text2">Slack is not connected for the company. {asked ? <b className="text-pass" data-mk="asked">✓ Asked Avery Stone to connect it</b> : <button type="button" data-mk="ask-owner" onClick={() => setAsked(true)} className="font-semibold text-accent-ink">Ask an owner</button>}</span> : <span className="text-text2">Direct message at 8:00 AM</span>}</div> {/* MOCK-HOOK */}
             </> // MOCK-HOOK
           ) : ( // b: per item, set where you watch it; this page lists them
@@ -333,7 +334,6 @@ export function DigestSettingsMk() { // MOCK-HOOK
           )} {/* MOCK-HOOK */}
         </div> {/* MOCK-HOOK */}
       </section> {/* MOCK-HOOK */}
-      {st === 'owner' && <CompanyDefaultsMk v={v} />} {/* MOCK-HOOK */}
     </> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK

@@ -7,6 +7,7 @@ import { ActedCell, SETTLING, useActed } from '@/components/account/acted';
 import { ConfirmDialog } from '@/components/account/ConfirmDialog';
 import { scopeLabel } from '@/components/account/scopes';
 import { SlackPingsPanel } from '@/components/account/SlackPingsPanel';
+import { DigestMk, DigestSettingsMk } from '@/app/simple/_watch-mk'; // MOCK-HOOK
 import {
   Expiry,
   expiryText,
@@ -155,6 +156,8 @@ export function MyAccount() {
         }
       />
       <Split inspector={inspector}>
+        <DigestSettingsMk /> {/* MOCK-HOOK */}
+        <DigestMk /> {/* MOCK-HOOK */}
         {accountQ.error && <Notice tone="error">{accountQ.error}</Notice>}
         {account && <PasswordPanel account={account} onChanged={refreshCredentials} />}
         <TokensPanel query={tokensQ} />
