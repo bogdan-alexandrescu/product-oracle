@@ -122,7 +122,7 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
     {
       name: 'Goal map',
       keys: [
-        { keys: mod ? ['Ctrl', 'K'] : ['/'], label: 'Search the roadmap' }, // MOCK-HOOK
+        ...(mod ? [] : [{ keys: ['/'], label: 'Search the roadmap' }]), // MOCK-HOOK: with Ctrl K it is Everywhere's Search or filter, listed once
         { keys: mod ? ['Alt', 'Enter'] : ['Enter'], label: 'Open the goal' },
       ],
     },
@@ -423,7 +423,7 @@ export function KeysMock() {
       tipEl =
         role === 'viewer'
           ? tipAt(nameLineEnd(rows[hover]), 'View only: no moving', null, 'right') // MOCK-HOOK: beside the name, inside its own row
-          : tipAt(lineTwoEnd(rows[hover]) || nameLineEnd(rows[hover]), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'right'); // MOCK-HOOK: beside the name line, inside row
+          : tipAt(lineTwoEnd(rows[hover]) || nameLineEnd(rows[hover]), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'right'); // MOCK-HOOK: after the free second line, covers no text
     }
   }
 

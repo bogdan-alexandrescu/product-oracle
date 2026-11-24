@@ -176,7 +176,7 @@
       },
       {
        "file": "ks2-a-open.html",
-       "caption": "Hovering Roadmap in the rail: its tooltip, inside the rail after the name, shows g then r over the count until the pointer leaves."
+       "caption": "Hovering Roadmap in the rail: its tooltip sits beside Roadmap, over its count, and shows g then r until the pointer leaves."
       },
       {
        "file": "ks2-a-mid.html",
@@ -188,7 +188,7 @@
       },
       {
        "file": "ks2-a-hard-1512.html",
-       "caption": "The hard case, a commenter at 1512 in dark: hovering Weekly alert digest's grip, the tooltip beside its name line reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal. The rail's counts are what waits on this person, so they are smaller than the owner's."
+       "caption": "The hard case, a commenter at 1512 in dark: hovering Weekly alert digest's grip, the tooltip after its second line, After Alert rules engine, which it needs, reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks2-a-viewer.html",

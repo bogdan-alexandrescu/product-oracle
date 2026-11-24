@@ -79,10 +79,10 @@ KS2 = {
    'cost': 'Nothing extra on screen. Open the third feature: 3 keys (j j Enter) against 1 click.',
    'frames': fr('ks2', 'a', [
      ('rest', 'At rest: the first row has the key focus, a blue bar on its left and a light fill.'),
-     ('open', 'Hovering Roadmap in the rail: its tooltip, inside the rail after the name, shows g then r over the count until the pointer leaves.'),
+     ('open', 'Hovering Roadmap in the rail: its tooltip sits beside Roadmap, over its count, and shows g then r until the pointer leaves.'),
      ('mid', 'After j j the focus is on Weekly alert digest; hovering its name shows Open Enter beside the name line.'),
      ('result', 'Enter opens it in the feature panel; hovering Close shows Esc under it. 3 keys against 1 click.'),
-     ('hard-1512', 'The hard case, a commenter at 1512 in dark: hovering Weekly alert digest\'s grip, the tooltip beside its name line reads Suggest a move, Shift J or Shift K, since a commenter\'s move becomes a proposal. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
+     ('hard-1512', 'The hard case, a commenter at 1512 in dark: hovering Weekly alert digest\'s grip, the tooltip after its second line, After Alert rules engine, which it needs, reads Suggest a move, Shift J or Shift K, since a commenter\'s move becomes a proposal. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
      ('viewer', 'A viewer\'s rows have no grip; the tip beside the row\'s name says view only, with no key; j, k and Enter still work. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
      ('detailed', 'Detailed: the focused row takes the table\'s own selected look, the same row the panel shows.'),
      ('phone-390', 'Phone 390: no tooltips; with a keyboard the first row shows the blue bar.'),
