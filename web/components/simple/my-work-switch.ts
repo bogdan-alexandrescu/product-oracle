@@ -1,4 +1,6 @@
 // MOCK-HOOK: the whole file. URL switches for the My work mock-ups (#1798). Never merged.
+import { useSyncExternalStore } from 'react';
+
 import { MW_FORTY, MW_ITEMS } from '@/lib/api/mock/my-work';
 
 /** MOCK-HOOK: one URL switch. */
@@ -26,3 +28,18 @@ export function myWorkCount(): number {
   return c === 'none' ? 0 : c === 'forty' ? 40 : c === 'one' ? 1 : MW_ITEMS.length; // MOCK-HOOK
 }
 
+
+// MOCK-HOOK: late items decided on My work this visit, so the rail's count drops at once.
+let decidedLate = 0; // MOCK-HOOK
+const subs = new Set<() => void>(); // MOCK-HOOK
+export function decideLate() {
+  decidedLate += 1; // MOCK-HOOK
+  subs.forEach((f) => f()); // MOCK-HOOK
+}
+export function useMyWorkLate(): number {
+  return useSyncExternalStore(
+    (f) => (subs.add(f), () => void subs.delete(f)),
+    () => myWorkLate() - decidedLate,
+    () => 0,
+  ); // MOCK-HOOK
+}

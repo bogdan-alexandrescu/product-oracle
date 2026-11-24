@@ -371,7 +371,7 @@ function HomePage() {
         // The empty In flight line carries New PRD itself; never draw it twice.
         action={!nothingInFlight && newPrd()}
       />
-      {mw('mw1') === 'b' && <div data-mode="simple" className="simple-mode"><MyWorkHome /></div>} {/* MOCK-HOOK */}
+      {mw('mw1') === 'b' && <div data-mode="simple" className="simple-mode mb-6"><MyWorkHome /></div>} {/* MOCK-HOOK */}
       <Split
         inspector={
           selected ? (

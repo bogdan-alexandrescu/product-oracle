@@ -1,6 +1,6 @@
 'use client';
 
-import { myWorkEntry, myWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { myWorkEntry, useMyWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { Link, usePathname, useRouter } from '@/lib/nav';
 import {
   useCallback,
@@ -376,6 +376,7 @@ export function useSimpleShown(): boolean {
  * Simple page opens its matching Detailed page instead.
  */
 export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet') => ReactNode }) {
+  const mwLate = useMyWorkLate(); // MOCK-HOOK
   const pathname = usePathname();
   const router = useRouter();
   const { me, role, capsReady, capsError, simpleMode } = useMe();
@@ -508,7 +509,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
-          const n = d.label === 'My work' ? myWorkLate() : (counts?.[d.label] ?? 0); // MOCK-HOOK
+          const n = d.label === 'My work' ? mwLate : (counts?.[d.label] ?? 0); // MOCK-HOOK
           const failed = failedOf(d.label);
           const words = failed
             ? failedWords(countWords(d.label, n, counts), n)

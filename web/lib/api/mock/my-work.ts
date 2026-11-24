@@ -59,7 +59,7 @@ const FORTY_NAMES = [
   'Welcome checklist that remembers what each person skipped', 'Sample project on first sign-in', 'In-app tour for the alert rules page',
   'Status page link in the footer', 'Read-only share links', 'Comment mentions with email',
   'Dark mode for printed reports', 'CSV import of contacts', 'Duplicate contact merge',
-  'Lead source on every deal', 'Rep leaderboard by week', 'Call notes from the phone app',
+  'Lead source on every deal', 'Rep leaderboard by week', 'Call notes from the phone app', 'Spam check on sign-up',
 ];
 const DAYS = ['Nov 16', 'Nov 19', 'Nov 23', 'Nov 25', 'Nov 26', 'Nov 27', 'Dec 1', 'Dec 3', 'Dec 8', 'Dec 10', 'Jan 6', 'Jan 20', null]; // MOCK-HOOK
 const WHEN: MwItem['when'][] = [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4]; // MOCK-HOOK

@@ -13,7 +13,7 @@ import { FeaturePanel } from '@/app/simple/roadmap/_panel';
 import { OpenFeatureContext, useOpenFeature } from '@/components/simple/OpenFeature';
 import { MW_FORTY, MW_ITEMS, MW_UNOWNED, type MwItem, type MwKind } from '@/lib/api/mock/my-work';
 import { Link } from '@/lib/nav';
-import { mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { decideLate, mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { useMe } from '@/lib/me';
 
 const KIND_ICON: Record<MwKind, IconName> = {
@@ -88,16 +88,16 @@ function Row({
         {opens ? (
           <button
             type="button"
-            className="min-w-0 flex-1 truncate text-left text-base font-[650] hover:underline"
+            className="min-w-0 flex-1 truncate text-left text-base font-[650] hover:underline max-[600px]:whitespace-normal"
             onClick={() => open?.({ code: item.code!, name: item.name })}
           >
             {title}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-base font-[650]">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-base font-[650] max-[600px]:whitespace-normal">{title}</span>
         )}
         {status}
-        <span className="simple-meta tnum w-20 text-right">{item.due ?? 'No date'}</span>
+        <span className="simple-meta tnum w-20 text-right max-[600px]:w-14">{item.due ?? 'No date'}</span>
       </li>
     ); // MOCK-HOOK
   return (
@@ -366,7 +366,7 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
   let items = taken ?? base; // MOCK-HOOK
   if (place === 'roadmap') items = items.filter((i) => i.kind === 'feature' || i.kind === 'milestone'); // MOCK-HOOK
   if (place === 'home') items = items.filter((i) => i.kind !== 'decision'); // MOCK-HOOK
-  const open = items.filter((i) => !decided[i.id] || act === 'done'); // MOCK-HOOK
+  const open = items; // MOCK-HOOK: a decided row stays, with Undo
   const left = items.filter((i) => !decided[i.id]); // MOCK-HOOK
   const forty = items.length > 20; // MOCK-HOOK
   const compact = forty && v3 === 'b'; // MOCK-HOOK
@@ -378,7 +378,7 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       canAct={canAct}
       act={i.id === 'd1' ? act : null}
       decided={decided[i.id]}
-      onDecide={(a) => setDecided({ ...decided, [i.id]: a })}
+      onDecide={(a) => (setDecided({ ...decided, [i.id]: a }), i.when === 0 && decideLate())}
     />
   ); // MOCK-HOOK
   if (items.length === 0) return <Empty canAct={canAct} onTaken={setTaken} />; // MOCK-HOOK
@@ -535,8 +535,6 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
   ); // MOCK-HOOK
   const phone = usePhone(); // MOCK-HOOK
   const { can } = useMe(); // MOCK-HOOK
-  const info =
-    'Features and milestones you own, decisions you make and proposals you made. Late and at risk first.'; // MOCK-HOOK
   const inner = (
     <OpenFeatureContext.Provider value={setFeature}>
       {feature && (
@@ -559,7 +557,7 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
       </Page>
     ); // MOCK-HOOK
   return (
-    <SimplePage title="My work" info={info}>
+    <SimplePage title="My work">
       {inner}
     </SimplePage>
   ); // MOCK-HOOK
