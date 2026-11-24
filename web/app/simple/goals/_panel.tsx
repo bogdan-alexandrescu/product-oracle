@@ -5,7 +5,7 @@
  * a feature: its details, dependencies both ways, dates, goal and how it is measured, each
  * editable there through the change engine, as on Simple Roadmap.
  */
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { toast as dsToast, type ToastAsk } from '@/components/ds';
 import { api, unwrap } from '@/lib/api/client';
@@ -59,12 +59,15 @@ export function FeaturePanel({
   name,
   placed,
   onClose,
+  onShown,
 }: {
   id: string;
   code?: string;
   name: string;
   placed?: Placement | null;
   onClose: () => void;
+  /** #1748: the item it shows once a dependency opened in its place (null: the card's own feature). */
+  onShown?: (item: { id: string; code: string | null; title: string } | null) => void;
 }) {
   const { can } = useMe();
   const phone = usePhone();
@@ -88,6 +91,11 @@ export function FeaturePanel({
   // goal-ladder L-2: a feature the ladder places under a goal's milestone reads that goal here,
   // so the panel and its card agree (the item's own goal, when it has one, stays).
   const own = !!found && found.id === id && !!placed;
+  const shown = opened && found ? found : null;
+  useEffect(
+    () => onShown?.(shown && { id: shown.id, code: shown.code ?? null, title: shown.title }),
+    [onShown, shown],
+  );
   const item = useMemo(
     () =>
       found && own && !found.goal

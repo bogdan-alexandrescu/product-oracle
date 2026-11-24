@@ -173,6 +173,22 @@ function placement(map: GoalMap, c: Chip, codes: Map<string, string>): Placement
 /** The ring's key: one chip, a feature under one goal. */
 const ringOf = (feature: string, goal: string) => `${feature} ${goal}`;
 
+/** #1748: the chip of the feature the panel shows: the clicked one, else one of the feature it moved to (none: no chip). */
+function markOf(
+  panel: Chip | null,
+  shown: { id: string; code: string | null; title: string } | null,
+  chips: Chip[],
+  codes: Map<string, string>,
+): string | null {
+  if (!panel) return null;
+  const is = (f: Chip) =>
+    !shown ||
+    f.id === shown.id ||
+    (!!shown.code && codes.get(f.id)?.toLowerCase() === shown.code.toLowerCase());
+  const hit = is(panel) ? panel : chips.find(is);
+  return hit ? ringOf(hit.id, hit.goal) : null;
+}
+
 function reveal(sel: string, block: ScrollLogicalPosition = 'center') {
   setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: 'nearest' }), 50);
 }
@@ -193,6 +209,8 @@ interface Ctx {
   mcode: Map<string, string>;
   tracks: Track[];
   onOpen: (c: Chip) => void;
+  /** #1748: the chip whose panel is open (its ringOf key), marked. */
+  opened: string | null;
   menu: string | null;
   setMenu: (k: string | null) => void;
   setMover: (c: Chip | null) => void;
@@ -309,14 +327,18 @@ function Menu({
   label,
   items,
   c,
+  pin,
 }: {
   k: string;
   label: string;
   items: { w: string; on: () => void; crit?: boolean }[];
   c: Ctx;
+  /** #1769: placed on the window under its ⋯, so the held goal row (a sideways scroll box) does not cut it. */
+  pin?: boolean;
 }) {
   const open = c.menu === k;
   const more = useRef<HTMLButtonElement>(null);
+  const [at, setAt] = useState<CSSProperties | undefined>(undefined);
   return (
     <span
       className="relative inline-flex"
@@ -337,7 +359,17 @@ function Menu({
         aria-label={`More for ${label}`}
         aria-expanded={open}
         data-testid={`gm-menu-${k}`}
-        onClick={(e) => (e.stopPropagation(), c.setMenu(open ? null : k))}
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          if (pin)
+            setAt({
+              position: 'fixed',
+              top: r.bottom,
+              right: document.documentElement.clientWidth - r.right,
+            });
+          c.setMenu(open ? null : k);
+        }}
         className={`rounded-md px-1 leading-none text-text2 hover:bg-surface2 ${open ? 'bg-surface2' : ''}`}
       >
         <Icon name="more" size={16} />
@@ -345,6 +377,7 @@ function Menu({
       {open && (
         <span
           role="menu"
+          style={pin ? at : undefined}
           className="absolute top-full right-0 z-30 mt-1 flex w-max min-w-[180px] flex-col rounded-xl border border-line bg-surface py-1 text-sm shadow-lg"
         >
           {items.map((it) => (
@@ -424,7 +457,7 @@ function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
     { w: 'Propose a milestone', on: () => c.onEdit({ kind: 'propose', goal: g.id }) },
     { w: 'Pick its metric', on: () => c.onEdit({ kind: 'metric', goal: g.id }) },
   ];
-  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={items} />;
+  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={items} pin />;
 }
 
 /** What resolves a goal's badge: Not measured, its metric; No gate, its first milestone's gate. */
@@ -505,6 +538,27 @@ function MilestoneDay({ m, c }: { m: M; c: Ctx }) {
   );
 }
 
+/** #1771: a milestone with no number to reach (its gate). Plain words, and one that can be set looks like a button. */
+function NoTarget({ m, c }: { m: M; c: Ctx }) {
+  if (!m.can_change)
+    return (
+      <span className="rounded-full bg-na-bg px-1.5 text-xs font-semibold whitespace-nowrap text-na">
+        No target
+      </span>
+    );
+  return (
+    <Button
+      variant="ghost"
+      data-testid="gm-strip-target"
+      title="Set the number this milestone must reach"
+      onClick={(e) => (e.stopPropagation(), c.onEdit({ kind: 'gate', milestone: m.id }))}
+      className="h-auto! min-h-0! cursor-pointer gap-0! rounded-full! border! border-dashed! border-accent! px-1.5! py-0! text-xs! leading-[18px]! font-semibold! whitespace-nowrap text-accent-ink! hover:bg-accent-soft!"
+    >
+      + Target
+    </Button>
+  );
+}
+
 /** A feature's status mark; its ⋯ menu takes the same place on hover or focus, and while its menu is open.
  * The open menu is read from state, not CSS :has(): a :has() rule is global and made every style
  * recalculation on the 500-item Roadmap's drag ten times slower (dod-perf). */
@@ -538,6 +592,16 @@ function Legend({ tracks, guardrail }: { tracks: Track[]; guardrail: GoalMap['gu
           {t.name}
         </span>
       ))}
+      {/* #1770: what a chip's mark means. */}
+      <span className="flex items-center gap-1.5 px-1 text-sm" data-testid="gm-legend-marks">
+        <span className="flex items-center gap-1">
+          <span className="text-xs text-pass">✓</span>Shipped
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="size-2 rounded-full border border-text-faint" />
+          Planned
+        </span>
+      </span>
       {guardrail && <Guardrail g={guardrail} />}
     </span>
   );
@@ -1105,6 +1169,10 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
 
 /* ---------- The grid ---------- */
 
+/** The grid's columns: the track names, then one per goal (the goal row and the rest share them). */
+const GRID =
+  'grid min-w-[1000px] grid-cols-[150px_repeat(var(--gm-n),minmax(0,1fr))] gap-x-3 max-[600px]:grid-cols-[96px_repeat(var(--gm-n),220px)]';
+
 function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrLine[]>; c: Ctx }) {
   const goals = c.goalDrag.shown
     .map((id) => c.map.goals.find((g) => g.id === id))
@@ -1129,278 +1197,304 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
       .map((id) => inCell(goal, track).find((f) => f.id === id)!);
   const inCell = (goal: string, track: string | null) =>
     chips.filter((f) => at(f).goal === goal && at(f).track === track);
+  const wrap = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  // The goal row's own sideways scroll (no bar) and the grid's move as one, either way.
+  const follow = (to: HTMLDivElement | null, x: number) => {
+    if (to && to.scrollLeft !== x) to.scrollLeft = x;
+  };
+  useEffect(() => {
+    const [w, b, g] = [wrap.current, box.current, grid.current];
+    if (!w || !b || !g) return;
+    const ro = new ResizeObserver(() => {
+      w.style.setProperty('--gm-head-h', `${b.offsetHeight}px`);
+      follow(b, g.scrollLeft);
+    });
+    ro.observe(b);
+    ro.observe(g);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div className="flex flex-col gap-3 overflow-x-auto" data-testid="gm-grid">
+    // #1769: the goal row holds at the top at every width. It sits outside the sideways scroll box (a sticky row
+    // needs no scrolling box between it and the page) and follows that box's scroll; focus stops clear of it.
+    <div ref={wrap} className="@container" style={{ '--gm-n': n } as CSSProperties}>
       <div
-        className="grid min-w-[1000px] grid-cols-[150px_repeat(var(--gm-n),minmax(0,1fr))] gap-x-3 max-[600px]:grid-cols-[96px_repeat(var(--gm-n),220px)]"
-        style={{ '--gm-n': n } as CSSProperties}
+        ref={box}
+        data-testid="gm-head-box"
+        onScroll={(e) => follow(grid.current, e.currentTarget.scrollLeft)}
+        className="sticky top-0 z-20 overflow-x-auto overflow-y-hidden bg-bg [scrollbar-width:none] max-[600px]:top-(--phone-top-bar)"
       >
-        {/* The corner: on a phone it holds still with the track names, so the goal cards pass under it. */}
-        <span
-          data-testid="gm-corner"
-          className="max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
-        />
-        {goals.map((g) => (
-          <div
-            key={g.id}
-            data-goal={g.id}
-            data-testid="gm-goal"
-            {...c.goalDrag.target(g.id)}
-            className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3"
-          >
-            {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
+        <div data-testid="gm-head" className={`${GRID} pb-px`}>
+          {/* The corner: on a phone it holds still with the track names, so the goal cards pass under it. */}
+          <span
+            data-testid="gm-corner"
+            className="max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
+          />
+          {goals.map((g) => (
+            <div
+              key={g.id}
+              data-goal={g.id}
+              data-testid="gm-goal"
+              {...c.goalDrag.target(g.id)}
+              className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3"
+            >
+              {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
                 out) and the status moves under it, still on the right. Lines as tall as the target's glyphs, so a
                 status under it never meets them; -3px so the row takes the room it did. */}
-            <div className="-my-[3px] flow-root">
-              <span className="float-right ml-1 flex h-[30px] items-center gap-1">
-                <GoalInfo g={g} krs={lines.get(g.id) ?? []} />
-                {goalMenu(
-                  g,
-                  all.filter((m) => m.goal === g.id),
-                  c,
-                )}
-              </span>
-              <span className="text-xl leading-[30px] font-bold">{num(g.target, g.unit)}</span>
-              <span className="float-right ml-2 flex h-[30px] items-center">
-                <Status
-                  s={g.status}
-                  {...goalFix(
+              <div className="-my-[3px] flow-root">
+                <span className="float-right ml-1 flex h-[30px] items-center gap-1">
+                  <GoalInfo g={g} krs={lines.get(g.id) ?? []} />
+                  {goalMenu(
                     g,
                     all.filter((m) => m.goal === g.id),
                     c,
                   )}
-                />
-              </span>
-            </div>
-            {c.renaming === g.id ? (
-              <Rename id={g.id} was={g.name} c={c} className="text-base" />
-            ) : (
-              <span
-                {...c.goalDrag.handle(g.id, g.name)}
-                className="line-clamp-2 min-h-[2.5em] text-base leading-[1.25] font-semibold"
-                title={g.name}
-              >
-                {g.name}
-              </span>
-            )}
-            <Bar g={g} />
-          </div>
-        ))}
-        <span className="pt-2 text-xs font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
-          Milestones
-        </span>
-        {/* The milestone strip: by date across the goals, each under the goal it measures. */}
-        <div
-          className="col-span-(--gm-n) grid grid-cols-[repeat(var(--gm-n),minmax(0,1fr))] gap-x-3 pt-2 max-[600px]:grid-cols-[repeat(var(--gm-n),220px)]"
-          data-testid="gm-strip"
-        >
-          {goals.map((g) => (
-            <div
-              key={g.id}
-              className="flex flex-wrap content-start items-start gap-1 border-t-4 pt-1.5"
-              style={{ borderColor: 'var(--accent-mid)' }}
-            >
-              {all
-                .filter((m) => m.goal === g.id)
-                .map((m) => (
-                  <span
-                    key={m.id}
-                    data-milestone={m.id}
-                    data-testid="gm-strip-milestone"
-                    className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-xs"
-                  >
-                    <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
-                    {c.renaming === m.id ? (
-                      <Rename id={m.id} was={m.name} c={c} className="text-xs" />
-                    ) : (
-                      <span
-                        className="line-clamp-2 min-w-0 break-words"
-                        title={m.name}
-                        data-testid="gm-strip-name"
-                        onDoubleClick={() => m.can_change && c.setRenaming(m.id)}
-                      >
-                        {m.name}
-                      </span>
+                </span>
+                <span className="text-xl leading-[30px] font-bold">{num(g.target, g.unit)}</span>
+                <span className="float-right ml-2 flex h-[30px] items-center">
+                  <Status
+                    s={g.status}
+                    {...goalFix(
+                      g,
+                      all.filter((m) => m.goal === g.id),
+                      c,
                     )}
-                    <MilestoneDay m={m} c={c} />
-                    {m.threshold === null && (
-                      <Status
-                        s="no_gate"
-                        small
-                        on={
-                          m.can_change
-                            ? () => c.onEdit({ kind: 'gate', milestone: m.id })
-                            : undefined
-                        }
-                        hint="Set the gate"
-                      />
-                    )}
-                    {/* Out of sight at rest, not display:none, so Tab reaches it; it shows on hover or focus as a chip's ⋯. */}
-                    <span
-                      className={`${c.menu === `m-${m.id}` ? 'inline-flex' : 'sr-only'} group-hover:not-sr-only group-hover:inline-flex group-focus-within:not-sr-only group-focus-within:inline-flex max-[600px]:not-sr-only max-[600px]:inline-flex`}
-                    >
-                      {milestoneMenu(m, c)}
-                    </span>
-                  </span>
-                ))}
+                  />
+                </span>
+              </div>
+              {c.renaming === g.id ? (
+                <Rename id={g.id} was={g.name} c={c} className="text-base" />
+              ) : (
+                <span
+                  {...c.goalDrag.handle(g.id, g.name)}
+                  className="line-clamp-2 min-h-[2.5em] text-base leading-[1.25] font-semibold"
+                  title={g.name}
+                >
+                  {g.name}
+                </span>
+              )}
+              <Bar g={g} />
             </div>
           ))}
         </div>
-        {c.tracks.map((t) => (
-          <div key={t.id ?? 'none'} className="contents">
-            <span
-              className="flex items-start gap-1.5 border-t border-line pt-2 text-sm leading-[18px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
-              data-testid="gm-track"
-              data-track={t.id ?? 'none'}
-            >
-              <span
-                className="mt-1 size-2.5 shrink-0 rounded-full"
-                style={{ background: t.color }}
-              />
-              {t.name}
-            </span>
+      </div>
+      <div
+        ref={grid}
+        data-testid="gm-grid"
+        onScroll={(e) => follow(box.current, e.currentTarget.scrollLeft)}
+        className="relative flex flex-col overflow-x-auto @min-[1000px]:overflow-x-visible [&_*]:scroll-mt-[calc(var(--gm-head-h,0px)+8px)]"
+      >
+        <div className={GRID}>
+          <span className="pt-2 text-xs font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
+            Milestones
+          </span>
+          {/* The milestone strip: by date across the goals, each under the goal it measures. */}
+          <div
+            className="col-span-(--gm-n) grid grid-cols-[repeat(var(--gm-n),minmax(0,1fr))] gap-x-3 pt-2 max-[600px]:grid-cols-[repeat(var(--gm-n),220px)]"
+            data-testid="gm-strip"
+          >
             {goals.map((g) => (
-              <ul
+              <div
                 key={g.id}
-                className="group flex min-h-10 flex-col gap-1 border-t border-line py-1.5"
-                data-testid="gm-cell"
-                data-track={t.id ?? 'none'}
-                data-goal={g.id}
-                onDragOver={(e) => {
-                  if (c.canChange && e.dataTransfer.types.includes('text/x-gm-chip'))
-                    e.preventDefault();
-                }}
-                onDrop={(e) => {
-                  const key = e.dataTransfer.getData('text/x-gm-chip');
-                  if (!key) return;
-                  e.preventDefault();
-                  c.dropOn(key, g.id, t.id);
-                }}
+                className="flex flex-wrap content-start items-start gap-1 border-t-4 pt-1.5"
+                style={{ borderColor: 'var(--accent-mid)' }}
               >
-                {/* simple-goals: an empty cell adds a feature of its track to its goal's first milestone (out of sight at rest, as a chip's ⋯). */}
-                {c.map.can_edit &&
-                  !chips.some((f) => f.goal === g.id && f.track === t.id) &&
-                  all.some((m) => m.goal === g.id) && (
-                    <li className="sr-only group-hover:not-sr-only group-focus-within:not-sr-only max-[600px]:not-sr-only">
-                      <button
-                        type="button"
-                        data-testid="gm-cell-add"
-                        className="text-sm font-semibold text-accent-ink hover:underline"
-                        onClick={() => c.onAttach(all.find((m) => m.goal === g.id)!.id, t.id)}
-                      >
-                        + Add a feature
-                      </button>
-                    </li>
-                  )}
-                {cellOrder(g.id, t.id).map((f) => (
-                  <li
-                    key={f.id}
-                    data-testid="gm-chip"
-                    data-feature={f.id}
-                    data-goal={g.id}
-                    data-track={t.id ?? 'none'}
-                    data-moved={c.moved === ringOf(f.id, g.id) ? '1' : undefined}
-                    draggable={c.canChange && c.renaming !== ringOf(f.id, f.goal)}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/x-gm-chip', ringOf(f.id, f.goal));
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDrop={(e) => {
-                      // prioritize: dropped on another chip of its own cell, it takes that chip's place.
-                      const from = cellIds(g.id, t.id).find(
-                        (id) => ringOf(id, g.id) === e.dataTransfer.getData('text/x-gm-chip'),
-                      );
-                      if (!from || from === f.id) return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void c.order.move(`${g.id}:${t.id}`, cellIds(g.id, t.id), from, f.id);
-                    }}
-                    className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-sm leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-2 ring-accent' : 'border-line'}`}
-                    style={{ borderLeft: `3px solid ${t.color}` }}
-                  >
-                    {c.renaming === ringOf(f.id, f.goal) && (
-                      <Rename id={f.id} was={f.name} c={c} className="flex-1 text-sm" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // A double-click renames, so the panel waits a beat for a second click.
-                        window.clearTimeout(clickAt.current);
-                        clickAt.current = window.setTimeout(
-                          () => c.onOpen(f),
-                          c.canChange ? 220 : 0,
-                        );
-                      }}
-                      onDoubleClick={() => {
-                        window.clearTimeout(clickAt.current);
-                        if (c.canChange) c.setRenaming(ringOf(f.id, f.goal));
-                      }}
-                      onKeyDown={(e) => {
-                        c.order.keys(`${g.id}:${t.id}`, cellIds(g.id, t.id), f.id)(e);
-                        if (e.key === 'F2' && c.canChange) {
-                          e.preventDefault();
-                          c.setRenaming(ringOf(f.id, f.goal));
-                        } else if (
-                          (e.key === 'Delete' || e.key === 'Backspace') &&
-                          c.map.can_edit
-                        ) {
-                          e.preventDefault();
-                          void c.act.trashFeature(f);
-                        }
-                      }}
-                      className={`min-w-0 flex-1 text-left ${c.renaming === ringOf(f.id, f.goal) ? 'hidden' : ''}`}
+                {all
+                  .filter((m) => m.goal === g.id)
+                  .map((m) => (
+                    <span
+                      key={m.id}
+                      data-milestone={m.id}
+                      data-testid="gm-strip-milestone"
+                      className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-xs"
                     >
-                      <span
-                        data-testid="gm-chip-name"
-                        className="block truncate hover:underline max-[600px]:whitespace-normal max-[600px]:line-clamp-2"
-                        title={`${c.codes.get(f.id) ?? ''} ${f.name}`.trim()}
-                      >
-                        <FeatureName
-                          item={{
-                            code: c.codes.get(f.id),
-                            title: f.name,
-                            confirm_feature_id: c.confirm.get(f.id),
-                          }}
-                        />
-                        {c.order.pending(f.id) && <PendingMark />}
-                      </span>
-                      {/* The milestones' codes and names, as people named them (a list, not prose). */}
-                      <span
-                        data-user-content
-                        data-testid="gm-chip-ms"
-                        className="line-clamp-2 text-xs text-text2 [overflow-wrap:anywhere]"
-                        title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : undefined}
-                      >
-                        {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : 'No milestone'}
-                      </span>
-                    </button>
-                    <Slot f={f} c={c} />
-                  </li>
-                ))}
-                {c.ghosts
-                  .filter((x) => x.goal === g.id && x.track === t.id)
-                  .map((x) => (
-                    <li
-                      key={x.key}
-                      data-testid="gm-chip-pending"
-                      data-proposed={x.proposed ? '1' : undefined}
-                      aria-busy={!x.proposed}
-                      className="flex items-center gap-1 rounded-lg border border-dashed border-line bg-surface px-2 py-0.5 text-sm leading-[17px] opacity-60"
-                      style={{ borderLeft: `3px solid ${t.color}` }}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{x.title}</span>
-                      {x.proposed && (
-                        <span className="text-xs text-text2" title="Waiting for a decision">
-                          ◷
+                      <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
+                      {c.renaming === m.id ? (
+                        <Rename id={m.id} was={m.name} c={c} className="text-xs" />
+                      ) : (
+                        <span
+                          className="line-clamp-2 min-w-0 break-words"
+                          title={m.name}
+                          data-testid="gm-strip-name"
+                          onDoubleClick={() => m.can_change && c.setRenaming(m.id)}
+                        >
+                          {m.name}
                         </span>
                       )}
-                    </li>
+                      <MilestoneDay m={m} c={c} />
+                      {m.threshold === null && <NoTarget m={m} c={c} />}
+                      {/* Out of sight at rest, not display:none, so Tab reaches it; it shows on hover or focus as a chip's ⋯. */}
+                      <span
+                        className={`${c.menu === `m-${m.id}` ? 'inline-flex' : 'sr-only'} group-hover:not-sr-only group-hover:inline-flex group-focus-within:not-sr-only group-focus-within:inline-flex max-[600px]:not-sr-only max-[600px]:inline-flex`}
+                      >
+                        {milestoneMenu(m, c)}
+                      </span>
+                    </span>
                   ))}
-                {c.canChange && <CellAdd goal={g.id} track={t.id} c={c} />}
-              </ul>
+              </div>
             ))}
           </div>
-        ))}
+          {c.tracks.map((t) => (
+            <div key={t.id ?? 'none'} className="contents">
+              <span
+                className="flex items-start gap-1.5 border-t border-line pt-2 text-sm leading-[18px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
+                data-testid="gm-track"
+                data-track={t.id ?? 'none'}
+              >
+                <span
+                  className="mt-1 size-2.5 shrink-0 rounded-full"
+                  style={{ background: t.color }}
+                />
+                {t.name}
+              </span>
+              {goals.map((g) => (
+                <ul
+                  key={g.id}
+                  className="group flex min-h-10 flex-col gap-1 border-t border-line py-1.5"
+                  data-testid="gm-cell"
+                  data-track={t.id ?? 'none'}
+                  data-goal={g.id}
+                  onDragOver={(e) => {
+                    if (c.canChange && e.dataTransfer.types.includes('text/x-gm-chip'))
+                      e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    const key = e.dataTransfer.getData('text/x-gm-chip');
+                    if (!key) return;
+                    e.preventDefault();
+                    c.dropOn(key, g.id, t.id);
+                  }}
+                >
+                  {/* simple-goals: an empty cell adds a feature of its track to its goal's first milestone (out of sight at rest, as a chip's ⋯). */}
+                  {c.map.can_edit &&
+                    !chips.some((f) => f.goal === g.id && f.track === t.id) &&
+                    all.some((m) => m.goal === g.id) && (
+                      <li className="sr-only group-hover:not-sr-only group-focus-within:not-sr-only max-[600px]:not-sr-only">
+                        <button
+                          type="button"
+                          data-testid="gm-cell-add"
+                          className="text-sm font-semibold text-accent-ink hover:underline"
+                          onClick={() => c.onAttach(all.find((m) => m.goal === g.id)!.id, t.id)}
+                        >
+                          + Add a feature
+                        </button>
+                      </li>
+                    )}
+                  {cellOrder(g.id, t.id).map((f) => (
+                    <li
+                      key={f.id}
+                      data-testid="gm-chip"
+                      data-feature={f.id}
+                      data-goal={g.id}
+                      data-track={t.id ?? 'none'}
+                      data-moved={c.moved === ringOf(f.id, g.id) ? '1' : undefined}
+                      aria-current={c.opened === ringOf(f.id, g.id) ? 'true' : undefined}
+                      draggable={c.canChange && c.renaming !== ringOf(f.id, f.goal)}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/x-gm-chip', ringOf(f.id, f.goal));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDrop={(e) => {
+                        // prioritize: dropped on another chip of its own cell, it takes that chip's place.
+                        const from = cellIds(g.id, t.id).find(
+                          (id) => ringOf(id, g.id) === e.dataTransfer.getData('text/x-gm-chip'),
+                        );
+                        if (!from || from === f.id) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void c.order.move(`${g.id}:${t.id}`, cellIds(g.id, t.id), from, f.id);
+                      }}
+                      className={`group flex items-center gap-1 rounded-lg border px-2 py-0.5 text-sm leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-surface ring-2 ring-accent' : c.opened === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-line bg-surface'}`}
+                      style={{ borderLeft: `3px solid ${t.color}` }}
+                    >
+                      {c.renaming === ringOf(f.id, f.goal) && (
+                        <Rename id={f.id} was={f.name} c={c} className="flex-1 text-sm" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // A double-click renames, so the panel waits a beat for a second click.
+                          window.clearTimeout(clickAt.current);
+                          clickAt.current = window.setTimeout(
+                            () => c.onOpen(f),
+                            c.canChange ? 220 : 0,
+                          );
+                        }}
+                        onDoubleClick={() => {
+                          window.clearTimeout(clickAt.current);
+                          if (c.canChange) c.setRenaming(ringOf(f.id, f.goal));
+                        }}
+                        onKeyDown={(e) => {
+                          c.order.keys(`${g.id}:${t.id}`, cellIds(g.id, t.id), f.id)(e);
+                          if (e.key === 'F2' && c.canChange) {
+                            e.preventDefault();
+                            c.setRenaming(ringOf(f.id, f.goal));
+                          } else if (
+                            (e.key === 'Delete' || e.key === 'Backspace') &&
+                            c.map.can_edit
+                          ) {
+                            e.preventDefault();
+                            void c.act.trashFeature(f);
+                          }
+                        }}
+                        className={`min-w-0 flex-1 text-left ${c.renaming === ringOf(f.id, f.goal) ? 'hidden' : ''}`}
+                      >
+                        <span
+                          data-testid="gm-chip-name"
+                          className="line-clamp-2 break-words hover:underline"
+                          title={`${c.codes.get(f.id) ?? ''} ${f.name}`.trim()}
+                        >
+                          <FeatureName
+                            item={{
+                              code: c.codes.get(f.id),
+                              title: f.name,
+                              confirm_feature_id: c.confirm.get(f.id),
+                            }}
+                          />
+                          {c.order.pending(f.id) && <PendingMark />}
+                        </span>
+                        {/* The milestones' codes and names, as people named them (a list, not prose); #1770: No milestone
+                          is for a screen reader only, not a line on nearly every chip. */}
+                        <span
+                          data-user-content
+                          data-testid="gm-chip-ms"
+                          className={`${f.ms.length ? 'line-clamp-2' : 'sr-only'} text-xs text-text2 [overflow-wrap:anywhere]`}
+                          title={
+                            f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : undefined
+                          }
+                        >
+                          {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : 'No milestone'}
+                        </span>
+                      </button>
+                      <Slot f={f} c={c} />
+                    </li>
+                  ))}
+                  {c.ghosts
+                    .filter((x) => x.goal === g.id && x.track === t.id)
+                    .map((x) => (
+                      <li
+                        key={x.key}
+                        data-testid="gm-chip-pending"
+                        data-proposed={x.proposed ? '1' : undefined}
+                        aria-busy={!x.proposed}
+                        className="flex items-center gap-1 rounded-lg border border-dashed border-line bg-surface px-2 py-0.5 text-sm leading-[17px] opacity-60"
+                        style={{ borderLeft: `3px solid ${t.color}` }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{x.title}</span>
+                        {x.proposed && (
+                          <span className="text-xs text-text2" title="Waiting for a decision">
+                            ◷
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  {c.canChange && <CellAdd goal={g.id} track={t.id} c={c} />}
+                </ul>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1705,6 +1799,10 @@ export function GoalMapPage() {
     new Map(),
   );
   const [panel, setPanel] = useState<Chip | null>(null);
+  // #1748: a dependency the panel opened in its place (null: the clicked chip's own feature).
+  const [shown, setShown] = useState<{ id: string; code: string | null; title: string } | null>(
+    null,
+  );
   const [attach, setAttach] = useState<string | null>(null);
   const [attachTrack, setAttachTrack] = useState<string | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -1874,7 +1972,8 @@ export function GoalMapPage() {
     confirm,
     mcode,
     tracks,
-    onOpen: setPanel,
+    onOpen: (f) => (setShown(null), setPanel(f)),
+    opened: markOf(panel, shown, chips, codes),
     menu,
     setMenu,
     setMover,
@@ -2089,7 +2188,9 @@ export function GoalMapPage() {
           code={codes.get(panel.id)}
           name={panel.name}
           placed={placement(map, panel, mcode)}
+          onShown={setShown}
           onClose={() => {
+            setShown(null);
             setPanel(null);
             void refresh();
           }}
