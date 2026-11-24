@@ -36,7 +36,7 @@ async function snap(page: Page, name: string, opts: { dark?: boolean; cost?: str
       document.body.appendChild(d); // MOCK-HOOK
     }, opts.cost); // MOCK-HOOK
   await page.screenshot({ path: path.join(FR, `${name}.png`) }); // MOCK-HOOK
-  if (opts.dark) { // MOCK-HOOK
+  if (opts.dark !== false) { // MOCK-HOOK: every frame also gets its dark PNG
     await page.evaluate(() => (document.documentElement.dataset.theme = 'dark')); // MOCK-HOOK
     await page.waitForTimeout(300); // MOCK-HOOK
     await page.screenshot({ path: path.join(FR, `${name}-dark.png`) }); // MOCK-HOOK

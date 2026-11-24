@@ -21,6 +21,16 @@ function useWatched(): Set<string> { // MOCK-HOOK
   return useSyncExternalStore((f) => (subs.add(f), () => subs.delete(f)), () => watched, () => watched); // MOCK-HOOK
 } // MOCK-HOOK
 
+// WD1 A: which panel has its Watch choices open, and the last "Watching ..." note. // MOCK-HOOK
+let ui: { open: string | null; said: string | null } = { open: null, said: null }; // MOCK-HOOK
+let uiSeeded = false; // MOCK-HOOK
+const uiSubs = new Set<() => void>(); // MOCK-HOOK
+const setUi = (p: Partial<typeof ui>) => { ui = { ...ui, ...p }; uiSubs.forEach((f) => f()); }; // MOCK-HOOK
+function useUi(itemKey: string) { // MOCK-HOOK
+  if (!uiSeeded) { uiSeeded = true; if (mk.step() === 'open' || mk.step() === 'mid') ui = { ...ui, open: itemKey }; } // MOCK-HOOK
+  return useSyncExternalStore((f) => (uiSubs.add(f), () => uiSubs.delete(f)), () => ui, () => ui); // MOCK-HOOK
+} // MOCK-HOOK
+
 const Svg = ({ d, size = 16, fill = 'none' }: { d: string; size?: number; fill?: string }) => ( // MOCK-HOOK
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="flex-none"><path d={d} /></svg> // MOCK-HOOK
 ); // MOCK-HOOK
@@ -36,10 +46,10 @@ const pill = 'inline-flex h-7 flex-none items-center gap-1.5 rounded-md border b
 export function WatchHeadMk({ itemKey, title, code }: { itemKey: string; title: string; code?: string | null }) { // MOCK-HOOK
   const v = mk.wd1(); // MOCK-HOOK
   const w = useWatched(); // MOCK-HOOK
+  const u = useUi(itemKey); // MOCK-HOOK
   const on = w.has(itemKey); // MOCK-HOOK
-  const [open, setOpen] = useState(mk.step() === 'open' || mk.step() === 'mid'); // MOCK-HOOK
-  const [picked, setPicked] = useState<boolean[]>(EVENTS.map((_, k) => !(mk.step() === 'mid' && k >= 3))); // MOCK-HOOK
-  const [said, setSaid] = useState<string | null>(mk.step() === 'done' ? `Watching ${code ?? ''} ${title}` : null); // MOCK-HOOK
+  const open = u.open === itemKey; // MOCK-HOOK
+  void title; void code; // MOCK-HOOK: the note's name comes from the panel (WatchMenuMk)
   if (!v || v === 'd' || v === 'c') return null; // MOCK-HOOK
   if (v === 'b') // MOCK-HOOK
     return ( // MOCK-HOOK
@@ -49,27 +59,12 @@ export function WatchHeadMk({ itemKey, title, code }: { itemKey: string; title: 
     ); // MOCK-HOOK
   return ( // MOCK-HOOK
     <div className="relative flex-none"> {/* MOCK-HOOK */}
-      <button type="button" data-mk="watch" aria-expanded={open} onClick={() => setOpen(!open)} className={`${pill} ${on ? 'border-accent bg-accent-soft text-accent-ink' : 'text-text hover:bg-surface2'}`}> {/* MOCK-HOOK */}
+      <button type="button" data-mk="watch" aria-expanded={open} onClick={() => setUi({ open: open ? null : itemKey })} className={`${pill} ${on ? 'border-accent bg-accent-soft text-accent-ink' : 'text-text hover:bg-surface2'}`}> {/* MOCK-HOOK */}
         <Svg d={BELL} fill={on ? 'currentColor' : 'none'} /> {on ? 'Watching' : 'Watch'} {/* MOCK-HOOK */}
       </button> {/* MOCK-HOOK */}
-      {open && ( // MOCK-HOOK
-        <div role="dialog" aria-label="Watch" data-mk="watch-menu" className="absolute right-0 z-50 mt-1 w-64 rounded-lg border border-line bg-surface p-3 shadow-tip"> {/* MOCK-HOOK */}
-          <p className="text-xs font-semibold tracking-[.06em] text-text2 uppercase">Tell me when</p> {/* MOCK-HOOK */}
-          {EVENTS.map((e, k) => ( // MOCK-HOOK
-            <label key={e} className="mt-2 flex items-center gap-2 text-sm"> {/* MOCK-HOOK */}
-              <input type="checkbox" data-mk={`ev${k}`} checked={picked[k]} onChange={() => setPicked(picked.map((p, j) => (j === k ? !p : p)))} /> {e} {/* MOCK-HOOK */}
-            </label> // MOCK-HOOK
-          ))} {/* MOCK-HOOK */}
-          <p className="mt-2 text-xs text-text2">Daily email at 8:00 AM · <a className="font-semibold text-accent-ink underline" href="/account?wd3=a">Change</a></p> {/* MOCK-HOOK */}
-          <div className="mt-3 flex gap-2"> {/* MOCK-HOOK */}
-            <button type="button" data-mk="watch-save" onClick={() => { setWatched(itemKey, true); setOpen(false); setSaid(`Watching ${code ?? ''} ${title}: ${EVENTS.map((e, k) => (picked[k] ? SHORT[k] : null)).filter(Boolean).join(', ')}`); }} className="h-8 rounded-md bg-accent px-3 text-sm font-semibold text-on-accent">{on ? 'Save' : 'Watch'}</button> {/* MOCK-HOOK */}
-            {on && <button type="button" onClick={() => { setWatched(itemKey, false); setOpen(false); setSaid(null); }} className="h-8 rounded-md px-3 text-sm font-semibold text-accent-ink hover:bg-surface2">Stop watching</button>} {/* MOCK-HOOK */}
-          </div> {/* MOCK-HOOK */}
-        </div> // MOCK-HOOK
-      )} {/* MOCK-HOOK */}
-      {said && on && !open && ( // MOCK-HOOK
+      {u.said && on && !open && ( // MOCK-HOOK
         <div role="status" data-mk="toast" className="fixed left-1/2 -translate-x-1/2 bottom-20 z-[60] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-tip"> {/* MOCK-HOOK */}
-          <span>✓ {said}</span> {/* MOCK-HOOK */}
+          <span>✓ {u.said}</span> {/* MOCK-HOOK */}
           <button type="button" className="font-semibold underline" onClick={() => setWatched(itemKey, false)}>Undo</button> {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
       )} {/* MOCK-HOOK */}
@@ -77,14 +72,42 @@ export function WatchHeadMk({ itemKey, title, code }: { itemKey: string; title: 
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
+/** WD1 A: the "Tell me when" choices open in place under the panel's head, so they push the panel down and never cover it. */ // MOCK-HOOK
+function WatchMenuMk({ itemKey, label }: { itemKey: string; label: string }) { // MOCK-HOOK
+  const w = useWatched(); // MOCK-HOOK
+  const on = w.has(itemKey); // MOCK-HOOK
+  const viewer = mk.role() === 'viewer'; // MOCK-HOOK: a viewer gets no suggestions, so is not offered them
+  const ev = EVENTS.map((e, k) => [e, k] as const).filter(([, k]) => !(viewer && k === 4)); // MOCK-HOOK
+  const [picked, setPicked] = useState<boolean[]>(EVENTS.map((_, k) => !(mk.step() === 'mid' && k >= 3))); // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <div role="group" aria-label="Watch" data-mk="watch-menu" className="mt-3 rounded-lg border border-line bg-surface2 p-3"> {/* MOCK-HOOK */}
+      <p className="text-xs font-semibold tracking-[.06em] text-text2 uppercase">Tell me when</p> {/* MOCK-HOOK */}
+      <div className="mt-1 grid grid-cols-1"> {/* MOCK-HOOK */}
+        {ev.map(([e, k]) => ( // MOCK-HOOK
+          <label key={e} className="mt-1.5 flex items-center gap-2 text-sm"> {/* MOCK-HOOK */}
+            <input type="checkbox" data-mk={`ev${k}`} checked={picked[k]} onChange={() => setPicked(picked.map((p, j) => (j === k ? !p : p)))} /> {e} {/* MOCK-HOOK */}
+          </label> // MOCK-HOOK
+        ))} {/* MOCK-HOOK */}
+      </div> {/* MOCK-HOOK */}
+      <div className="mt-3 flex flex-wrap items-center gap-2"> {/* MOCK-HOOK */}
+        <button type="button" data-mk="watch-save" onClick={() => { setWatched(itemKey, true); setUi({ open: null, said: `Watching ${label}: ${ev.map(([, k]) => (picked[k] ? SHORT[k] : null)).filter(Boolean).join(', ')}` }); }} className="h-8 rounded-md bg-accent px-3 text-sm font-semibold text-on-accent">{on ? 'Save' : 'Watch'}</button> {/* MOCK-HOOK */}
+        {on && <button type="button" onClick={() => { setWatched(itemKey, false); setUi({ open: null, said: null }); }} className="h-8 rounded-md px-3 text-sm font-semibold text-accent-ink hover:bg-surface2">Stop watching</button>} {/* MOCK-HOOK */}
+        <span className="ml-auto text-xs text-text2">Daily email at 8:00 AM · <a className="font-semibold text-accent-ink underline" href="/account?wd3=a">Change</a></span> {/* MOCK-HOOK */}
+      </div> {/* MOCK-HOOK */}
+    </div> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+
 /** WD1 c and d: a line under the panel's head (who watches / why I hear about it). */ // MOCK-HOOK
-export function WatchLineMk({ itemKey, canChange, deciders = [] }: { itemKey: string; canChange: boolean; deciders?: string[] }) { // MOCK-HOOK
+export function WatchLineMk({ itemKey, canChange, deciders = [], label = '' }: { itemKey: string; canChange: boolean; deciders?: string[]; label?: string }) { // MOCK-HOOK
   const v = mk.wd1(); // MOCK-HOOK
   const w = useWatched(); // MOCK-HOOK
   const on = w.has(itemKey); // MOCK-HOOK
   const [adding, setAdding] = useState(mk.step() === 'open' || mk.step() === 'mid'); // MOCK-HOOK
   const [extra, setExtra] = useState<string[]>(mk.step() === 'done' ? ['Rae Okafor'] : []); // MOCK-HOOK
   const [muted, setMuted] = useState(false); // MOCK-HOOK
+  const u = useUi(itemKey); // MOCK-HOOK
+  if (v === 'a') return u.open === itemKey ? <WatchMenuMk itemKey={itemKey} label={label} /> : null; // MOCK-HOOK
   if (v === 'c') { // MOCK-HOOK
     const many = mk.n() === 'many'; // MOCK-HOOK
     const who = [...new Set([...(on ? ['You'] : []), ...extra, ...(many ? MK_WATCHERS.slice(1) : itemKey === 'alert-digest' ? ['Jonah Prell'] : [])])]; // MOCK-HOOK
@@ -368,7 +391,7 @@ function CompanyDefaultsMk({ v }: { v: string }) { // MOCK-HOOK
         ) : ( // MOCK-HOOK
           <div className="flex items-center gap-3"><span className="w-40 text-text2">New people get</span><b>{v === 'c' ? 'Slack daily, email if unread' : 'Daily email at 8:00 AM'}</b></div> // MOCK-HOOK
         )} {/* MOCK-HOOK */}
-        <div className="flex items-center gap-3"><Toggle on={force} label="Apply to everyone now" mkId="apply-all" onClick={() => setForce(!force)} /><span>{v === 'b' ? 'Apply to the 140 watched items nobody changed' : 'Apply to the 31 people who never changed theirs'}</span>{force && <b className="text-pass">✓ Applied</b>}</div> {/* MOCK-HOOK */}
+        <div className="flex items-center gap-3"><Toggle on={force} label="Apply to everyone now" mkId="apply-all" onClick={() => setForce(!force)} /><span>{v === 'b' ? 'Apply to the 140 watches of the 31 people who never changed theirs' : 'Apply to the 31 people who never changed theirs'}</span>{force && <b className="text-pass">✓ Applied</b>}</div> {/* MOCK-HOOK */}
       </div> {/* MOCK-HOOK */}
     </section> // MOCK-HOOK
   ); // MOCK-HOOK

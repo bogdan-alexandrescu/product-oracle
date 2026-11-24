@@ -575,7 +575,7 @@ function DayChart(props: TimelineProps) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const labelW = phone ? 132 : LABEL_W;
+  const labelW = phone ? 132 : LABEL_W + (new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('wd1') === 'b' ? 104 : 0); // MOCK-HOOK: WD1 B's eye needs room beside full names
   const days = data.items
     .flatMap((i) => [i.start.date, i.end.date])
     .concat(data.today)
