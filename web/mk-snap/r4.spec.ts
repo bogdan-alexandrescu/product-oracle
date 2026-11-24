@@ -157,4 +157,13 @@ for (const [sfx, w, h] of [['', 1440, 900], ['-1512', 1512, 945]] as const) // M
     await page.waitForTimeout(500); // MOCK-HOOK
     await snap(page, `ut3-a-hard${sfx}`); // MOCK-HOOK
   }); // MOCK-HOOK
+t('ut3-a-phone-390', async ({ page }) => { // MOCK-HOOK: the same cut on a phone: History is a section of the panel sheet
+  await open(page, 'ut3=a', 390, 844); // MOCK-HOOK
+  await ut3cut(page); // MOCK-HOOK
+  await hist(page).click(); // MOCK-HOOK
+  await page.waitForTimeout(500); // MOCK-HOOK
+  await hist(page).evaluate((e) => e.scrollIntoView({ block: 'start' })); // MOCK-HOOK
+  await page.waitForTimeout(500); // MOCK-HOOK
+  await snap(page, 'ut3-a-phone-390'); // MOCK-HOOK
+}); // MOCK-HOOK
 void expect; // MOCK-HOOK

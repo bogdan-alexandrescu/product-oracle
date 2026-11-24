@@ -8,6 +8,7 @@ const OUT = path.resolve(__dirname, '../../mockups-out/mk-undo/frames'); // MOCK
 const HOOK = fs.readFileSync(path.join(__dirname, 'hook.html'), 'utf8'); // MOCK-HOOK
 
 export async function signIn(page: Page, to: string, email = 'admin@example.com') { // MOCK-HOOK
+  await page.clock.install({ time: new Date('2026-11-24T12:15:00Z') }); // MOCK-HOOK: every frame starts at the same moment, so each draft banner reads the same time
   await page.goto('/login'); // MOCK-HOOK
   await page.getByLabel('Email').fill(email); // MOCK-HOOK
   await page.getByLabel('Password').fill(MOCK_LOGIN.password); // MOCK-HOOK

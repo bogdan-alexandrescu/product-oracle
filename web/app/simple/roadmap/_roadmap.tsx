@@ -807,7 +807,7 @@ function DraftBanner({
   const working = drafts.filter(
     (d) =>
       (d.status === 'working' || d.status === 'submitted') &&
-      (d.changes > 0 || !!d.from_prds?.length),
+      (d.changes > 0 || !!d.from_prds?.length || mkExtra > 0), // MOCK-HOOK: the mock-ups' quick changes keep the draft
   );
   if (!working.length) {
     if (!inReview) return null;
@@ -822,7 +822,7 @@ function DraftBanner({
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
-  const ready = (d: Draft) => d.status === 'working' && (d.changes > 0 || !!d.from_prds?.length);
+  const ready = (d: Draft) => d.status === 'working' && (d.changes > 0 || mkExtra > 0 || !!d.from_prds?.length); // MOCK-HOOK
   // roadmap-decide (owner, Nov 4: draft, shown live): the decider approves and publishes in place; others send it for review.
   const publishable = working.filter((d) => ready(d) && d.can_publish);
   const submittable = working.filter((d) => ready(d) && d.can_submit && !d.can_publish);

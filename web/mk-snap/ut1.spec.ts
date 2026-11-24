@@ -46,8 +46,8 @@ for (const v of ['a', 'b', 'c', 'd']) { // MOCK-HOOK
       await snap(page, `ut1-${v}-hard${sfx}`); // MOCK-HOOK
     }); // MOCK-HOOK
   } // MOCK-HOOK
-  if (v === 'b' || v === 'c') // MOCK-HOOK
-    test(`ut1 ${v} open`, async ({ page }) => { // MOCK-HOOK
+  if (v === 'b' || v === 'c') // MOCK-HOOK: round 4 snaps the b/c open frames in their stories (r4.spec.ts)
+    test.skip(`ut1 ${v} open`, async ({ page }) => { // MOCK-HOOK
       await open(page, `ut1=${v}${v === 'c' ? '&open=1' : ''}`); // MOCK-HOOK
       await real(page); // MOCK-HOOK
     await push(page, [B, C]); // MOCK-HOOK

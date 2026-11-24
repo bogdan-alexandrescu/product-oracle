@@ -43,7 +43,7 @@ async function detailed(page: Page, q: string, email = 'admin@example.com') { //
   await page.goto(u.pathname + (u.search ? u.search + '&' : '?') + q + '&hold=1'); // MOCK-HOOK
   await page.waitForTimeout(2500); // MOCK-HOOK
 } // MOCK-HOOK
-test('ut1-c-detailed', async ({ page }) => { // MOCK-HOOK
+test.skip('ut1-c-detailed', async ({ page }) => { // MOCK-HOOK: round 4 snaps it in r4.spec.ts, from the same three changes as UT1 c open
   await detailed(page, 'ut1=c&open=1'); // MOCK-HOOK
   await push(page, [ // MOCK-HOOK
     ['Set F-79 Weekly alert digest to At risk', 'Undo'], // MOCK-HOOK
