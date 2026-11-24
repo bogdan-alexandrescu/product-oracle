@@ -173,7 +173,8 @@ for (const o of ['a', 'b', 'c']) {
     await key(page);
     await type(page, s.mid);
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(o === 'b' ? 3500 : 2000);
+    // b: wait out the 10 s Added toast so the result shows the page, not a message over it
+    await page.waitForTimeout(o === 'b' ? 11500 : 2000);
     await snap(page, `cp2-${o}-result`, D);
     if (o === 'b') {
       // a feature's own actions: Tab on the selected feature

@@ -263,7 +263,7 @@ function PaletteInner() {
                         ? 'New item'
                         : 'Propose a new item',
                   where: decides
-                    ? 'Roadmap · on the roadmap and track you used last'
+                    ? 'Roadmap · last track used'
                     : 'Roadmap · an approver decides',
                   run: () => {
                     router.push('/simple/roadmap');
@@ -453,8 +453,8 @@ function PaletteInner() {
               </span>
             </span>
             {two && (
-              <span className="flex items-center gap-2 text-sm text-text-faint">
-                <span className="min-w-0 flex-1 truncate">
+              <span className="flex items-start gap-2 text-sm text-text-faint">
+                <span className="min-w-0 flex-1 break-words">
                   {h.kind} · {h.where}
                 </span>
                 {on && !phone && h.feature && s.cp2 === 'b' && !sub && (
@@ -601,7 +601,7 @@ function PaletteInner() {
   const costNote = s.cost && (
     <>
       {/* The page gives up a strip at the foot for the note, so the note covers nothing. */}
-      <style>{`.h-dvh{height:calc(100dvh - 48px)!important}.min-h-dvh{min-height:calc(100dvh - 48px)!important}body{padding-bottom:48px}[data-testid=mk-entry].fixed{bottom:72px!important}`}</style>
+      <style>{`.h-dvh{height:calc(100dvh - 48px)!important}.min-h-dvh{min-height:calc(100dvh - 48px)!important}body{padding-bottom:48px}.pointer-events-none.fixed.bottom-4{bottom:64px!important}[data-testid=item-panel]{max-height:calc(100dvh - 72px)!important}[data-testid=mk-entry].fixed{bottom:72px!important}`}</style>
       <div
         data-testid="mk-cost"
         className="fixed inset-x-0 bottom-0 z-[80] flex h-12 items-center gap-2 border-t-2 border-dashed border-accent bg-surface px-6 text-sm text-text"
