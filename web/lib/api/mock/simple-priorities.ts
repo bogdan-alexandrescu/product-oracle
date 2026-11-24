@@ -17,7 +17,7 @@ import {
   codedTitle,
   ROADMAPS,
   companyToday,
-  goalRank,
+  goalRankByKeyOrId,
   prdCode,
   roadmapOut,
   shownCode,
@@ -908,15 +908,14 @@ function ranking(db: SimpleDb, all: Item[] = openItems(db)) {
 export function withOrder(
   db: SimpleDb,
   out: Schemas['SimpleRoadmapOut'] | null,
-  /** `out` is the owner's whole read: the ranking starts from its items instead of reading the roadmap again (500 items drew slower for it). */
+  /** `out` is the owner's whole read: the ranking starts from its items instead of reading the roadmap again (500 items drew slower for it), unless the owner holds a working draft (the API ranks from the committed items, not the draft's overlay). */
   ownerRead = false,
 ): Schemas['SimpleRoadmapOut'] | null {
   if (!out) return out;
   const rank = new Map(
-    ranking(db, openItems(db, ownerRead ? out.items : undefined)).yours.map((i, n) => [
-      i.id,
-      n + 1,
-    ]),
+    ranking(db, openItems(db, ownerRead && !out.drafts?.length ? out.items : undefined)).yours.map(
+      (i, n) => [i.id, n + 1],
+    ),
   );
   const items = out.items.map((i) => ({
     ...i,
@@ -1246,7 +1245,8 @@ export function prioritiesOut(
   }
   // goal-order: goals in the one goal order, No goal last.
   buckets.sort(
-    (a, b) => Number(a.no_goal) - Number(b.no_goal) || goalRank(a.key) - goalRank(b.key),
+    (a, b) =>
+      Number(a.no_goal) - Number(b.no_goal) || goalRankByKeyOrId(a.key) - goalRankByKeyOrId(b.key),
   );
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;

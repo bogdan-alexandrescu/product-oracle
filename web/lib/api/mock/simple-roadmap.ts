@@ -608,12 +608,19 @@ export function knowGoalParents(
     ),
   );
 }
-/**
- * A goal's place in the one goal order (by key; timeline-order: or by id, as an item that names its goal by id
- * groups it, the API's goal entity being one).
- */
+/** A goal's place in the one goal order (by key). */
 export function goalRank(key: string): number {
-  const n = companyGoals.findIndex((g) => g.key === key || g.id === key);
+  const n = companyGoals.findIndex((g) => g.key === key);
+  return n < 0 ? Number.MAX_SAFE_INTEGER : n;
+}
+/**
+ * timeline-order: the same place for a goal an item names by its id (the API's goal entity): the key first, then
+ * the id. Only the Goal buckets and Priorities rank so; the goal groups and cards keep goalRank (by key), which
+ * the Roadmap's lanes and goal cards read alike.
+ */
+export function goalRankByKeyOrId(key: string): number {
+  const byKey = companyGoals.findIndex((g) => g.key === key);
+  const n = byKey < 0 ? companyGoals.findIndex((g) => g.id === key) : byKey;
   return n < 0 ? Number.MAX_SAFE_INTEGER : n;
 }
 /** goal-order: how goal groups sort: the one goal order, then by key (the goal-suggestions list sorts so too). */
