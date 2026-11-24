@@ -38,20 +38,21 @@ const base: IkItem[] = [ // MOCK-HOOK
   { id: 'i14', kind: 'Review reminder', icon: 'doc', title: 'Review the draft of Recipe cards PRD', ctx: 'Nudged by Noor Haddad', age: '10m', main: 'Review', did: 'Opened for review', decline: false, ownerOnly: false, detail: 'Noor changed the print sizes; she asks for a look.' },
   { id: 's1', kind: 'Feedback', icon: 'comment', title: '"Dark mode for the kitchen tablet"', code: 'F-38', ctx: 'From Ada Wilkins · Kitchen tablet view', age: '1w', main: 'Accept', did: 'Accepted', decline: true, ownerOnly: false, detail: 'Ada: the screen is too bright at night service.', seen: true },
   { id: 's2', kind: 'Question', icon: 'ask', title: 'Do we keep the old meal plan link?', ctx: 'Asked by Ravi Kapoor · Meal plan export', age: '5d', main: 'Answer', did: 'Answered', decline: false, ownerOnly: false, detail: 'Ravi: 300 people bookmarked it.', seen: true },
-  { id: 's3', kind: 'Dates', icon: 'clock', title: 'Oracle suggests Jan 11 – Feb 3, 2027', code: 'F-39', ctx: 'Barcode scan', age: '4d', main: 'Accept', did: 'Accepted: dates set', decline: true, ownerOnly: true, detail: 'It starts after F-38 and runs 23 days.', seen: true },
+  { id: 's3', kind: 'Dates', icon: 'clock', title: 'Oracle suggests Jan 11 – Feb 3, 2027', code: 'F-39', ctx: 'Barcode scan', age: '4d', main: 'Accept', did: 'Accepted: dates set', decline: true, ownerOnly: true, detail: 'It starts after F-38 Kitchen tablet view and runs 23 days.', seen: true },
 ]; // MOCK-HOOK
 
-/** Long names (the hard case): the same rows with long feature and people names. MOCK-HOOK */
+/** Long names (the hard case): the same rows with long titles and people names; a feature keeps its one name. MOCK-HOOK */
 const LONG: Record<string, Partial<IkItem>> = { // MOCK-HOOK
   i1: { ctx: 'Ground Truth proposal · Pantry sync across every household member and their shared shopping lists' },
-  i3: { title: 'Move delivery to Feb 12 and split printing into its own slice', ctx: 'From Noor Haddad-Villanueva · Recipe cards with step photos for print and the tablet' },
+  i3: { title: 'Move delivery to Feb 12 and split printing with step photos into its own slice', ctx: 'From Noor Haddad-Villanueva · Recipe cards' },
   i4: { title: 'Should Grocery list share keep working offline on long train rides with no signal?', ctx: 'Asked by Teodor Lindqvist-Abernathy · Grocery list share' },
-  i6: { ctx: 'Smart oven timers that follow the recipe step you are on' },
-  i8: { ctx: 'From Mara Okonkwo-Fairweather · Checkout totals with tax and deposit lines' },
+  i6: { title: 'Oracle suggests Mar 2 – Apr 10, 2027, after the print vendor slot and the holiday freeze' },
+  i8: { title: '"The shopping total should show tax and the bottle deposit as their own lines"', ctx: 'From Mara Okonkwo-Fairweather · Checkout totals' },
 }; // MOCK-HOOK
 
 /** More of the same kind (many items): 30 more rows. MOCK-HOOK */
-const MANY_NAMES = ['Spice rack scan', 'Weekly menu email', 'Allergen badges', 'Batch cooking mode', 'Pantry low alerts', 'Family accounts', 'Store price compare', 'Recipe import', 'Portion slider', 'Voice timers']; // MOCK-HOOK
+/** 30 names, each used once: one invented feature, one code. MOCK-HOOK */
+const MANY_NAMES = ['Spice rack scan', 'Lunchbox planner', 'Allergen badges', 'Batch cooking mode', 'Pantry low alerts', 'Family accounts', 'Store price compare', 'Recipe import', 'Portion slider', 'Voice timers', 'Freezer log', 'Seasonal picks', 'Wine pairing tips', 'Kids cooking mode', 'Budget tracker', 'Herb garden notes', 'Party menu builder', 'Unit converter', 'Cookware list', 'Bread starter log', 'Picnic packs', 'Swap suggestions', 'Fridge photo scan', 'Meal prep timer', 'Snack ideas', 'Tea and coffee log', 'Baking scale', 'Grill guide', 'Soup of the week', 'Dinner rota']; // MOCK-HOOK
 
 export function ikItems(opts: { long?: boolean; many?: boolean }): IkItem[] { // MOCK-HOOK
   let items = base.map((i) => (opts.long && LONG[i.id] ? { ...i, ...LONG[i.id] } : i));
@@ -62,9 +63,9 @@ export function ikItems(opts: { long?: boolean; many?: boolean }): IkItem[] { //
         id: `m${n}`,
         kind: n % 3 === 0 ? 'Feedback' : n % 3 === 1 ? 'Dates' : 'Proposal',
         icon: n % 3 === 0 ? 'comment' : n % 3 === 1 ? 'clock' : 'pencil',
-        title: n % 3 === 0 ? `"Please add ${MANY_NAMES[n % 10].toLowerCase()}"` : n % 3 === 1 ? 'Oracle suggests May 3 – Jun 1, 2027' : 'Move delivery a week later',
+        title: n % 3 === 0 ? `"Please add ${MANY_NAMES[n].toLowerCase()}"` : n % 3 === 1 ? 'Oracle suggests May 3 – Jun 1, 2027' : 'Move delivery a week later',
         code: `F-${60 + n}`,
-        ctx: MANY_NAMES[n % 10],
+        ctx: MANY_NAMES[n],
         age: `${n + 1}m`,
         main: 'Accept',
         did: 'Accepted',

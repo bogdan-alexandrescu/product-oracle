@@ -9,7 +9,7 @@ const DIST = join(__dirname, '../../dist-mock');
 mkdirSync(join(OUT, 'frames'), { recursive: true });
 mkdirSync(join(OUT, 'assets'), { recursive: true });
 
-export type Step = string; // 'k:j' key, 'c:css' click, 'r:role|name' click by role, 't:text' type, 'w:ms'
+export type Step = string; // 'A:' align rows to the dock, 'k:j' key, 'c:css' click, 'r:role|name' click by role, 't:text' type, 'w:ms'
 export type Frame = { file: string; url: string; steps?: Step[]; w?: number; h?: number; as?: string };
 
 async function login(page: Page, email: string) {
@@ -97,6 +97,22 @@ async function run(page: Page, f: Frame) {
     else if (kind === 'w') await page.waitForTimeout(Number(arg));
     else if (kind === 'v') await page.locator(arg).first().evaluate((e) => e.scrollIntoView({ block: 'center' }));
     else if (kind === 's') await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // 'A:' scrolls so that no row is cut by the docked bar (it ends whole above it or goes under it whole).
+    else if (kind === 'A')
+      await page.evaluate(() => {
+        const dock = document.querySelector('[data-ik-dock]');
+        if (!dock) return;
+        const b = dock.getBoundingClientRect();
+        const line = b.top > innerHeight / 2 ? b.top : b.bottom;
+        const r = Array.from(document.querySelectorAll('[data-ik-row]'))
+          .map((e) => e.getBoundingClientRect())
+          .find((x) => x.top < line - 1 && x.bottom > line + 1);
+        if (!r) return;
+        let el = document.querySelector('[data-ik-row]')?.parentElement ?? null;
+        while (el && !(el.scrollHeight > el.clientHeight && /(auto|scroll)/.test(getComputedStyle(el).overflowY))) el = el.parentElement;
+        if (el && el !== document.body && el !== document.documentElement) el.scrollTop += r.bottom - line;
+        else window.scrollBy(0, r.bottom - line);
+      });
     await page.waitForTimeout(120);
   }
   await save(page, f.file, w, h);

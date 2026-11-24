@@ -72,7 +72,8 @@
     "k:j",
     "k:j",
     "k:j",
-    "k:j"
+    "k:j",
+    "v:[data-focused]"
    ],
    "w": 1512,
    "h": 900,
@@ -291,7 +292,8 @@
     "k:x",
     "k:j",
     "k:x",
-    "k:j"
+    "k:j",
+    "A:"
    ],
    "w": 1512,
    "h": 900,
@@ -312,7 +314,8 @@
     "k:j",
     "k:x",
     "k:j",
-    "k:x"
+    "k:x",
+    "A:"
    ],
    "w": 390,
    "h": 844,
@@ -466,7 +469,8 @@
     "k:j",
     "k:j",
     "k:a",
-    "k:e"
+    "k:e",
+    "A:"
    ],
    "w": 1512,
    "h": 900,
@@ -477,7 +481,8 @@
    "url": "/simple/inbox?ik2=b",
    "steps": [
     "r:button|Approve",
-    "r:button|Accept"
+    "r:button|Accept",
+    "A:"
    ],
    "w": 390,
    "h": 844,
@@ -550,7 +555,7 @@
    "file": "ik2-c-phone-390",
    "url": "/simple/inbox?ik2=c",
    "steps": [
-    "r:button|Approve"
+    "c:[data-ik-row=i2] button[aria-expanded]"
    ],
    "w": 390,
    "h": 844,
@@ -817,6 +822,7 @@
     "k:j",
     "k:j",
     "k:j",
+    "v:[data-ik-row=i8]",
     "k:s"
    ],
    "w": 1440,
@@ -835,6 +841,7 @@
     "k:j",
     "k:j",
     "k:j",
+    "v:[data-ik-row=i8]",
     "k:s",
     "k:ArrowDown",
     "k:ArrowDown",
@@ -856,6 +863,7 @@
     "k:j",
     "k:j",
     "k:j",
+    "v:[data-ik-row=i8]",
     "k:s",
     "k:ArrowDown",
     "k:ArrowDown",
