@@ -2,7 +2,15 @@ import { describe, expect, test } from 'vitest';
 
 import type { EntityOut } from '@/lib/api/client';
 
-import { assess, formatFigure, goalViews, parseFigure, type Point } from './_goals';
+import {
+  assess,
+  atRisk,
+  cardProgress,
+  formatFigure,
+  goalViews,
+  parseFigure,
+  type Point,
+} from './_goals';
 
 /**
  * Unit tests for Home's goal maths (no browser): reading a figure, the goal's direction,
@@ -280,5 +288,57 @@ describe('typed goals: comparison gives the direction, typed beats text', () => 
     expect(p.state).toBe('notarget');
     expect(p.text).toBe('No current value yet');
     expect(g.missing).toEqual(['unit', 'comparison', 'target']);
+  });
+});
+
+// #1742: a reading is a current value with the day it was read, however the API stored the
+// figure (typed, or kept as text for want of a day): no day, no reading, never met or at risk.
+describe('a goal card reads a current value only with its day', () => {
+  const asOf = { current_as_of: '2026-10-01' };
+  const undated: [string, Record<string, unknown>][] = [
+    [
+      '0 of at most 0 events kept as text',
+      { unit: 'events', comparison: 'at_most', target: 0, current_text: '0' },
+    ],
+    [
+      '5 of at least 20 trials kept as text',
+      { unit: 'trials', comparison: 'at_least', target: 20, current_text: '5 trials' },
+    ],
+    ['a typed current with no unit', { comparison: 'at_least', target: 20, current: 5 }],
+    ['a typed current with no day', { unit: '%', comparison: 'at_least', target: 20, current: 5 }],
+  ];
+  for (const [name, attrs] of undated) {
+    test(name, () => {
+      const [g] = goalViews([goal(attrs, 'Raise it')]);
+      expect(g.unread).toBe(true);
+      const p = cardProgress(g);
+      expect(p).toEqual({ state: 'none', text: 'No current value yet' });
+      expect(atRisk(g, p)).toBe(false);
+      expect(atRisk(g, assess(g))).toBe(false);
+    });
+  }
+
+  test('a goal written only in words is never at risk without a day', () => {
+    const [g] = goalViews([goal({ target_text: 'at least 20 trials', current_text: '5 trials' })]);
+    expect(atRisk(g, cardProgress(g))).toBe(false);
+  });
+
+  test('a dated reading under 75% of its target is at risk', () => {
+    const [g] = goalViews([
+      goal({ unit: '%', comparison: 'at_least', target: 20, current: 5, ...asOf }),
+    ]);
+    const p = cardProgress(g);
+    expect(p.state).toBe('togo');
+    expect(atRisk(g, p)).toBe(true);
+    const [t] = goalViews([
+      goal({
+        unit: 'trials',
+        comparison: 'at_least',
+        target: 20,
+        current_text: '5 trials',
+        ...asOf,
+      }),
+    ]);
+    expect(atRisk(t, cardProgress(t))).toBe(true);
   });
 });

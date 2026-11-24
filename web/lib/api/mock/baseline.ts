@@ -412,24 +412,26 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // Activation a count of 0 against at most 0 that was never read (no day for its current value).
   if (scenario === PLAN_GOAL_RISK_SCENARIO) {
     paid.attrs = { ...paid.attrs, current: 5 };
-    // Churn under 75% too, but typed with no day it was read: the Goal map's Not measured.
+    // Churn under 75% too, but its current kept as text with no day it was read, as the API
+    // stores an undated reading: the Goal map's Not measured.
     churn.attrs = {
       ...churn.attrs,
       target_text: undefined,
-      unit: '%',
+      unit: 'trials',
       comparison: 'at_least',
       target: 20,
       start: 0,
-      current: 5,
+      current_text: '5 trials',
     };
     activation.attrs = {
       ...activation.attrs,
+      current: undefined,
       current_as_of: undefined,
       unit: 'events',
       comparison: 'at_most',
       target: 0,
       start: 0,
-      current: 0,
+      current_text: '0',
     };
     // #1788: a key result whose name is longer than its line on the goal card.
     const kr = entity('goal', 'kr-growth-long', PLAN_LONG_KR, {
