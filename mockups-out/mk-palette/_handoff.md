@@ -35,3 +35,11 @@ MOCK-UPS ONLY, never merged. Branch base 83b3594.
 - Cost strip: the feature panel ends above it; the cp2-b result frame waits out the 10 s Added toast.
 - cp2-b-viewer-1512 caption names Ask Oracle, New item, New PRD as drawn.
 - Re-captured cp1-*, cp2-b, cp3-* (light, dark, 1512, 390).
+
+## Round 4 (fixes)
+- Cause of the panel under the cost strip: cp1-* and cp2-a/c result frames were captured from a stale build
+  without the `[data-testid=item-panel]` max-height rule. Rebuilt and recaptured; the panel now ends at about
+  y=884, above the strip (y=897), in cp1-a/b/c-result and cp2-a/c-result, light and dark.
+- Side sheet (CP1 c): the second line breaks only between whole parts (“Plan changes track” stays together).
+- Captions: cp1-a/b hard name the “…” mid-word as the cost of one line per row; result captions name F-79 Weekly alert digest.
+- `MK_FRAMES=a,b` on the capture spec writes only the named frames.

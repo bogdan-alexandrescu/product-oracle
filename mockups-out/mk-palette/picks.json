@@ -31,11 +31,11 @@
             },
             {
               "file": "frames/cp1-a-result.html",
-              "caption": "Enter: the feature panel of F-79 opens over Home. The cost note at the foot names what this look costs."
+              "caption": "Enter: the panel of F-79 Weekly alert digest opens over Home, ending above the cost note. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-a-hard-1512.html",
-              "caption": "Hard case at 1512: 60 more features with long names; 5 per group, then “more”."
+              "caption": "Hard case at 1512: 60 more features with long names; 5 per group, then “more”. Long names and where they sit end in “…”, even mid-word: what one line per row costs in the centered sheet (the side sheet wraps them)."
             },
             {
               "file": "frames/cp1-a-detailed-open-1512.html",
@@ -69,11 +69,11 @@
             },
             {
               "file": "frames/cp1-b-result.html",
-              "caption": "Enter: the F-79 panel opens over Home. The cost note at the foot names what this look costs."
+              "caption": "Enter: the F-79 Weekly alert digest panel opens over Home, ending above the cost note. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-b-hard-1512.html",
-              "caption": "Hard case at 1512 on Roadmap: long names cut to one line; the page shows through."
+              "caption": "Hard case at 1512 on Roadmap: long names cut to one line, ending in “…” even mid-word, the cost of one line per row; the page shows through."
             },
             {
               "file": "frames/cp1-b-detailed-open-1512.html",
@@ -107,11 +107,11 @@
             },
             {
               "file": "frames/cp1-c-result.html",
-              "caption": "Enter: the sheet gives way to the F-79 panel on the same side. The cost note at the foot names what this look costs."
+              "caption": "Enter: the sheet gives way to the F-79 Weekly alert digest panel on the same side. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-c-hard-1512.html",
-              "caption": "Hard case at 1512: long names wrap to two lines, the picked one too (its keys sit on the second line); 8 shown, then “more”."
+              "caption": "Hard case at 1512: long names wrap to two lines, the picked one too (its keys sit on the second line, which breaks only between whole parts); 8 shown, then “more”."
             },
             {
               "file": "frames/cp1-c-detailed-open-1512.html",
@@ -153,7 +153,7 @@
             },
             {
               "file": "frames/cp2-a-result.html",
-              "caption": "Enter: the F-79 panel opens over Home; you never left the page. Cost note at the foot."
+              "caption": "Enter: the F-79 Weekly alert digest panel opens over Home; you never left the page. Cost note at the foot."
             },
             {
               "file": "frames/cp2-a-phone-390.html",
@@ -234,7 +234,7 @@
             },
             {
               "file": "frames/cp2-c-result.html",
-              "caption": "Enter: you are on Roadmap with the F-79 panel open. Cost note at the foot."
+              "caption": "Enter: you are on Roadmap with the F-79 Weekly alert digest panel open. Cost note at the foot."
             },
             {
               "file": "frames/cp2-c-phone-390.html",

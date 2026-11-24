@@ -3,7 +3,7 @@
 // entry without a keyboard), &many=1 (many long names), &cost=1 (the cost note). Never merged.
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '@/components/ds/Icon';
 import { askWith } from '@/components/hop/open-state';
@@ -447,15 +447,21 @@ function PaletteInner() {
                 <span className="flex-none font-mono text-sm text-text-faint">{h.code}</span>
               )}
               <span
-                className={`min-w-0 text-base text-text ${two ? 'line-clamp-2' : 'truncate'} ${on ? 'font-semibold' : 'font-medium'}`}
+                className={`min-w-0 text-base text-text ${two ? 'line-clamp-2 [text-wrap:pretty]' : 'truncate'} ${on ? 'font-semibold' : 'font-medium'}`}
               >
                 {h.name}
               </span>
             </span>
             {two && (
               <span className="flex items-start gap-2 text-sm text-text-faint">
-                <span className="min-w-0 flex-1 break-words">
-                  {h.kind} · {h.where}
+                {/* MOCK-HOOK: each part between dots stays whole, so no single word sits alone on the next line */}
+                <span className="min-w-0 flex-1 break-words [text-wrap:pretty]">
+                  {[h.kind, ...h.where.split(' · ')].map((part, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && ' · '}
+                      <span className="whitespace-nowrap">{part}</span>
+                    </Fragment>
+                  ))}
                 </span>
                 {on && !phone && h.feature && s.cp2 === 'b' && !sub && (
                   <span className={kbd}>Tab</span>

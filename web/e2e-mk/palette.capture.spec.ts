@@ -14,6 +14,9 @@ const P = { width: 390, height: 844 };
 const ONLY = process.env.MK_ONLY ?? '';
 
 async function snap(page: Page, name: string, size: { width: number; height: number }) {
+  // MK_FRAMES=a,b: write only these frames (the rest of the story still runs, unchanged on disk)
+  const only = (process.env.MK_FRAMES ?? '').split(',').filter(Boolean);
+  if (only.length && !only.includes(name)) return;
   await page.waitForTimeout(700);
   const html = await page.evaluate(
     ({ w, h }) => {
