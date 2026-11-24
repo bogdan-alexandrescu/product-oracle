@@ -81,7 +81,7 @@ function CopyChip({ text, testId }: { text: string; testId?: string }) {
 
 /** What the person's tools will be able to do: read from what their role may call. */
 function RoleAccess() {
-  const { can } = useMe();
+  const { can, capsReady } = useMe();
   const [kind, label, tip] = can('create_bucket_goal')
     ? ([
         'pass',
@@ -99,6 +99,8 @@ function RoleAccess() {
           'Read only',
           'A connected tool reads goals, the roadmap and documents, and changes nothing.',
         ] as const);
+  // Until the capabilities load, no status (never a wrong one).
+  if (!capsReady) return null;
   return (
     <span className="inline-flex items-center gap-1" data-testid="mcp-role-access">
       <Chip kind={kind} dot>
