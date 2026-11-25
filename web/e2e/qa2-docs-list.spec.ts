@@ -63,7 +63,7 @@ test.describe('desktop', () => {
   test('qa-docs-19: the PRDs info tip stays inside the window', async ({ page }) => {
     await openList(page);
     await page
-      .getByRole('button', { name: 'About PRDs' })
+      .getByRole('button', { name: 'About One-pagers' })
       .filter({ visible: true })
       .first()
       .click();
@@ -154,7 +154,7 @@ test.describe('desktop', () => {
     await login(page);
     await page.goto('/documents/referral-link/publish');
     const crumb = page.getByRole('navigation', { name: 'Breadcrumb' });
-    await expect(crumb.getByRole('link', { name: 'PRDs' })).toBeVisible();
+    await expect(crumb.getByRole('link', { name: 'One-pagers' })).toBeVisible();
     await expect(crumb.getByRole('link', { name: 'Referral link PRD' })).toHaveAttribute(
       'href',
       '/documents/referral-link',

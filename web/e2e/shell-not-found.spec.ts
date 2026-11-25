@@ -80,7 +80,7 @@ for (const phone of [false, true]) {
         .filter({ visible: true });
       await expect(message).toHaveCount(1);
       await expect(
-        page.getByRole('link', { name: 'Back to PRDs' }).filter({ visible: true }),
+        page.getByRole('link', { name: 'Back to One-pagers' }).filter({ visible: true }),
       ).toHaveAttribute('href', '/documents');
       await expect(page.getByRole('button', { name: /Export/ })).toHaveCount(0);
       await expect(page.getByRole('link', { name: /Compare with/ })).toHaveCount(0);

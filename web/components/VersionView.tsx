@@ -89,6 +89,7 @@ import { useMe } from '@/lib/me';
 import { OWNER_APPROVES } from '@/lib/owner-kinds';
 import { useDocumentView, type DocumentView } from '@/lib/preferences';
 import { useScreenSubject } from '@/lib/screen-subject';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { keyFromHash, sectionHref } from '@/lib/section-link';
 import { useLiveRefresh } from '@/lib/use-live-refresh';
 import { useQuery } from '@/lib/use-query';
@@ -1381,7 +1382,7 @@ export function VersionView({
               Open the document
             </LinkButton>
             <LinkButton href="/documents" variant="secondary" icon="back" className="h-10">
-              Back to PRDs
+              Back to {PRD_LIST}
             </LinkButton>
           </>
         }

@@ -31,7 +31,7 @@ for (const [name, viewport] of [
 
     // The header: the PRDs list and the document by name, then "Impact v2", as Quality's.
     const crumb = page.getByRole('navigation', { name: 'Breadcrumb' }).filter({ visible: true });
-    await expect(crumb.getByRole('link', { name: 'PRDs' })).toBeVisible();
+    await expect(crumb.getByRole('link', { name: 'One-pagers' })).toBeVisible();
     await expect(crumb.getByRole('link', { name: 'Referral link PRD' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Impact');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('v2');

@@ -268,11 +268,14 @@ test.describe('desktop', () => {
     const state = page.getByTestId('new-prd-not-allowed');
     await expect(state.getByRole('heading', { name: "You can't start a PRD" })).toBeVisible();
     await expect(state).toContainText('Only commenters, approvers and owners can start a PRD.');
-    await expect(page.getByRole('link', { name: 'Back to PRDs' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Back to One-pagers' })).toHaveCount(0);
     await expect(
-      page.locator('main').getByRole('link', { name: /PRDs/ }).filter({ visible: true }),
+      page
+        .locator('main')
+        .getByRole('link', { name: /One-pagers/ })
+        .filter({ visible: true }),
     ).toHaveCount(1);
-    await page.locator('[data-page-back]').getByRole('link', { name: 'PRDs' }).click();
+    await page.locator('[data-page-back]').getByRole('link', { name: 'One-pagers' }).click();
     await expect(page).toHaveURL(/\/documents$/);
   });
 

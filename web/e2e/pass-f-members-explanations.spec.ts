@@ -151,7 +151,7 @@ test("A brief that is not here: why is in the title's (i)", async ({ page }) => 
     'It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD; a deleted one waits in Trash for a while.',
   );
   await expect(
-    page.getByTestId('intake-gone').getByRole('link', { name: 'Back to PRDs' }),
+    page.getByTestId('intake-gone').getByRole('link', { name: 'Back to One-pagers' }),
   ).toBeVisible();
   await fitsPhone(page);
 });

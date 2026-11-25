@@ -76,7 +76,7 @@ test.describe('desktop', () => {
     page,
   }) => {
     await open(page, 'viewer', '/documents');
-    await expect(page.getByRole('heading', { level: 1, name: 'PRDs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'One-pagers' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'New PRD' })).toHaveCount(0);
 
     await page.goto('/documents/new?kind=prd');
@@ -87,7 +87,7 @@ test.describe('desktop', () => {
     await expect(page.getByTestId('recommendation-panel')).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText(/403|Requires the/);
     // qa-docs-35: one way back, the header's crumb.
-    await page.locator('[data-page-back]').getByRole('link', { name: 'PRDs' }).click();
+    await page.locator('[data-page-back]').getByRole('link', { name: 'One-pagers' }).click();
     await expect(page).toHaveURL(/\/documents$/);
   });
 

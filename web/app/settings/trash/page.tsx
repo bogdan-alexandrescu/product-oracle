@@ -22,6 +22,7 @@ import { artifactsChanged } from '@/lib/artifacts';
 import { formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 type Entry = Schemas['TrashEntryOut'];
 
@@ -256,7 +257,7 @@ function TrashPage() {
                 {/* Where they delete: owners documents, everyone else the roadmap's features and goals. */}
                 {can('delete_document') ? (
                   <Link href="/documents" className="font-semibold text-accent-ink hover:underline">
-                    Open PRDs
+                    Open {PRD_LIST}
                   </Link>
                 ) : (
                   <Link

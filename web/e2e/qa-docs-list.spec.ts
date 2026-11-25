@@ -45,8 +45,8 @@ test.describe('desktop', () => {
     await open(page);
     // The count is on the PRDs tab only: no '7 PRDs' chip, no second 'PRDs' card title.
     await expect(page.getByText(/^\d+ PRDs?$/)).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'PRDs' })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: /^PRDs\s*\d+$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'One-pagers' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /^One-pagers\s*\d+$/ })).toBeVisible();
 
     // Usage alerts: its latest version is its approved one, said once, in words.
     await pick(page, 'Usage alerts PRD');
@@ -78,7 +78,7 @@ test.describe('desktop', () => {
 
   test("qa-docs-25: the info tip is plain words and names the rail's Plan", async ({ page }) => {
     await open(page);
-    await page.getByRole('button', { name: 'About PRDs' }).click();
+    await page.getByRole('button', { name: 'About One-pagers' }).click();
     const tip = page.getByRole('tooltip');
     await expect(tip).toContainText('Plan');
     await expect(tip).not.toContainText('POST');

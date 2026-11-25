@@ -43,7 +43,7 @@ test('qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await expect(page.getByTestId('inbox-tab-empty')).not.toContainText('will show up here');
 
   // PRDs: the next step, with the button the owner has.
-  await open(page, 'nav-prds', 'PRDs');
+  await open(page, 'nav-prds', 'One-pagers');
   await expect(page.getByTestId('prds-empty')).toHaveText('No PRDs yet. Start one with New PRD.');
   await expect(page.getByRole('link', { name: 'New PRD' }).filter({ visible: true })).toHaveCount(
     1,
@@ -103,7 +103,7 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
   await emptyCompany(page);
   await login(page, 'viewer@example.com');
 
-  await open(page, 'nav-prds', 'PRDs');
+  await open(page, 'nav-prds', 'One-pagers');
   await expect(page.getByTestId('prds-empty')).toHaveText(
     'No PRDs yet. They appear here once someone starts one.',
   );

@@ -214,7 +214,7 @@ export function BeforeDrafting({ id }: { id: string }) {
           className="flex flex-col items-start gap-3 rounded-panel border border-line bg-surface p-4 shadow-panel"
         >
           <Link href="/documents" className="font-semibold text-accent-ink underline">
-            Back to PRDs
+            Back to {PRD_LIST}
           </Link>
         </div>
       </Page>

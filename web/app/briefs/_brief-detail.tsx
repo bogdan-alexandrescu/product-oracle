@@ -19,6 +19,7 @@ import { Loading, LoadError } from '@/components/ui';
 import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useQuery } from '@/lib/use-query';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 type TechBrief = Schemas['TechBriefOut'];
 
@@ -294,7 +295,7 @@ export function BriefDetail({ id }: { id: string }) {
         testId="brief-not-found"
         actions={
           <LinkButton href="/documents" variant="primary" icon="back">
-            Back to PRDs
+            Back to {PRD_LIST}
           </LinkButton>
         }
       >
