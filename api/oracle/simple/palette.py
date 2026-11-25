@@ -83,7 +83,8 @@ def _goals(by_id: dict[uuid.UUID, Entity]) -> tuple[list[PaletteGoal], list[Pale
         while (up := top.parent_id) is not None and up in live:
             top = live[up]
         if top is g:
-            measure = str((g.attrs or {}).get("metric") or "")
+            metric = (g.attrs or {}).get("metric")
+            measure = metric if isinstance(metric, str) else ""
             goals.append(PaletteGoal(id=g.id, name=g.title, measure=measure))
         else:
             results.append(PaletteKeyResult(id=g.id, name=g.title, goal=top.title, goal_id=top.id))
