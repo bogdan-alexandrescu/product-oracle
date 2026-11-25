@@ -303,17 +303,22 @@ function textWidth(s: string, size: number, weight: number): number {
   if (known !== undefined) return known;
   const w = measured(s, size, weight);
   if (measure) widths.set(key, w);
+  if (measure && document.fonts?.status !== 'loaded') guessed = true;
   return w;
 }
 /** Measures again once the web fonts have loaded (#1581: they can load after the first layout). */
+let guessed = false;
 function useFontsReady(): number {
   const [n, setN] = useState(0);
   useEffect(() => {
+    // draw-time (#1870): every width held was measured with the web fonts in: nothing to lay out again.
+    if (document.fonts?.status === 'loaded' && !guessed) return;
     let live = true;
     void document.fonts?.ready.then(() => {
       if (!live) return;
       // Widths measured in a fallback font are measured again in the web font.
       widths.clear();
+      guessed = false;
       setN(1);
     });
     return () => {
@@ -638,7 +643,7 @@ declare global {
 
 const NO_ROWS: Row[] = [];
 
-export function Chart({
+export const Chart = memo(function Chart({
   data: given,
   format,
   unit,
@@ -794,11 +799,11 @@ export function Chart({
     const on = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() =>
-        setView(
-          el.scrollWidth > el.clientWidth + 1
-            ? [el.scrollLeft, el.scrollLeft + el.clientWidth]
-            : null,
-        ),
+        setView((was) => {
+          if (el.scrollWidth <= el.clientWidth + 1) return null;
+          const [a, b] = [el.scrollLeft, el.scrollLeft + el.clientWidth];
+          return was && was[0] === a && was[1] === b ? was : [a, b];
+        }),
       );
     };
     on();
@@ -1723,7 +1728,7 @@ export function Chart({
       </div>
     </div>
   );
-}
+});
 
 /** A phase's x and width inside its bar: a phase a gate dates past the item's end is drawn
  * inside the bar (its title keeps the dates). */

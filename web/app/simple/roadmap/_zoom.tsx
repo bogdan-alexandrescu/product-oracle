@@ -286,6 +286,7 @@ function waitingAdds(proposals: Change[] = []) {
 const ADD_H = 28;
 
 const LABEL_W = 232;
+const NO_ROWS: Row[] = [];
 /** A milestone label's "+N" chip, about its width. */
 const MS_CHIP_W = 30;
 /** QA Nov 12 #8: at All 3 years a milestone label keeps up to this much of its words (px). */
@@ -570,8 +571,14 @@ function DayChart(props: TimelineProps) {
   };
   const fit = zoom === 'all';
   const box = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(1000);
-  const [sl, setSl] = useState(0);
+  // draw-time (#1870): the 500 rows are drawn once, when the chart's width and its first scroll are
+  // known (both before the first paint), not at a guess and then twice more.
+  const [seenW, setW] = useState<number | null>(null);
+  const w = seenW ?? 1000;
+  const measured = seenW !== null;
+  const [scrolledTo, setSl] = useState<number | null>(null);
+  const placed = scrolledTo !== null;
+  const sl = scrolledTo ?? 0;
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -596,8 +603,11 @@ function DayChart(props: TimelineProps) {
   const x = (d: string) => daysBetween(t0, d) * ppd;
   const xt = x(data.today);
   useLayoutEffect(() => {
-    if (box.current && !fit) box.current.scrollLeft = Math.max(0, xt - 60);
-  }, [xt, fit, zoom]);
+    const el = box.current;
+    if (!el || !measured) return;
+    if (!fit) el.scrollLeft = Math.max(0, xt - 60);
+    setSl(el.scrollLeft);
+  }, [xt, fit, zoom, measured]);
   const months: { day: string; label: string }[] = [];
   for (let d = t0; d <= t1;) {
     const m = Number(d.slice(5, 7));
@@ -1446,7 +1456,8 @@ function DayChart(props: TimelineProps) {
               style={{ left: labelW + x(d) }}
             />
           ))}
-          {rows.map((r, n) => {
+          {!placed && <div aria-hidden style={{ height: rows.length * ROW_H }} />}
+          {(placed ? rows : NO_ROWS).map((r, n) => {
             const add = addAfter.get(n);
             const addRow = add && props.onAddAt && (
               <AddRow
