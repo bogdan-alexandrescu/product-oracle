@@ -12,6 +12,7 @@ import {
 
 import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
+import { SheetDecide } from '@/components/simple/questions/SheetDecide';
 import { Sheet } from '@/components/ds/Sheet';
 import { toast } from '@/components/ds/Toast';
 import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
@@ -257,6 +258,7 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(target));
   const [decider, setDecider] = useState<Person | null>(draftOf(target).decider);
   const [error, setError] = useState<string | null>(null);
+  const [decided, setDecided] = useState<string | null>(null);
   // An Accept refused as out of date elsewhere (Home, Waiting for you) says so at the top, over the decision as it is now.
   const notice = target.kind === 'decision' ? (target.notice ?? null) : null;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -555,8 +557,13 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
           {error}
         </p>
       )}
-      {/* A viewer reads only: no foot at all. */}
-      {(editing || writes) && (
+      {decided && (
+        <p className="simple-meta font-[650]" role="status" data-testid="decision-sheet-decided">
+          Decided: {decided}
+        </p>
+      )}
+      {/* A viewer reads only: no foot at all; a decision decided here has no foot either. */}
+      {!decided && (editing || writes) && (
         <div
           className="flex flex-wrap items-center gap-2 border-t border-line pt-3"
           data-testid="decision-sheet-foot"
@@ -591,6 +598,14 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
           ) : (
             writes && (
               <>
+                {target.kind === 'decision' && (
+                  <SheetDecide
+                    number={target.row.number}
+                    busy={busy}
+                    act={act}
+                    onDecided={(label) => (setDecided(label), done())}
+                  />
+                )}
                 <button
                   type="button"
                   className="simple-button simple-button-primary"
