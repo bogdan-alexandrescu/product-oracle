@@ -43251,6 +43251,38 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleMeetingActionItem
+         * @description #1817: a sent meeting's recorded action item; ``can_change``: its owner, or one who
+         *     decides its item, marks it done or changes it.
+         */
+        SimpleMeetingActionItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name?: string | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
         /** SimpleMeetingBrief */
         SimpleMeetingBrief: {
             /**
@@ -43532,6 +43564,11 @@ export interface components {
              */
             waiting_people: components["schemas"]["SimplePersonRef"][];
             minutes?: components["schemas"]["SimpleMinutes"] | null;
+            /**
+             * Action Items
+             * @default []
+             */
+            action_items: components["schemas"]["SimpleMeetingActionItem"][];
             /** Minutes Job */
             minutes_job?: ("drafting" | "slow" | "failed") | null;
             delivery?: components["schemas"]["SimpleDelivery"] | null;

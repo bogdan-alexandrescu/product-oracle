@@ -32,7 +32,7 @@ from fastapi import BackgroundTasks, Depends, HTTPException, Query
 from oracle.auth.deps import Principal, TenantDB
 from oracle.decisions.models import Decision
 from oracle.routing import APIRouter
-from oracle.simple import meeting_draft, meetings
+from oracle.simple import meeting_actions, meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     SimpleAgendaEditIn,
@@ -69,6 +69,8 @@ async def _run(db, coro):
 
 async def _out(db, principal, meeting_id, not_approved=None) -> SimpleMeetingOut:
     out = await _run(db, meetings.one(db, principal, meeting_id, not_approved))
+    if out.minutes_state == "sent":  # #1817: its action items, each Done or changed here
+        out.action_items = await meeting_actions.of_meeting(db, principal, meeting_id)
     await db.commit()  # a meeting idle past its session ends on read
     return out
 

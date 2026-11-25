@@ -77,6 +77,20 @@ class SimpleActionItemOut(SimpleActionItemIn):
     owner_name: str | None = None
 
 
+class SimpleMeetingActionItem(BaseModel):
+    """#1817: a sent meeting's recorded action item; ``can_change``: its owner, or one who
+    decides its item, marks it done or changes it."""
+
+    id: uuid.UUID
+    title: str
+    owner_id: uuid.UUID
+    owner_name: str | None = None
+    due_date: dt.date | None = None
+    item_id: uuid.UUID | None = None
+    status: str
+    can_change: bool = False
+
+
 class SimpleWait(BaseModel):
     """What still waits on whom (an absent required reviewer's approval, a proposal)."""
 
@@ -311,6 +325,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     # be an attendee), for the banner's "Waiting on <name>'s approval".
     waiting_people: list[SimplePersonRef] = []
     minutes: SimpleMinutes | None = None
+    # #1817: once sent, its action items as recorded, each with its status.
+    action_items: list[SimpleMeetingActionItem] = []
     # The minutes job's state while ``minutes_state`` is "drafting" (else None).
     minutes_job: MinutesJobState | None = None
     delivery: SimpleDelivery | None = None

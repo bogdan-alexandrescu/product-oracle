@@ -128899,6 +128899,77 @@
         ],
         "title": "SimpleMatch"
       },
+      "SimpleMeetingActionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "owner_id",
+          "status"
+        ],
+        "title": "SimpleMeetingActionItem",
+        "description": "#1817: a sent meeting's recorded action item; ``can_change``: its owner, or one who\ndecides its item, marks it done or changes it."
+      },
       "SimpleMeetingBrief": {
         "properties": {
           "id": {
@@ -129569,6 +129640,14 @@
                 "type": "null"
               }
             ]
+          },
+          "action_items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingActionItem"
+            },
+            "type": "array",
+            "title": "Action Items",
+            "default": []
           },
           "minutes_job": {
             "anyOf": [

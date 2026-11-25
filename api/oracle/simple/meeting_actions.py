@@ -5,6 +5,7 @@ Its owner changes or closes one through the change engine (oracle.simple.targets
 ``edit_action_item``, ``set_action_item_status``), one Undo each.
 """
 
+import uuid
 from typing import Any
 
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from oracle import company_time
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimpleActionItem, SimpleMeeting
 from oracle.simple.schemas import InboxSimpleActionItem
+from oracle.simple.schemas_meetings import SimpleMeetingActionItem
 
 
 async def mine(db: AsyncSession, principal: Any) -> list[SimpleActionItem]:
@@ -32,8 +34,6 @@ async def mine(db: AsyncSession, principal: Any) -> list[SimpleActionItem]:
 
 async def may_close(db: AsyncSession, principal: Any, target: dict[str, Any]) -> bool:
     """Whether ``principal`` owns the action item a change targets (its owner applies)."""
-    import uuid
-
     me = getattr(principal, "user_id", None)
     try:
         aid = uuid.UUID(str(target.get("action_item_id")))
@@ -70,5 +70,46 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             at=r.created_at,
             state="new" if seen is None or r.created_at > seen else "open",
         )
+        for r in rows
+    ]
+
+
+async def of_meeting(
+    db: AsyncSession, principal: Any, meeting_id: uuid.UUID
+) -> list[SimpleMeetingActionItem]:
+    """A meeting's recorded action items, each with whether ``principal`` changes it: its
+    owner, or one who decides its item (oracle.simple.service.can_decide; an owner with none)."""
+    from oracle.authz import has_role
+    from oracle.simple import service
+    from oracle.simple.meetings import _names
+
+    rows = list(await db.scalars(
+        select(SimpleActionItem).where(SimpleActionItem.meeting_id == meeting_id)
+        .order_by(SimpleActionItem.created_at, SimpleActionItem.title)
+    ))  # fmt: skip
+    if not rows:
+        return []
+    me = getattr(principal, "user_id", None)
+    read_ = await service.load(db) if any(r.item_id for r in rows) else None
+    by_id = read_.by_id() if read_ else {}
+
+    def decides(r: SimpleActionItem) -> bool:
+        entry = by_id.get(r.item_id) if r.item_id else None
+        if entry is None or read_ is None:
+            return has_role(principal.role, "owner")
+        return service.can_decide(principal, entry, read_.deciders)
+
+    names = await _names(db, {r.owner_id for r in rows})
+    return [
+        SimpleMeetingActionItem(
+            id=r.id,
+            title=r.title,
+            owner_id=r.owner_id,
+            owner_name=names.get(r.owner_id),
+            due_date=r.due_date,
+            item_id=r.item_id,
+            status=r.status,
+            can_change=me is not None and (r.owner_id == me or decides(r)),
+        )  # fmt: skip
         for r in rows
     ]
