@@ -44,7 +44,9 @@
 
 ## Suite chunks (the other 619 test files, 8 chunks $TMPDIR/rq_00..07)
 - rq_05 (77 files): reached 97% with no failure before the 9-minute command limit stopped it.
-- NOT RUN (out of time): rq_00..rq_04, rq_06, rq_07 and the last 3% of rq_05. The 158 Simple/rebuild/
+- rq_06 (77 files): every test reached [100%] with no failure (one xfail); the command limit stopped it in
+  teardown, before the summary line.
+- NOT RUN (out of time): rq_00..rq_04, rq_07 and the last 3% of rq_05. The 158 Simple/rebuild/
   goal-map/one-pager files ran in full (above). The next lane or CI runs the rest.
 
 
