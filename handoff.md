@@ -17,6 +17,40 @@
   inbox-track-alerts-walk: 40 passed. format:check exit 0. Full `npm run lint` exit 0. tsc exit 0.
 - No API change this round, so the API suite, timing tests, pyright and frozen migrations were not rerun.
 
+# task-push handoff (#1816, fix round 1: review NOT_YET, two blockers)
+
+## Fixed (exactly the two blockers in verdict.json)
+- Head pins: `api/tests/test_migrations.py:196` (and 'task-push' added to its 'renumbered on merge' list),
+  `test_stale_settled_on_approval.py:178`, `test_unique_item_codes.py:134` and
+  `test_stale_by_meaning_migration.py:61` now pin `0139_task_tracker_push_error`. The down_revision check at
+  `test_stale_settled_on_approval.py:177` is unchanged (0138).
+- Read digests re-pinned in `api/tests/test_simple_read_speed.py` (roadmap, roadmap-viewer) and
+  `api/tests/test_simple_roadmap_speed.py` (goal, track, prd, one-roadmap, viewer). Each JSON body from base
+  4ecbc5620 was diffed against the head body (all keys, all list items). The only change in each of the 7 reads
+  is three keys added to each of the seed's 268 tasks: `.items[].tasks[].tracker_ref`, `tracker_url` and
+  `tracker_error`, all null. Nothing else is added, removed or changed. The other digests match at both commits.
+  Full diff: `read-digest-json-diff.txt` in the artifacts.
+
+## Gates
+- Whole API suite (`-m "not timing"`, split into 8 groups of files, run with -n 4 or -n 6): every group green, 0 failures
+  (1080+1355+1388+1512+1659+1414+1457+1413 passed). The first try at groups 02 and 03 hit Postgres's 'out of shared
+  memory' lock table, an environment limit, not the code. Both were rerun with max_locks_per_transaction=1024 and passed.
+- ruff check and format: clean. tests/test_frozen_migrations.py passed (in the 36 targeted tests).
+- Timing tests in the touched files: one failure, `test_simple_roadmap_speed::test_reads_answer_within_budget`
+  (0.37 s). It fails at base 4ecbc5620 in the same environment, and is slower there (0.42 s). This is environment
+  noise, as the review also found. The rest of the `-m timing` suite was not rerun for lack of time. The review ran
+  405 of 409, and every failure it found was environment noise.
+- pyright: NOT RUN. Pyright is not installed here (no web/node_modules). This round changes only test strings and
+  comments under api/tests, and the CI job checks api/oracle, so its count cannot move. It stays at the review's 1269
+  (the same as the baseline).
+- Web: no change this round (the review's tsc, lint, format and Playwright runs still stand).
+
+## Left (minors from the review, not in scope for this round)
+- Inline push inside the request transaction: move it to a background job when a real connector lands
+  (owner question open).
+- A stale tracker_push_error is kept after two-way sync is turned off, so Retry seems to do nothing.
+- The mock pushes on the undo of an add (harmless).
+
 # codes-at-write handoff (PR #1811, fix round 3)
 
 ## Write paths that number an item at write (file:line, at this branch)
@@ -333,3 +367,47 @@ fixed; the first round's "7 of 8" was wrong about #1753).
 - Red check: with the three app files at 2acfd1e (title attribute, pad) and the new spec, #1740 fails
   (locator.focus timeout: no tip trigger) and #1753 passes, as an already-fixed issue should.
 - Not run: the 248-spec roadmap sweep; no API change, so no API gates.
+
+# task-push (#1816) handoff
+
+## Built (branch head: see git log; subjects start "task-push: ")
+- API: `oracle.roadmap.tracker.push_task` is the one gate. It refuses through `refuse_push`, as `push_track_to_tracker`
+  does, because no connector is verified. `oracle/simple/task_push.py` has push() and retry(). push() runs at the end
+  of `targets._apply` for every task op except an undone add. It runs in a savepoint and never fails the change. A
+  failure goes into `roadmap_item_tasks.tracker_push_error` (migration 0139_task_tracker_push_error, the only head).
+  The read (`SimpleItemTask`) has new fields tracker_ref, tracker_url and tracker_error. The Retry route is
+  `POST /v1/simple/tasks/{task_id}/tracker-push`: per item (can_decide), denied as an Ask Oracle action (outward).
+- Web: `web/app/simple/roadmap/_tasks.tsx` TrackerMark shows the record link, the failure behind an (i), and Retry
+  (a failed Retry shows a toast). Mock: `web/lib/api/mock/task-push.ts` ("task-tracker" scenario), wired in
+  simple-changes.ts, simple-roadmap.ts (taskOut) and server.ts (route, seed).
+
+## What today's behaviour means
+- Two-way sync off (default) means no tracker is connected: nothing is pushed and nothing shows.
+- Sync on: every push is refused, honestly, with the "no connector verified" reason and Retry on the task. A real
+  connector (Linear or Jira) is a new client and so needs the owner's go. The pytest stubs one to prove create,
+  link, status-follows and Retry.
+
+## Gates
+- pytest tests/test_simple_task_push.py: red first (a78011a), then green.
+- All 19 files touching tasks or trackers, plus test_frozen_migrations, test_ask_oracle_actions and
+  test_capabilities: green.
+- ruff check and format: green. pyright: 1269 errors, baseline 1269 (OK). alembic: one head.
+- Web: tsc 0, full npm run lint 0, format:check 0, test:unit 49 files / 308 tests green.
+- Playwright (--retries=0): task-push 3/3 (2 fail without the _tasks.tsx change); feature-panel-gaps,
+  walkc-roadmap-tasks, simple-home, goal-buckets-accept and prose-guard green (prose-guard with
+  PROSE_BASE=4ecbc56, because no origin/main is fetched here).
+- goal-buckets-tasks: 2 of the first run failed. "heading clears its feature count" then passed 6/6 with
+  --repeat-each=3. The drag test passed on the next run. Both pass at base. Read as flaky.
+- Postgres needs max_locks_per_transaction=1024 for -n 6. With 256, DROP SCHEMA runs out of shared memory and the
+  run stalls or errors.
+- Whole API suite: run in 8 chunks of $TMPDIR/files.txt (see below for how far it got).
+  - Green: chunk 00 (test_accept... to test_connections_browse_slack, 1815 passed), chunk 01 (1282 passed) and
+    chunk 05 (test_run_frozen_reads to test_simple_goal_map_scoreboard_api, 1149 passed).
+  - NOT RUN, out of time: chunks 02, 03, 04, 06 and 07. Their task and tracker files did run in the targeted group
+    above. Command: `split -n l/8 -d <(ls tests/test_*.py) c8_`, then `uv run pytest -q -n 6 -m "not timing" $(cat c8_0N)`.
+- Timing tests (`-m timing`): NOT finished. 28 passed with 0 failures before the 400 s foreground limit cut the run.
+  Next step: run them in parts.
+
+## Left
+- The rest of the whole-suite chunks and the timing tests, as above.
+- The owner's call: a real tracker connector (Linear or Jira) is a new client and so needs the owner's go.

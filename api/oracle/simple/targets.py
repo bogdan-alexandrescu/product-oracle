@@ -80,7 +80,7 @@ from oracle.requests.models import REQUESTER_KINDS, ProductRequest
 from oracle.roadmap import company
 from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import ProductTrack, RoadmapItem
-from oracle.simple import changes, service
+from oracle.simple import changes, service, task_push
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import (
     ACTION_STATUSES,
@@ -708,6 +708,11 @@ async def _apply(
     except launches.LaunchError as e:
         raise _fail(e) from e
     await db.flush()
+    if kind == "task" and not (undo and c.op.startswith("add_")):
+        # task-push (#1816): the saved task goes to the connected tracker; never fails it.
+        row = await _row(db, kind, c.target)
+        if row is not None:
+            await task_push.push(db, principal, row)
 
 
 async def _task_trash(db: AsyncSession, principal: Any, row: Any, was: Any, gone: bool) -> None:

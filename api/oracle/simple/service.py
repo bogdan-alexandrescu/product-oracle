@@ -1587,22 +1587,40 @@ async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[S
     names = {
         u.id: display_name(u.email, u.name) for u in await drafts.all_users(db) if u.id in people
     }
+    records = await task_records(db, rows)
     out: dict[uuid.UUID, list[SimpleItemTask]] = defaultdict(list)
     for t in rows:
         item = keyed.get((t.roadmap_document_id, t.item_key))
         if item is not None:
-            out[item].append(task_out(t, names))
+            out[item].append(task_out(t, names, records))
     return out
 
 
-def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
+async def task_records(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, Any]:
+    """task-push (#1816): the tracker records the tasks are linked to, by id."""
+    from oracle.roadmap.models import TrackerRecord
+
+    ids = {t.tracker_record_id for t in rows if t.tracker_record_id is not None}
+    if not ids:
+        return {}
+    return {
+        r.id: r for r in await db.scalars(select(TrackerRecord).where(TrackerRecord.id.in_(ids)))
+    }
+
+
+def task_out(
+    t: Any, names: dict[uuid.UUID, str], records: dict[uuid.UUID, Any] | None = None
+) -> SimpleItemTask:
     owner = (
         SimplePersonRef(id=t.owner_id, name=names[t.owner_id])
         if t.owner_id is not None and t.owner_id in names
         else None
     )
+    rec = (records or {}).get(t.tracker_record_id) if t.tracker_record_id else None
     return SimpleItemTask(id=t.id, title=t.title, status=t.status, owner=owner,
-                          due_date=t.due_date)  # fmt: skip
+                          due_date=t.due_date, tracker_ref=rec.external_ref if rec else None,
+                          tracker_url=rec.url if rec else None,
+                          tracker_error=t.tracker_push_error)  # fmt: skip
 
 
 async def _decided(

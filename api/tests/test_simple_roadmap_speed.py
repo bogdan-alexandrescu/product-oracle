@@ -54,12 +54,14 @@ VIEWS = {
 # five roadmap views differ from c92397816's by that field alone, the two counts not at all.
 # unique-codes: the five roadmap views gain feature_name on each item (null on this seed) and
 # nothing else (diffed against fa899682c); the two counts are unchanged.
+# task-push: the five roadmap views gain tracker_ref, tracker_url and tracker_error on each task
+# (null on this seed) and nothing else (JSON diff against 4ecbc5620); the two counts are unchanged.
 DIGESTS = {
-    "goal": "bcbb97399745dee54d981994134174b91d9955f9191395ca9bc2022941fbe5cf",
-    "track": "19cfa11d7cc7b6114b5b312c1ba26ca31a4ddc641f4f3b0fcef54c948ed213b9",
-    "prd": "0c424b71f59d6d02c7e45b4e71c18bac7c68b0da3c7b8fba355d2f76eb3f8288",
-    "one-roadmap": "bc34dfaa8dd084ee97b323c400aa5b9f37746daea7ff3293b60cbfaa9f969533",
-    "viewer": "77e190a41f94c2f1a59a21066b8baf06d50b1f6422643eada52ac68cdd08aee0",
+    "goal": "6660b2e4fc100d2d1e41ffcbb7c66d54e7f746f06085d8f4242329db9136e83f",
+    "track": "c1906cc00bdab30bd11b0073f747339a8c958b5f78434a95e82b9af1fc9da3b1",
+    "prd": "c9029989d2650352840bc50b5f0a5ca9c0fed7bef2115d7167b197b4a01b2ad8",
+    "one-roadmap": "d2c37d49c5fce2deeac46f279ec21ed5c895825915e5845c102f779c4a9b8c31",
+    "viewer": "f0fa99c44b40add65a3058cae4893f4a89cfa8865895e0e55c94981d684aef7a",
     "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }
