@@ -15,6 +15,8 @@ export type Hit = {
   href?: string;
   feature?: PanelFeature;
   run?: () => void;
+  /** The row that shows the rest of this kind. */
+  more?: HitKind;
 };
 
 export const FOUND_KINDS: HitKind[] = ['Feature', 'PRD', 'Goal', 'Key result', 'Milestone'];
@@ -25,28 +27,6 @@ export const GROUP_OF: Record<string, string> = {
   'Key result': 'Key results',
   Milestone: 'Milestones',
 };
-
-/** Every page, in each shell (Simple's own, Detailed's nearest). */
-const PAGES: { name: string; href: string; detailed: string }[] = [
-  { name: 'Home', href: '/simple', detailed: '/home' },
-  { name: 'Roadmap', href: '/simple/roadmap', detailed: '/plan' },
-  { name: 'Goal map', href: '/simple/goals', detailed: '/plan/outcomes' },
-  { name: 'Priorities', href: '/simple/priorities', detailed: '/priorities' },
-  { name: 'One-pagers', href: '/simple/one-pagers', detailed: '/documents' },
-  { name: 'Meetings', href: '/simple/meetings', detailed: '/simple/meetings' },
-  { name: 'Decisions', href: '/simple/decisions', detailed: '/inbox' },
-  { name: 'Inbox', href: '/simple/inbox', detailed: '/inbox' },
-];
-
-export function pageHits(simple: boolean): Hit[] {
-  return PAGES.map((p) => ({
-    key: `p-${p.name}`,
-    kind: 'Page',
-    name: p.name,
-    where: simple ? 'Simple' : 'Detailed',
-    href: simple ? p.href : p.detailed,
-  }));
-}
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9$ ]/g, '');
 
@@ -118,7 +98,8 @@ export function indexHits(p: Schemas['PaletteOut'] | undefined): Hit[] {
       code: m.code || undefined,
       name: m.name,
       where: ['Roadmap', m.date].filter(Boolean).join(' · '),
-      href: '/simple/roadmap',
+      // Its own card on the Roadmap, opened by address (useLinkedMilestone).
+      href: `/simple/roadmap?milestone=${m.id}`,
     })),
   ];
 }

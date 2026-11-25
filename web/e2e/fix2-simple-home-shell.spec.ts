@@ -177,6 +177,9 @@ test("qa-simple-home-30: the rail's Mode switch is one Tab stop; the arrow keys 
   await simple.focus();
   await page.keyboard.press('Tab');
   await expect(detailed).not.toBeFocused();
+  // build-palette (CP3 a, the owner's pick): the switch, then Find, then Home.
+  await expect(page.getByTestId('palette-entry').filter({ visible: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByTestId('simple-nav-home')).toBeFocused();
   // With the shell's radio keys: an arrow moves focus without leaving the page; Enter opens it.
   await simple.focus();

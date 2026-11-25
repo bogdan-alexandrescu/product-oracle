@@ -11,8 +11,9 @@ export function PaletteEntry({
 }: {
   where: 'simple-rail' | 'detailed-rail' | 'phone-header';
 }) {
-  const { me } = useMe();
-  if (!me) return null;
+  const { me, loading } = useMe();
+  // While /v1/me loads its place is kept, so the rail's rows never move down once it answers.
+  if (!me && !loading) return null;
   if (where === 'simple-rail')
     return (
       <button

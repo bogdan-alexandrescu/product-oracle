@@ -432,6 +432,12 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           <span className={`${SEGMENTED.option} animate-pulse bg-surface`} />
           <span className={SEGMENTED.option} />
         </span>
+        {/* build-palette: Find's place, as the switch's. */}
+        <span
+          aria-hidden
+          data-testid="simple-nav-skeleton-find"
+          className="mb-1 h-12 w-full flex-none animate-pulse rounded-xl border border-rail-sep"
+        />
         {SIMPLE_DESTINATIONS.map((d) => (
           <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
             <span className="size-5 flex-none animate-pulse rounded bg-rail-hover" />

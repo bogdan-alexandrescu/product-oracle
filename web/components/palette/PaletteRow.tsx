@@ -70,3 +70,33 @@ export function PaletteRow({
     </li>
   );
 }
+
+/** "5 more features ↓": the rest of a kind, in the arrow order as the rows are. */
+export function PaletteMoreRow({
+  hit,
+  index,
+  on,
+  onPoint,
+  onPick,
+}: {
+  hit: Hit;
+  index: number;
+  on: boolean;
+  onPoint: () => void;
+  onPick: () => void;
+}) {
+  return (
+    <li
+      role="option"
+      aria-selected={on}
+      id={`palette-opt-${index}`}
+      data-testid="palette-more"
+      onMouseEnter={onPoint}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onPick}
+      className={`mx-1 inline-flex h-8 cursor-pointer items-center rounded-lg px-2.5 text-sm font-medium text-accent-ink ${on ? 'bg-accent-soft' : 'hover:bg-accent-soft'}`}
+    >
+      {hit.name}
+    </li>
+  );
+}

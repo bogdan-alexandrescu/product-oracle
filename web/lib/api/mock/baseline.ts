@@ -14,6 +14,7 @@ import { ANY_CODE, codeOnJoin, formerKeys, findByKey } from './feature-codes';
 import { describe, proposer } from './describe';
 import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from './goals';
 import { MOCK_SCENARIO_KEY, PRODUCT_CHAT_ID, seededItemId } from './ids';
+import { PALETTE_KR_SCENARIO, seedPaletteGoals } from './palette';
 import { routeEvidenceLinks } from './public-links';
 import { reply } from './typed';
 
@@ -402,6 +403,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario =
     typeof localStorage !== 'undefined' ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  if (scenario === PALETTE_KR_SCENARIO) seedPaletteGoals(entity);
   if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
     const shapes =
       scenario === GOAL_ATTRS_SCENARIO

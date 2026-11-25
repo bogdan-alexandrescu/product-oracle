@@ -15,6 +15,31 @@ export function useOpenPalette(on: () => void): void {
   }, [on]);
 }
 
+/** The open palette's Escape. Listened to before any layer's own (this module loads first), so the
+ * panel or sheet under the palette never closes with it. */
+let escape: (() => void) | null = null;
+if (typeof window !== 'undefined')
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'Escape' || !escape) return;
+      e.stopImmediatePropagation();
+      if (e.isComposing) return;
+      e.preventDefault();
+      escape();
+    },
+    true,
+  );
+
+export function usePaletteEscape(on: () => void): void {
+  useEffect(() => {
+    escape = on;
+    return () => {
+      if (escape === on) escape = null;
+    };
+  }, [on]);
+}
+
 export type NewItemAsk = { title: string; add: boolean };
 let pending: NewItemAsk | null = null;
 

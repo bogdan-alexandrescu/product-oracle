@@ -1,7 +1,7 @@
 // build-palette (#1794): the ⌘K palette's open sheet, as the owner picked it (CP1 a, Centered
 // sheet; CP2 b, Find and do): the box at the top, one line per result in groups, the key strip at
 // the foot; on a phone it fills the screen. Roles come through can() only.
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Button } from '@/components/ds/Button';
 import { Icon } from '@/components/ds/Icon';
@@ -12,81 +12,16 @@ import { useMe } from '@/lib/me';
 import { useRouter } from '@/lib/nav';
 import { useQuery } from '@/lib/use-query';
 
-import { askNewItem } from './events';
-import { buildGroups, newTitle, type Group } from './groups';
-import {
-  featureHits,
-  indexHits,
-  pageHits,
-  recentKeys,
-  rememberOpened,
-  type Hit,
-  type HitKind,
-} from './hits';
-import { KBD, PaletteRow } from './PaletteRow';
+import { actionsFor, featureActions, roleLineOf, type Rights } from './actions';
+import { askNewItem, usePaletteEscape } from './events';
+import { buildGroups, moreOf, rowsOf, type Group } from './groups';
+import { featureHits, indexHits, recentKeys, rememberOpened, type Hit, type HitKind } from './hits';
+import { palettePages } from './pages';
+import { NoMatch, ReadFailed, Reading } from './PaletteParts';
+import { KBD, PaletteMoreRow, PaletteRow } from './PaletteRow';
 
-type Rights = { proposes: boolean; decides: boolean; edits: boolean; startsPrd: boolean };
-
-function actionsFor(
-  words: string,
-  { proposes, decides, startsPrd }: Rights,
-  run: { newItem: (title: string, add: boolean) => void; newPrd: () => void },
-): Hit[] {
-  const { typedNew, title } = newTitle(words);
-  const itemWord = decides ? 'New item' : 'Propose a new item';
-  const out: Hit[] = [];
-  if (proposes)
-    out.push({
-      key: 'a-item',
-      kind: 'Action',
-      name: typedNew && title ? `${itemWord}: ${title}` : itemWord,
-      where: decides ? 'Roadmap · last track used' : 'Roadmap · an approver decides',
-      run: () => run.newItem(title, decides && !!title),
-    });
-  if (startsPrd)
-    out.push({ key: 'a-prd', kind: 'Action', name: 'New PRD', where: 'Home', run: run.newPrd });
-  out.push({
-    key: 'a-ask',
-    kind: 'Action',
-    name: words && !typedNew ? `Ask Oracle: ${words}` : 'Ask Oracle',
-    where: 'Opens beside the page',
-    run: () => askWith(typedNew ? '' : words),
-  });
-  return out;
-}
-
-/** Tab on a feature: its own actions. */
-function featureActions(h: Hit, onPanel: (h: Hit, onRoadmap?: boolean) => void): Hit[] {
-  return [
-    {
-      key: 'x-open',
-      kind: 'Action',
-      name: 'Open its panel',
-      where: 'Here, over this page',
-      run: () => onPanel(h),
-    },
-    {
-      key: 'x-road',
-      kind: 'Action',
-      name: 'Show it on the Roadmap',
-      where: 'Roadmap',
-      run: () => onPanel(h, true),
-    },
-    {
-      key: 'x-ask',
-      kind: 'Action',
-      name: `Ask Oracle about ${h.code} ${h.name}`,
-      where: 'Opens beside the page',
-      run: () => askWith(`Tell me about ${h.code} ${h.name}`),
-    },
-  ];
-}
-
-function roleLineOf({ proposes, edits }: Rights): string {
-  if (!proposes) return 'As a viewer you can find and open anything; you cannot add or change.';
-  if (!edits) return 'As a commenter you can open any panel and propose changes there.';
-  return '';
-}
+/** What Tab reaches inside the sheet (its options are walked with the arrow keys). */
+const TAB_STOPS = 'input, button:not([tabindex="-1"]):not([disabled])';
 
 export function PaletteSheet({
   phone,
@@ -101,13 +36,15 @@ export function PaletteSheet({
   onPanel: (h: Hit, onRoadmap?: boolean) => void;
   onNewPrd: () => void;
 }) {
-  const { can } = useMe();
+  const { can, simpleMode } = useMe();
   const router = useRouter();
   const [q, setQ] = useState('');
-  const [sel, setSel] = useState(0);
+  const [picked, setSel] = useState(0);
   const [sub, setSub] = useState<Hit | null>(null);
-  const [whole, setWhole] = useState<HitKind | null>(null);
+  const [whole, setWhole] = useState<HitKind[]>([]);
   const list = useRef<HTMLDivElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLInputElement>(null);
   const roadmap = useQuery('simple-roadmap:{}', () => unwrap(api.GET('/v1/simple/roadmap', {})));
   const index = useQuery('simple-palette', () => unwrap(api.GET('/v1/simple/palette')));
   const rights: Rights = {
@@ -125,47 +62,84 @@ export function PaletteSheet({
     askNewItem({ title, add });
   };
   const actions = actionsFor(words, rights, { newItem, newPrd: onNewPrd });
+  // Not read is not empty: nothing is said to be missing, or added, until both have answered.
+  const ready = !!roadmap.data && !!index.data;
+  const failed = (!roadmap.data && roadmap.error) || (!index.data && index.error) || null;
+  const again = () => {
+    if (!roadmap.data) void roadmap.reload();
+    if (!index.data) void index.reload();
+    box.current?.focus();
+  };
   const { groups, none } = buildGroups({
     words,
     all: [...featureHits(roadmap.data?.items ?? []), ...indexHits(index.data)],
-    pages: pageHits(simple),
+    pages: palettePages(simple, { can, simpleMode }),
     actions,
     recent: recentKeys(),
     whole,
+    ready,
   });
-  const flat = sub ? featureActions(sub, onPanel) : groups.flatMap((g) => g.hits);
+  /** Nothing matches: Enter adds the words as an item (or proposes it), else asks Oracle. */
+  const choices: Hit[] = [
+    ...(rights.proposes
+      ? [
+          {
+            key: 'n-add',
+            kind: 'Action' as const,
+            name: `${rights.decides ? 'Add' : 'Propose'} “${words}” as an item`,
+            where: '',
+            run: () => newItem(words, false),
+          },
+        ]
+      : []),
+    { key: 'n-ask', kind: 'Action', name: 'Ask Oracle', where: '', run: () => askWith(words) },
+  ];
+  const flat = sub ? featureActions(sub, onPanel) : none ? choices : rowsOf(groups);
+  // A read that answers may shorten the list under the selection.
+  const last = Math.max(0, flat.length - 1);
+  const sel = Math.min(picked, last);
   const roleLine = roleLineOf(rights);
   const tabbable = !sub && !!flat[sel]?.feature;
 
   const go = (h: Hit | undefined) => {
     if (!h) return;
+    if (h.more) {
+      // The rest of the kind, the selection on the first row it adds.
+      setWhole([...whole, h.more]);
+      return;
+    }
     onClose();
     if (h.kind !== 'Action' && h.kind !== 'Page') rememberOpened(h.key);
     if (h.run) h.run();
     else if (h.feature) onPanel(h);
     else if (h.href) router.push(h.href);
   };
-  /** Nothing matches: Enter adds the words as an item (or proposes it), else asks Oracle. */
-  const noMatch = (add: boolean) => {
-    onClose();
-    if (add) newItem(words, false);
-    else askWith(words);
-  };
   const move = (to: number) => {
     setSel(to);
     list.current?.querySelector(`#palette-opt-${to}`)?.scrollIntoView?.({ block: 'nearest' });
   };
   const more = () => {
+    box.current?.focus();
     setSub(flat[sel]);
     setSel(0);
   };
+  usePaletteEscape(useCallback(() => (sub ? setSub(null) : onClose()), [sub, onClose]));
+  // Tab opens a feature's actions; elsewhere it walks the sheet's own controls and stays inside it.
+  const walk = (back: boolean) => {
+    const els = [...(sheet.current?.querySelectorAll<HTMLElement>(TAB_STOPS) ?? [])];
+    const at = els.indexOf(document.activeElement as HTMLElement);
+    els[(at + (back ? -1 : 1) + els.length) % els.length]?.focus();
+  };
+  const onTab = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    if (tabbable && !e.shiftKey && document.activeElement === box.current) more();
+    else walk(e.shiftKey);
+  };
   const keys: Record<string, (() => void) | undefined> = {
-    Escape: () => (sub ? setSub(null) : onClose()),
-    ArrowDown: () => move(Math.min(flat.length - 1, sel + 1)),
+    ArrowDown: () => move(Math.min(last, sel + 1)),
     ArrowUp: () => move(Math.max(0, sel - 1)),
-    Enter: () => (none ? noMatch(rights.proposes) : go(flat[sel])),
-    // The box keeps the focus while the sheet is open: Tab only opens a feature's actions.
-    Tab: () => tabbable && more(),
+    Enter: () => go(flat[sel]),
     ArrowRight: tabbable ? more : undefined,
   };
   const onKeyDown = (e: KeyboardEvent) => {
@@ -174,9 +148,17 @@ export function PaletteSheet({
     e.preventDefault();
     k();
   };
-
   let idx = 0;
-  const rows = (hits: Hit[], label?: string) => (
+  const moreRow = (h: Hit, i: number) => (
+    <PaletteMoreRow
+      hit={h}
+      index={i}
+      on={i === sel}
+      onPoint={() => setSel(i)}
+      onPick={() => go(h)}
+    />
+  );
+  const rows = (hits: Hit[], label?: string, rest?: Hit) => (
     <ul role="listbox" aria-label={label}>
       {hits.map((h) => {
         const i = idx++;
@@ -193,22 +175,14 @@ export function PaletteSheet({
           />
         );
       })}
+      {rest && moreRow(rest, idx++)}
     </ul>
   );
   const group = (g: Group) =>
     g.hits.length ? (
       <div key={g.label}>
         <p className="px-3 pt-3 pb-1 text-xs font-semibold text-text-faint">{g.label}</p>
-        {rows(g.hits, g.label)}
-        {g.more > 0 && (
-          <Button
-            variant="ghost"
-            className="mx-1 text-accent-ink"
-            onClick={() => setWhole(g.kind ?? null)}
-          >
-            {g.more} more {g.label.toLowerCase()} ↓
-          </Button>
-        )}
+        {rows(g.hits, g.label, moreOf(g))}
       </div>
     ) : null;
 
@@ -219,6 +193,8 @@ export function PaletteSheet({
       data-testid="palette"
     >
       <div
+        ref={sheet}
+        onKeyDown={onTab}
         role="dialog"
         aria-modal="true"
         aria-label="Find"
@@ -227,19 +203,20 @@ export function PaletteSheet({
         <div className="flex h-14 flex-none items-center gap-2 border-b border-line px-4">
           <Icon name="search" />
           <input
+            ref={box}
             autoFocus
             data-testid="palette-input"
             aria-label="Find a feature, PRD or goal"
             role="combobox"
             aria-expanded
             aria-controls="palette-list"
-            aria-activedescendant={flat.length && !none ? `palette-opt-${sel}` : undefined}
+            aria-activedescendant={flat.length ? `palette-opt-${sel}` : undefined}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setSel(0);
               setSub(null);
-              setWhole(null);
+              setWhole([]);
             }}
             onKeyDown={onKeyDown}
             placeholder={phone ? 'Find or do' : 'Find or do: a code, a name, “new …”'}
@@ -275,8 +252,12 @@ export function PaletteSheet({
               {rows(flat)}
             </>
           )}
-          {!sub && none && <NoMatch words={words} rights={rights} onPick={noMatch} />}
+          {!sub && none && (
+            <NoMatch words={words} choices={choices} sel={sel} onPoint={setSel} onPick={go} />
+          )}
           {!sub && !none && groups.map(group)}
+          {!sub && failed && <ReadFailed error={failed} onAgain={again} />}
+          {!sub && !ready && !failed && words && <Reading />}
         </div>
         {!phone && (
           <div className="flex flex-none gap-4 border-t border-line px-4 py-2 text-xs text-text-faint">
@@ -293,33 +274,6 @@ export function PaletteSheet({
             )}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function NoMatch({
-  words,
-  rights,
-  onPick,
-}: {
-  words: string;
-  rights: Rights;
-  onPick: (add: boolean) => void;
-}) {
-  return (
-    <div className="px-3 py-6 text-center" data-testid="palette-none">
-      <p className="text-base font-semibold text-text">Nothing matches “{words}”</p>
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {rights.proposes && (
-          <Button variant="solid" onClick={() => onPick(true)}>
-            {rights.decides ? 'Add' : 'Propose'} “{words}” as an item
-            <span className="ml-1 opacity-70">↵</span>
-          </Button>
-        )}
-        <Button variant={rights.proposes ? 'secondary' : 'solid'} onClick={() => onPick(false)}>
-          Ask Oracle {rights.proposes ? null : <span className="ml-1 opacity-70">↵</span>}
-        </Button>
       </div>
     </div>
   );
