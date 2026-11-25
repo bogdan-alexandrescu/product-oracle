@@ -43,6 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from '@/lib/api/client';
+import { displayName } from '@/lib/names';
 import {
   agendaOut,
   decidedOutsideRows,
@@ -343,8 +344,11 @@ const replacedPrd = (prd: Prd) =>
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === 'owner').map((m) => m.id);
 /** walkc-meeting r2 (5j, meetings._waits): who approves a meeting's drafts: the PRD's decider, else the company's owners. */
 const approversOf = (ctx: MeetingsCtx, p: Prd) => (p.decider ? [p.decider] : owners(ctx));
-const nameOf = (ctx: MeetingsCtx, id: string) =>
-  ctx.members.find((m) => m.id === id)?.name ?? 'someone';
+/** #1763: the one name rule (lib/names.ts), as meetings._names: never a bare email. */
+const nameOf = (ctx: MeetingsCtx, id: string) => {
+  const m = ctx.members.find((x) => x.id === id);
+  return m ? displayName(m.email, m.name) : 'someone';
+};
 const ref = (ctx: MeetingsCtx, id: string): Ref => ({ id, name: nameOf(ctx, id) });
 const docRef = (p: Prd) => ({ id: p.id, slug: p.slug, title: p.title });
 /** walkc-roadmap-tasks: a decided decision as an item reads it (meetings.decided_refs): who, when, the meeting's minutes. */
@@ -2203,7 +2207,7 @@ export async function routeSimpleMeetings(
       // qa4-simple-decide-14: as the API, whether the role may change things (not a viewer).
       members: ctx.members.map((x) => ({
         id: x.id,
-        name: x.name,
+        name: displayName(x.email, x.name),
         can_change: x.role !== 'viewer',
       })),
       length_min: occ?.length_min ?? 60,
