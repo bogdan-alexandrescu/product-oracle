@@ -54,10 +54,7 @@ async function cutElsewhere(page: Page) {
 }
 
 const proposalRow = (page: Page) =>
-  page
-    .getByRole('row')
-    .filter({ hasText: 'asked for by the meeting' })
-    .filter({ hasText: 'Welcome video' });
+  page.getByRole('row').filter({ hasText: 'The meeting' }).filter({ hasText: 'Welcome video' });
 
 async function waiting(page: Page): Promise<number> {
   const chip = page.getByText(/^\d+ waiting$/).first();
@@ -118,7 +115,7 @@ for (const phone of [false, true]) {
       const row = proposalRow(page);
       await expect(row).toHaveCount(1);
       await expect(row).toContainText(
-        /Cut Welcome video · asked for by the meeting Review: Usage alerts PRD on [A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M/,
+        /The meeting Review: Usage alerts PRD asks to cut Welcome video · [A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M/,
       );
       const before = await waiting(page);
       await tap(row.getByRole('button', { name: 'Accept' }));

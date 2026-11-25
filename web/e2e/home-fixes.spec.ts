@@ -249,7 +249,7 @@ test('A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
   await page.getByTestId('nav-inbox').click();
   await expect(page).toHaveURL(/\/inbox$/);
   await expect(
-    page.getByRole('row').filter({ hasText: 'Bulk export' }).filter({ hasText: 'asked for by' }),
+    page.getByRole('row').filter({ hasText: 'Bulk export' }).filter({ hasText: 'proposes' }),
   ).toHaveCount(1);
   await expect(page.getByText(`${waiting} waiting`).filter({ visible: true })).toBeVisible();
   await expect(badge).toHaveText(waiting);
@@ -266,7 +266,7 @@ test('the Proposals chip opens the Inbox on proposals only', async ({ page }) =>
   await expect(page).toHaveURL(/\/inbox\?kind=proposals$/);
   await expect(page.getByTestId('inbox-kind')).toContainText('Proposals');
   await expect(
-    page.getByRole('row').filter({ hasText: 'Bulk export' }).filter({ hasText: 'asked for by' }),
+    page.getByRole('row').filter({ hasText: 'Bulk export' }).filter({ hasText: 'proposes' }),
   ).toHaveCount(1);
   await expect(page.getByTestId('inbox-checkpoints')).toHaveCount(0);
   await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText('2 waiting');

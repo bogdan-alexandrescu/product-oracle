@@ -10,7 +10,7 @@ import { expect, test, type Locator, type Page } from './test';
  *
  * Card inbox-all-proposals-both: protects = the approver reaches the Inbox from Simple's rail by
  * a click (More on a phone); it has one row for each proposal, each with Accept and Decline: the
- * Ask Oracle one says "asked through Ask Oracle by" the commenter, the meeting's names the
+ * Ask Oracle one says the commenter "asks through Ask Oracle", the meeting's names the
  * meeting, each with its time month first; the rail's Inbox count equals the page's "N waiting";
  * fails_when = the Ask Oracle proposal has no row, a row has no Accept or Decline, the rail has
  * no Inbox, or its count differs from the page's.
@@ -20,7 +20,7 @@ import { expect, test, type Locator, type Page } from './test';
  * it or the row stays. Desktop and phone.
  */
 
-const WHEN = /on [A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M/;
+const WHEN = /· [A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M/;
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
@@ -112,13 +112,10 @@ async function waiting(page: Page): Promise<number> {
 const askRow = (page: Page) =>
   page
     .getByRole('row')
-    .filter({ hasText: 'asked through Ask Oracle by' })
+    .filter({ hasText: 'asks through Ask Oracle' })
     .filter({ hasText: 'Welcome video' });
 const meetingRow = (page: Page) =>
-  page
-    .getByRole('row')
-    .filter({ hasText: 'asked for by the meeting' })
-    .filter({ hasText: 'Welcome video' });
+  page.getByRole('row').filter({ hasText: 'The meeting' }).filter({ hasText: 'Welcome video' });
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(
@@ -148,11 +145,11 @@ for (const phone of [false, true]) {
       await expect(ask).toHaveCount(1);
       await expect(meeting).toHaveCount(1);
       await expect(ask).toContainText(
-        /Renamed Welcome video to “Welcome tour” · asked through Ask Oracle by [A-Z][a-z]+ [A-Z][a-z]+/,
+        /[A-Z][a-z]+ [A-Z][a-z]+ asks through Ask Oracle to rename Welcome video to “Welcome tour”/,
       );
       await expect(ask).toContainText(WHEN);
       await expect(meeting).toContainText(
-        /Cut Welcome video · asked for by the meeting Review: Usage alerts PRD/,
+        /The meeting Review: Usage alerts PRD asks to cut Welcome video/,
       );
       await expect(meeting).toContainText(WHEN);
       for (const row of [ask, meeting]) {
@@ -170,7 +167,7 @@ for (const phone of [false, true]) {
       await expect(
         page
           .getByRole('row')
-          .filter({ hasText: 'asked for by the meeting' })
+          .filter({ hasText: 'The meeting' })
           .filter({ hasText: 'Welcome tour' }),
       ).toHaveCount(1);
       await expect.poll(() => waiting(page).catch(() => 0)).toBe(before - 1);
