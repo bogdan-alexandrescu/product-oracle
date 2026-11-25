@@ -1571,7 +1571,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
     >
       <Icon name="back" size={16} />
-      PRDs
+      {PRD_LIST}
     </Link>
   );
 
