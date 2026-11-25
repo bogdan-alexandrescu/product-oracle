@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login, signOut } from './helpers';
 import { expect, test, type Page } from './test';
 
