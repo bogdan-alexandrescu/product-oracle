@@ -10,6 +10,7 @@ from datetime import date
 
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.auth.deps import TenantDB
 from oracle.base_model import BaseModel
 from oracle.baseline.models import Entity
@@ -111,7 +112,7 @@ def _milestones(read: SimpleRoadmapOut) -> list[PaletteMilestone]:
                 id=first.id,
                 code=code,
                 name=_name([*tracks, *of]),
-                date=f"{day:%b} {day.day}" if day else "",
+                date=company_time.calendar_day(day) if day else "",
             )
         )
     return out
