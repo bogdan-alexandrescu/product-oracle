@@ -312,7 +312,7 @@ async def _calls(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
             title=d.title,
             detail=d.question or "",
             action="Decide",
-            href=f"/company/decisions?d={d.number}",
+            href=f"/simple/decisions?decision={d.number}",
             at=d.created_at,
         )  # fmt: skip
         for d in rows

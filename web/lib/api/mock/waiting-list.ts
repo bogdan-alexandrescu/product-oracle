@@ -108,7 +108,7 @@ export async function waitingItems(
       title: c.title,
       detail: d?.question ?? '',
       action: 'Decide',
-      href: `/company/decisions?d=${c.number}`,
+      href: `/simple/decisions?decision=${c.number}`,
       at: c.since,
       op: null,
     });

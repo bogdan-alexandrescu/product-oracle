@@ -2554,7 +2554,7 @@ function DecisionRow({
             </button>
           </>
         ) : (
-          <Link href={`/company/decisions?d=${d.number}`} className="simple-button">
+          <Link href={`/simple/decisions?decision=${d.number}`} className="simple-button">
             Open
           </Link>
         )

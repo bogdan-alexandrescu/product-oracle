@@ -8,10 +8,10 @@ import { datesInWords } from '@/lib/dates';
  * (decision_notes, "D-12 Cut bulk export was reversed on Nov 3: <why>") and a read's left_out line
  * ("Left out, no longer standing: D-9 Ship alerts by email only (about a roadmap now in
  * Trash)."), drawn in the draft banner as plain words: "Decision 12 Cut bulk export", linked
- * to it in Company › Decisions.
+ * to it in Simple's decision sheet (#1818).
  */
 
-const decisionHref = (n: string) => `/company/decisions?d=${n}`;
+const decisionHref = (n: string) => `/simple/decisions?decision=${n}`;
 /** "D-12" read out as "Decision 12" wherever a text names one unparsed. */
 const plain = (text: string) => datesInWords(text.replace(/\bD-(\d+)\b/g, 'Decision $1'));
 
