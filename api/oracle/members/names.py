@@ -20,3 +20,15 @@ def display_name(email: str, name: str | None = None) -> str:
     if not words:
         return email
     return " ".join(w[:1].upper() + w[1:] for w in words)
+
+
+async def names_of(db, ids) -> dict:
+    """Each member of ``ids`` named by :func:`display_name`, in one read; none for no ids."""
+    from sqlalchemy import select
+
+    from oracle.auth.models import User
+
+    if not ids:
+        return {}
+    users = await db.scalars(select(User).where(User.id.in_(ids)))
+    return {u.id: display_name(u.email, u.name) for u in users}

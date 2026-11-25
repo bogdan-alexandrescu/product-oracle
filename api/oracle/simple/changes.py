@@ -112,7 +112,7 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
-from oracle.members.names import display_name
+from oracle.members.names import names_of
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
@@ -584,12 +584,7 @@ def current_route(
 
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     ids = {i for i in ids if i is not None}
-    if not ids:
-        return {}
-    return {
-        u.id: display_name(u.email, u.name)
-        for u in await db.scalars(select(User).where(User.id.in_(ids)))
-    }
+    return await names_of(db, ids)
 
 
 def _touched(c: SimpleChange) -> set[str]:
