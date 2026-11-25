@@ -82,6 +82,12 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await login(page);
   await page.goto('/simple/roadmap');
   await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  // The Roadmap's drafts: each draft's row carries the Draft tag, so their count is the tags'.
+  const drafts = page.getByTestId('timeline-row').getByTestId('draft-tag');
+  const row = page.locator('[data-testid="timeline-row"][data-item="alert-export"]');
+  await expect(row).toBeVisible();
+  await expect(row.getByTestId('draft-tag')).toHaveCount(0);
+  const before = await drafts.count();
   await openRoadmapItem(page, 'alert-export');
   const dates = await panel(page).getByTestId('card-dates').textContent();
   await changeStatus(page);
@@ -92,6 +98,9 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await panel(page).getByLabel('Why it moves back').fill('Planned too early');
   await save.click();
   await expect(panel(page).getByTestId('card-status')).toHaveText('Draft');
+  // It shows among the Roadmap's drafts at once, and the drafts' count goes up by one.
+  await expect(row.getByTestId('draft-tag')).toHaveText('Draft');
+  await expect(drafts).toHaveCount(before + 1);
   // What depends on it is flagged at once, and no longer once it is planned again.
   const dependant = async () => {
     await page.keyboard.press('Escape');
@@ -107,6 +116,9 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await statusPick(page).selectOption('planned');
   await expect(panel(page).getByTestId('card-status')).toHaveText('Planned');
   await expect(panel(page).getByTestId('card-dates')).toHaveText(dates ?? '');
+  // Planned again, it leaves the drafts and their count comes back.
+  await expect(row.getByTestId('draft-tag')).toHaveCount(0);
+  await expect(drafts).toHaveCount(before);
   await expect(await dependant()).not.toContainText('Depends on a draft');
   await page.keyboard.press('Escape');
   await openRoadmapItem(page, 'alert-export');
