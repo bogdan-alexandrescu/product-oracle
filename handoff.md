@@ -46,7 +46,7 @@
   - chunk 02: stopped by the time limit at 37%, no failure up to there. NOT RUN: chunks 01 and 03 (time).
 - Timing tests (`-m timing`): started, but the command's output was cut by the 10-minute limit before the
   summary line, so there is NO verdict; rerun them.
-- tests/test_frozen_migrations.py: no migration in this lane; it is in a chunk not run (rerun it).
+- tests/test_frozen_migrations.py: 8 passed.
 - pyright, as CI runs it: `pyright: 1267 errors, baseline 1267`, exit 0.
 - Playwright --retries=0, 16 specs driving the panel's Code/Status and the Roadmap (approved-roadmap-to-simple,
   codes-at-write, every-field-kr-goal-code, feature-panel-gaps, fix2-simple-roadmap-card, gt-proposed-confirm,
