@@ -53,7 +53,7 @@ async def plan(
             if d is not entry
             and d.row.feature_id == entry.row.feature_id
             and d.status not in ("cut", "merged")
-            and codes.title_code(d.row.title) is None
+            and service.coded_title(d.row.title, None)[0] is None
         ),
         None,
     )
