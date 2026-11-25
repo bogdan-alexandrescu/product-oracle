@@ -2319,7 +2319,7 @@ export function SimpleRoadmap() {
       return () =>
         setMoving((m) => {
           const n = new Map(m);
-          n.delete(id);
+          if (n.get(id) === patch) n.delete(id); // panel-stages: a later change's patch stays
           return n;
         });
     },
