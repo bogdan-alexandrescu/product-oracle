@@ -1,3 +1,24 @@
+# names-wording handoff (#1763, #1787, #1721; fix round 1: review NOT_YET, two blockers, one major)
+
+## This round
+- #1763 is fixed on this branch. Red test restored first (`api/tests/test_simple_meeting_names.py`, red on
+  the base rule: 'approver@example.com' != 'Approver'), then `api/oracle/simple/meetings.py` names people by
+  `oracle.members.names.display_name` in all four maps (`_names`, `options`, `listing`, `deliver`).
+- The 7 tests it turned red are updated: `test_simple_dod_gaps_api.py::test_chat_notes_record_who_and_when`,
+  `test_simple_meetings_api.py` (decisions_page_meeting_lists_its_comments, every_action_is_a_meeting_decision,
+  decisions_page_reads_comment_authors_once, old_comment_decisions_become_comments),
+  `test_walkc_meeting.py::test_a_declined_card_proposal_says_declined`, and the read digests in
+  `test_simple_read_speed.py` (decisions, decisions-viewer, decisions-goal, decisions-prd, roadmap,
+  roadmap-viewer). JSON diff of each body (base vs head): the only change is an email becoming its name in
+  `name`, `by_name` and `owner_name` (artifacts: digest-diff.txt, digest-summary.txt, digest-diff-roadmap.txt).
+- `test_module_size`: meetings.py stays under its entry (a 3-line import now on one line): entry lowered
+  1551 -> 1550.
+- Web red-first: `node scripts/mutate.mjs` with the API's old rule (`x.name || x.email`) planted in the mock's
+  meetings members (`web/lib/api/mock/server.ts`): baseline green, mutant red, file restored
+  ("MUTATE: OK 1/1"; spec and logs in artifacts: mut-1763.json, mutate-1763-*.log).
+- Left as is (minors in verdict.json): the zone-state spec title, the X-Company-Time-Zone-State header (not a
+  fix item), Plan's Documents tab, the repeated One-pagers title.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
