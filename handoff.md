@@ -1,3 +1,53 @@
+# panel-stages handoff (#1815, #1879, review fix round 1: verdict NOT_YET, four blockers, three majors)
+
+## Fixed (each blocker and major in verdict.json)
+- Blocker, panel-stages.spec.ts Done to Planned: root cause in `run` (web/app/simple/roadmap/_roadmap.tsx,
+  `lay`'s unlay): an earlier change's reload removed a later change's optimistic patch, so the panel read the
+  stale status (Done, Planned, Done) and remounted, closing the Status editor. unlay now removes only its own
+  patch (one line). The spec passes with --retries=0.
+- Blocker, mock-matches-api-roadmap.spec.ts:113: Done to Planned now fills 'Why it moves back' and Saves
+  (setStatus takes a reason); the "reads In progress again" assertion is unchanged.
+- Blocker, #1815 5: op `take_feature_code` (api/oracle/simple/code_take.py, KEYED by item id: one change, one
+  Undo). The item drops its own code and reads its feature's; the item that had it takes the next free number
+  (additions._next_code, the one numbering rule). A commenter's is a proposal (changes.create). Mock twin in
+  simple-changes.ts; the Code row shows "Use F-01" (ghost Button, only beside the "its feature" tip).
+  pytest test_an_item_takes_its_features_code_and_the_other_a_new_number; spec panel-stages.spec.ts (last test).
+- Blocker, #1879 dependants: flag `depends_on_draft` (constraints.check, schemas FlagKind, FLAG_KINDS, `make
+  openapi`), "Depends on a draft: '<name>'", no fixes; mock flags it the same. pytest
+  test_an_item_that_depends_on_a_draft_is_flagged; the spec opens the dependant (alert-sso) and sees the flag,
+  then sees it gone after planning again. Planted: without the mock flag the spec is red at :102.
+- Major, tracker-done reopen: no column holds a "reopened" mark without a migration, so the review's
+  alternative is built: Planned on an item that reads Done only from its tracker's records is refused,
+  "Its tracker says it is done: reopen it there" (stages.status_after, mock the same). Draft still works.
+  pytest test_a_move_back_of_an_item_done_in_its_tracker_says_why_it_cannot. Owner question in questions.json.
+- Major, #1815 4: `_title_code` (now code_take.title_code) no longer returns early for an item whose code comes
+  from its feature or PRD; it loads the codes (service.item_codes) and skips only the code the item reads now.
+  Found: at base the early return depended on `entry.code` not being loaded yet (it was None at plan time in
+  the tests), so the taken check ran by accident; with codes loaded a rename slipped through. pytest
+  test_a_rename_of_an_item_with_its_features_code_takes_no_other_code (red at base: its own feature's code in
+  front was refused as "already the code of a Ground Truth feature").
+- changes.py shrank to 2592 (module_sizes.json updated); drafts.OP_WORDS gets its entry from code_take
+  (drafts.py is at its size limit).
+
+## Already fixed / minors
+- #1815 6 (new code at once): the slice-code spec checks F-29a within 1.5 s; the take spec checks F-01 within
+  1.5 s. No separate code change.
+- Code-row wrap guard: the reviewer planted the defect (88px against 33) and it went red at 390/768/1440.
+- Minors not done (not blocker/major): history wording ("moved X back to Draft: reason"), ChangeError's
+  lazy import in stages.py, the hidden-plan-data read check.
+
+## Gates (this round)
+- pytest test_panel_stages + module_size + unique_item_codes + simple_panel_fields + codes_at_write: 44 passed.
+- Whole API suite, `-m "not timing"`, in 6 chunks of test files (one run of all at -n 4 passed 10 min):
+  see the chunk lines below.
+- Playwright --retries=0, 16 specs driving the panel's Code/Status and the Roadmap (approved-roadmap-to-simple,
+  codes-at-write, every-field-kr-goal-code, feature-panel-gaps, fix2-simple-roadmap-card, gt-proposed-confirm,
+  item-chat-understands, mock-matches-api-roadmap, prio-ux, panel-stages, qa4r-card, roadmap-add, roadmap-done,
+  roadmap-edit-fixes-2, simple-roadmap-qa-nov12-panel, unique-item-codes): 91 passed.
+- Prose guard: 33 passed with PROSE_BASE=FETCH_HEAD; its two merge-base tests need a shared history (this clone
+  is one squashed commit) and pass with PROSE_BASE=152a6c728 (this round's start). Ceilings unchanged.
+- tsc exit 0; full `npm run lint` exit 0; format:check "All matched files use Prettier code style!".
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
