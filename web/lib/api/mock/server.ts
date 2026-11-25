@@ -11,6 +11,7 @@ import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { routePalette } from './palette';
 import { mockName as displayName } from './people';
 import { reply, rawReply } from './typed';
 
@@ -631,7 +632,6 @@ import {
   seedStuckPrdAsk,
 } from './simple-milestones';
 import { knowPrdOrder } from './prd-rank';
-import { routePalette } from './palette';
 import { codedTitle, openDraft, roadmapId, targetRead } from './simple-roadmap';
 import {
   appliedVersionOf,
