@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
-import { ADMIN, login } from './helpers';
+import { ADMIN, lineOptionsSettled, login } from './helpers';
 import { expect, test, type Locator, type Page } from './test';
 
 /*
@@ -59,6 +59,7 @@ for (const v of SIZES) {
     }) => {
       await setUp(page, { phone: v.phone });
       await openPriorities(page, '?tab=ranked');
+      await lineOptionsSettled(page);
       const options = await page.locator('#prio-line option').allTextContents();
       for (const start of ['Key date: Customer conference', 'Milestone: Beta']) {
         // qa-nov17 G8: a milestone's option reads its code with its name ("Milestone: M6 Beta").

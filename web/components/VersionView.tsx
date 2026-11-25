@@ -1909,13 +1909,15 @@ export function VersionView({
                       <ErrorNote>{error}</ErrorNote>
                     </div>
                   )}
-                  {!error && !version && (
+                  {/* The document's read says whether this is a PRD (one document with a rail) or not: no
+                      sections are drawn before it lands, or a menu opened on them closes when the page switches. */}
+                  {!error && (!version || !document_) && (
                     <div className="px-4 py-6">
                       <Loading label="Loading version…" />
                     </div>
                   )}
-                  {version && !openSection && <Empty>No sections</Empty>}
-                  {version && openSection && (
+                  {version && document_ && !openSection && <Empty>No sections</Empty>}
+                  {version && document_ && openSection && (
                     <>
                       <div data-testid="document-sections" data-view={view} data-open={openKey}>
                         <SectionView
