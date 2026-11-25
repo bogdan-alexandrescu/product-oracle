@@ -323,3 +323,13 @@ async def features_world(prefix: str = "") -> tuple[Ctx, str]:
         await s.commit()
         referral_id = str(referral.id)
     return ctx, referral_id
+
+
+async def test_a_goal_measure_that_is_not_text_reads_empty(client):
+    """A goal whose metric is stored as an object reads no measure, never its Python text."""
+    ctx = await make_ctx(f"Example Co {uuid4().hex[:8]}")
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).entity("goal", "growth", metric={"name": "sign-ups"})
+        await s.commit()
+    goals = (await read(client, ctx, "viewer"))["goals"]
+    assert [(g["name"], g["measure"]) for g in goals] == [("Growth", "")]
