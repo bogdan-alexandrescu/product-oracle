@@ -56,12 +56,15 @@ VIEWS = {
 # nothing else (diffed against fa899682c); the two counts are unchanged.
 # task-push: the five roadmap views gain tracker_ref, tracker_url and tracker_error on each task
 # (null on this seed) and nothing else (JSON diff against 4ecbc5620); the two counts are unchanged.
+# names-wording (#1763): the five roadmap views name each owner and decider from their email
+# ("approver@example.com" -> "Approver": owner.name, decided_in[].decided_by.name) and nothing
+# else (JSON diff against main dcf1e64ce); the two counts are unchanged.
 DIGESTS = {
-    "goal": "6660b2e4fc100d2d1e41ffcbb7c66d54e7f746f06085d8f4242329db9136e83f",
-    "track": "c1906cc00bdab30bd11b0073f747339a8c958b5f78434a95e82b9af1fc9da3b1",
-    "prd": "c9029989d2650352840bc50b5f0a5ca9c0fed7bef2115d7167b197b4a01b2ad8",
-    "one-roadmap": "d2c37d49c5fce2deeac46f279ec21ed5c895825915e5845c102f779c4a9b8c31",
-    "viewer": "f0fa99c44b40add65a3058cae4893f4a89cfa8865895e0e55c94981d684aef7a",
+    "goal": "151d31efad3a20e7e81a3f14cc1dd72839c88fe0148b7e99a56688e93be4b19e",
+    "track": "b2e4834dafad1fa8b62f25cc4d7a27ebff88158b9b4cb1f6f59e9b4561da8c41",
+    "prd": "dd67503090d65a2e9a8dd4de0f7b89a5cd2d6051e6c7ff24d75c6d54f78af81b",
+    "one-roadmap": "8c4643d5ece9ec8e167d231614ccd0bcf0e143d4f72997aa78f1e4a0cca26c4f",
+    "viewer": "84a8ee43733d921e42daa816d5f00c715b0c2a42bcd952363605208a04cb3b97",
     "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }

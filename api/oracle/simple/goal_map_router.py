@@ -20,6 +20,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, require_role
+from oracle.members.names import display_name
 from oracle.routing import APIRouter
 from oracle.simple import goal_map
 from oracle.simple.goal_map import (
@@ -72,7 +73,7 @@ async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
 
 async def _who(db: TenantDB, principal: Principal) -> str:
     user = await db.get(User, principal.user_id) if principal.user_id else None
-    return (user.name or user.email) if user else "An API token"
+    return display_name(user.email, user.name) if user else "An API token"
 
 
 @router.get("", response_model=GoalMapOut)

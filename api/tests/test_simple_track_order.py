@@ -24,6 +24,7 @@ from datetime import timedelta
 import pytest
 
 from oracle import company_time
+from oracle.members.names import display_name
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_roadmap_api import NOW, Seed
@@ -40,7 +41,7 @@ def clock(monkeypatch):
 
 def who(ctx: Ctx, role: str) -> str:
     u = ctx.users[role]
-    return u.name or u.email
+    return display_name(u.email, u.name)
 
 
 async def seed(ctx: Ctx) -> dict[str, str]:

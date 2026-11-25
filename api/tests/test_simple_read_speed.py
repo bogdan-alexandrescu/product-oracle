@@ -74,9 +74,12 @@ VIEWS = {
 # others are unchanged.
 # task-push: the two roadmap views gain tracker_ref, tracker_url and tracker_error on each task
 # (null on this seed) and nothing else (JSON diff against 4ecbc5620); the six others are unchanged.
+# names-wording (#1763), owners too: the two roadmap views name each owner and decider from their
+# email ("approver@example.com" -> "Approver": owner.name, decided_in[].decided_by.name) and
+# nothing else (JSON diff against main dcf1e64ce); the six others are unchanged.
 DIGESTS = {
-    "roadmap": "baf216d64ea3cbafd6e1323acb5ee653074e352c391eb13e2798c16b6f1577b6",
-    "roadmap-viewer": "6f6a16c37ccc439f97e88e82a4153ddbb75023baf3c963981e583175d9675ce8",
+    "roadmap": "48db9e766d991bbbdb6e163a6af85f1d4ab2ddf27256431f4621d9079f95c6bd",
+    "roadmap-viewer": "ab651758c14dbf7608d7717e9d59f091fe697a72e4d772d4e6b2652128371187",
     "priorities": "b21526e73c21066f6027f67d6f1e116774a913778868391696c541a197bf6b45",
     "priorities-viewer": "2dca1614aa912c759813d3851df35897be11e298a3a9f9cf4eb6c4eb08b937c0",
     "decisions": "dca64176c5f3e0187e007563dd47c7eba45c22a8f43b4c2f56ea86bb05c2cc96",

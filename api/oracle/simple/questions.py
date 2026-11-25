@@ -396,7 +396,10 @@ async def _names(db: AsyncSession, ids: set) -> dict[uuid.UUID, str]:
     ids = {i for i in ids if i}
     if not ids:
         return {}
-    return {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    return {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(ids)))
+    }
 
 
 def _features(info: dict[str, Any], view: plan.View | None) -> list[SimpleQuestionFeature]:

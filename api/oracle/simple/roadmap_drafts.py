@@ -24,6 +24,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.names import display_name
 from oracle.roadmap import company
 from oracle.roadmap.models import DraftRoadmap, RoadmapItem
 from oracle.runs.models import Run
@@ -123,7 +124,7 @@ async def draft_prds(db: AsyncSession, principal: Any) -> list[SimpleRoadmapDraf
     rows = [r for r in every if r.id in spans]
     owners = {r.owner_id for r in rows if r.owner_id is not None}
     names = {
-        u: name or email
+        u: display_name(email, name)
         for u, name, email in (
             await db.execute(select(User.id, User.name, User.email).where(User.id.in_(owners)))
         ).all()
