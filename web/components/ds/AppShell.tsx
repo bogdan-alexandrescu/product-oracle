@@ -21,6 +21,7 @@ import {
   usePanelOpen,
 } from '@/components/hop/open-state';
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
+import { ZoneNotice } from '@/components/ZoneNotice';
 import { api, MOCK_MODE } from '@/lib/api/client';
 import { resetMockData } from '@/lib/api/mock/server';
 import { onReadChanged, onReadFailed } from '@/lib/api/shared-reads';
@@ -1311,6 +1312,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
           <CapsError />
+          <ZoneNotice bar />
           {children}
         </main>
         {/* qa-shell-31: the phone's tab bar (Navs). */}

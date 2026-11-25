@@ -17,7 +17,14 @@
 import type { Schemas } from '@/lib/api/client';
 import { inWords } from '@/lib/format';
 
-import { mockSettingValue, mockZone } from './connections';
+import { MOCK_ZONE_STATE_KEY, mockSettingValue, mockZone } from './connections';
+
+/** #1721: the pool's own read of the zone; "pool-unavailable" fails only this read, not GET /v1/me's. */
+const poolZoneState = () =>
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem(MOCK_ZONE_STATE_KEY) === 'pool-unavailable'
+    ? 'unavailable'
+    : mockZone().company_timezone_state;
 import { reply } from './typed';
 
 type Account = Schemas['AccountOut'];
@@ -417,9 +424,8 @@ async function handle(
       fallback: db.fallback,
       pool: poolOf(db),
       // #1677: the default zone when the Company time zone cannot be read, as the API.
-      time_zone:
-        mockZone().company_timezone_state === 'unavailable' ? 'America/Los_Angeles' : timeZone(),
-      time_zone_state: mockZone().company_timezone_state,
+      time_zone: poolZoneState() === 'unavailable' ? 'America/Los_Angeles' : timeZone(),
+      time_zone_state: poolZoneState(),
     };
     return reply('/v1/claude-accounts', 'get', page);
   }
