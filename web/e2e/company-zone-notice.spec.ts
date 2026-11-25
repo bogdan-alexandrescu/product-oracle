@@ -51,13 +51,13 @@ test('Claude accounts: the pool says its own read of the zone failed', async ({ 
   await zoneState(page, 'pool-unavailable');
   await login(page);
   await page.goto('/settings/claude-accounts');
-  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' }).first()).toBeVisible();
   await saysIt(page);
 });
 
 test('Claude accounts: a fetched zone says nothing', async ({ page }) => {
   await login(page);
   await page.goto('/settings/claude-accounts');
-  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' }).first()).toBeVisible();
   await expect(page.getByTestId('zone-unavailable')).toHaveCount(0);
 });
