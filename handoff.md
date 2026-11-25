@@ -38,8 +38,16 @@
 
 ## Gates (this round)
 - pytest test_panel_stages + module_size + unique_item_codes + simple_panel_fields + codes_at_write: 44 passed.
-- Whole API suite, `-m "not timing"`, in 6 chunks of test files (one run of all at -n 4 passed 10 min):
-  see the chunk lines below.
+- Whole API suite, `-m "not timing"`, split into 6 alphabetical chunks of the 776 test files (the run of all
+  files hit the 10-minute command limit at 26% with no failure):
+  - chunk 00 (files 1-132): 2229 passed, 4 skipped. chunk 04: 1107 passed. chunk 05 (includes
+    test_panel_stages, test_simple_*): 1968 passed, 1 skipped (its first try at -n 6 ran Postgres out of lock
+    memory; rerun at -n 4 with max_locks_per_transaction=1024 was green).
+  - chunk 02: stopped by the time limit at 37%, no failure up to there. NOT RUN: chunks 01 and 03 (time).
+- Timing tests (`-m timing`): started, but the command's output was cut by the 10-minute limit before the
+  summary line, so there is NO verdict; rerun them.
+- tests/test_frozen_migrations.py: no migration in this lane; it is in a chunk not run (rerun it).
+- pyright, as CI runs it: `pyright: 1267 errors, baseline 1267`, exit 0.
 - Playwright --retries=0, 16 specs driving the panel's Code/Status and the Roadmap (approved-roadmap-to-simple,
   codes-at-write, every-field-kr-goal-code, feature-panel-gaps, fix2-simple-roadmap-card, gt-proposed-confirm,
   item-chat-understands, mock-matches-api-roadmap, prio-ux, panel-stages, qa4r-card, roadmap-add, roadmap-done,
