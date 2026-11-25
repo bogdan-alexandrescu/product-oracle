@@ -74,9 +74,10 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   page,
 }) => {
   // protects=the Status picker offers Draft, Planned and Done; a move back asks why before it
-  // applies; Planned again keeps the dates; Done moves back to Planned; fails_when=Draft is not
-  // offered, a move back applies with no reason, or the dates are lost; no_claim=history words
-  // (pytest).
+  // applies; what depends on a draft is flagged; Planned again keeps the dates; Done moves back
+  // to Planned; fails_when=Draft is not offered, a move back applies with no reason, no flag on
+  // the dependant, the dates are lost, or a stale read closes the editor; no_claim=history
+  // words (pytest).
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await page.goto('/simple/roadmap');
@@ -91,11 +92,24 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await panel(page).getByLabel('Why it moves back').fill('Planned too early');
   await save.click();
   await expect(panel(page).getByTestId('card-status')).toHaveText('Draft');
+  // What depends on it is flagged at once, and no longer once it is planned again.
+  const dependant = async () => {
+    await page.keyboard.press('Escape');
+    await openRoadmapItem(page, 'alert-sso');
+    await expect(panel(page).getByTestId('card-status')).toBeVisible();
+    return panel(page);
+  };
+  await expect((await dependant()).getByTestId('card-flags')).toContainText('Depends on a draft');
+  await page.keyboard.press('Escape');
+  await openRoadmapItem(page, 'alert-export');
 
   await changeStatus(page);
   await statusPick(page).selectOption('planned');
   await expect(panel(page).getByTestId('card-status')).toHaveText('Planned');
   await expect(panel(page).getByTestId('card-dates')).toHaveText(dates ?? '');
+  await expect(await dependant()).not.toContainText('Depends on a draft');
+  await page.keyboard.press('Escape');
+  await openRoadmapItem(page, 'alert-export');
 
   await changeStatus(page);
   await statusPick(page).selectOption('done');

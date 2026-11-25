@@ -2823,6 +2823,14 @@ async function create(
       const back = isBack(seed(seen, key), String(a.status));
       if (back && !why) return json(422, { detail: 'Say why it moves back' });
       if (back) target.reason = why.slice(0, 500);
+      // stages.status_after: done from its tracker, not a mark: no mark here undoes that (Draft does).
+      if (
+        back &&
+        a.status === 'planned' &&
+        shownStatus(seed(seen, key)) === 'done' &&
+        !seed(seen, key).shipped
+      )
+        return json(422, { detail: 'Its tracker says it is done: reopen it there' });
       after = statusAfter(seed(seen, key), String(a.status), ctx.id);
       stored = Object.keys(after);
     } else if (body.op === 'set_code') {

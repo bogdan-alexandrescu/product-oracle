@@ -126650,7 +126650,8 @@
               "blocker_date",
               "outside_milestone",
               "cut_with_dependents",
-              "draft_without_owner"
+              "draft_without_owner",
+              "depends_on_draft"
             ],
             "title": "Kind"
           },

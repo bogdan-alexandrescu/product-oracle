@@ -42495,7 +42495,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dependency_order" | "blocker_date" | "outside_milestone" | "cut_with_dependents" | "draft_without_owner";
+            kind: "dependency_order" | "blocker_date" | "outside_milestone" | "cut_with_dependents" | "draft_without_owner" | "depends_on_draft";
             /** Reason */
             reason: string;
             /** Fixes */
