@@ -81,5 +81,7 @@ test('who may not decide sees no Decide on the sheet', async ({ page }) => {
     .click();
   const s = sheet(page);
   await expect(s.getByRole('button', { name: 'Edit' })).toBeVisible();
+  // Decide waits on the decision's own read (can_decide): let it land (the mock answers in 60 ms).
+  await page.waitForTimeout(1000);
   await expect(s.getByRole('button', { name: /^Decide/ })).toHaveCount(0);
 });
