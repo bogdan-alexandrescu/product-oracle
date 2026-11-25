@@ -958,10 +958,7 @@ export function prioritiesOut(
   // is a row with no item, never reorderable (priorities.py).
   const seen = new Set(read.items.map((i) => i.id));
   // draw-time (#1870): an owner's own read is the whole roadmap, as withOrder's.
-  const all = openItems(
-    db,
-    ctx.role === 'owner' && !read.drafts?.length ? read.items : undefined,
-  );
+  const all = openItems(db, ctx.role === 'owner' && !read.drafts?.length ? read.items : undefined);
   const { ranked, byId, score, sc, oracleRank, yours } = ranking(db, all);
   const keyOf = (i: Item) => i.key;
   const can = ctx.role !== 'viewer';

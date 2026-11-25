@@ -6869,7 +6869,9 @@ function flush() {
 
 function leave() {
   inFlight -= 1;
-  if (inFlight === 0) flush();
+  if (inFlight > 0) return;
+  answered = 0;
+  flush();
 }
 
 if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
@@ -6877,16 +6879,26 @@ if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
 /**
  * draw-time (#1870): each call is answered in a turn of its own, so a page's burst of reads lets it
  * draw and take a click between two answers, as reads of a server do (a message, not a timer: a
- * spec's stopped clock never holds it).
+ * spec's stopped clock never holds it). A read past a burst's first six (as many as a browser asks a
+ * server at once) waits for the page to have nothing else to do: a server's answers take none of the
+ * page's own thread. A write never waits for that itself.
  */
+const AT_ONCE = 6;
+let answered = 0;
 const turns: (() => void)[] = [];
 const turn = typeof MessageChannel === 'undefined' ? null : new MessageChannel();
 if (turn) turn.port1.onmessage = () => turns.shift()?.();
-function ownTurn(): Promise<void> {
-  if (!turn) return Promise.resolve();
+type Idle = { postTask?: (run: () => void, how: { priority: 'background' }) => Promise<unknown> };
+const idle = (globalThis as { scheduler?: Idle }).scheduler;
+function ownTurn(read: boolean): Promise<void> {
+  answered += 1;
   return new Promise((r) => {
-    turns.push(r);
-    turn.port2.postMessage(null);
+    if (read && answered > AT_ONCE && idle?.postTask) {
+      void idle.postTask(r, { priority: 'background' });
+    } else if (turn) {
+      turns.push(r);
+      turn.port2.postMessage(null);
+    } else r();
   });
 }
 
@@ -16333,7 +16345,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     } else if (!overwrites && (!chatPoll || readerWrote)) save(db);
     return res;
   };
-  const next = queue.then(ownTurn).then(answer).finally(leave);
+  const next = queue
+    .then(() => ownTurn(plainRead))
+    .then(answer)
+    .finally(leave);
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   const prefix = slow?.endsWith('*') ? slow.slice(0, -1) : null;

@@ -388,7 +388,18 @@ export function ConflictPanel({
 }: Common & { onShow: (key: string) => void }) {
   // roadmap-decide: every broken link of the working draft, a cut item others depend on
   // included: the same ones Needs a decision, Home and the side menu count.
-  const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
+  // draw-time (#1870): its reasons are worded once per roadmap, not again for each of the page's reads.
+  const list = useMemo(
+    () =>
+      data.items.flatMap((i) =>
+        brokenLinks(i).map((f) => ({
+          i,
+          f,
+          reason: shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId),
+        })),
+      ),
+    [data, byId],
+  );
   // Pre-demo QA S-14: an item's breaks together, in the order the first of them reads.
   const groups: (typeof list)[] = [];
   for (const x of list) {
@@ -396,7 +407,7 @@ export function ConflictPanel({
     if (g) g.push(x);
     else groups.push([x]);
   }
-  const one = ({ i, f }: (typeof list)[number]) => {
+  const one = ({ i, f, reason }: (typeof list)[number]) => {
     // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
     // the fixes take their own line under the sentence, as the tray has them.
     const stacked = phone || fixCount(f) > 3;
@@ -423,7 +434,7 @@ export function ConflictPanel({
             {REASON_WORDS[f.kind] ?? 'has a broken link'}
           </span>{' '}
           <InfoTip label="what is broken" align="start" testId="conflict-reason-tip">
-            {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+            {reason}
           </InfoTip>
         </span>
         <div className="max-w-full min-w-0">
