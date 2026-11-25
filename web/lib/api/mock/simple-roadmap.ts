@@ -3217,7 +3217,7 @@ export function roadmapOut(
           : []),
         ...(s.section
           ? [
-              `From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, '')}.`,
+              `From ${rm.prd} (draft ${rm.draft}): ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, '')}.`,
             ]
           : []),
       ].slice(0, 3),
