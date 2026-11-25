@@ -11,6 +11,12 @@ Test cards (protects / fails_when / no_claim):
   back; someone else who does not decide the item only proposes; fails_when=the link is
   dropped, the row never reaches its owner, the count misses it, or its owner can only
   propose; no_claim=the web (web/e2e/inbox-action-items.spec.ts).
+- test_sent_meeting_lists_its_action_items: protects=a sent meeting's read lists its
+  recorded action items (``action_items``: id, status, due date, linked item) with
+  ``can_change`` true for its owner, the item's decider and a company owner and false for
+  anyone else; a company owner closes it directly and the read says done; fails_when=the
+  meeting shows them read-only or to the wrong people, or an owner only proposes;
+  no_claim=the web.
 """
 
 from sqlalchemy import select
@@ -88,3 +94,36 @@ async def test_action_item_reaches_its_owner_and_is_done_once(client):
     assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
     [moved] = (await inbox(client, w, "approver"))["simple_action_items"]
     assert moved["due_date"] == "2026-12-04"
+
+
+async def test_sent_meeting_lists_its_action_items(client):
+    """A sent meeting lists its action items, each changeable by those who may."""
+    w = await world()
+    m = await start(client, w)
+    await end(client, w, m["id"])
+    feature = next(i for i in (await get(client, w, m["id"]))["agenda"]["items"]
+                   if i["feature_id"])  # fmt: skip
+    item_id = feature["feature_id"]
+    assert (await get(client, w, m["id"]))["action_items"] == []
+    body = {"summary": "Short", "open_questions": [],
+            "action_items": [{"title": "Write the QA plan", "owner_id": uid(w, "approver"),
+                              "due_date": "2026-12-01", "item_id": item_id}]}  # fmt: skip
+    r = await client.put(f"{MEETINGS}/{m['id']}/minutes", json=body, headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{MEETINGS}/{m['id']}/send", json={"email": True},
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    can = {}
+    for who in ("approver", "decider", "owner", "commenter"):
+        [a] = (await get(client, w, m["id"], who))["action_items"]
+        can[who] = a["can_change"]
+    assert can == {"approver": True, "decider": True, "owner": True, "commenter": False}
+    assert (a["title"], a["status"], a["due_date"], a["item_id"], a["owner_id"]) == (
+        "Write the QA plan", "open", "2026-12-01", item_id, uid(w, "approver"))  # fmt: skip
+    done = {"op": "set_action_item_status",
+            "target": {"item_id": item_id, "action_item_id": a["id"]},
+            "before": {"status": "open"}, "after": {"status": "done"}}  # fmt: skip
+    r = await client.post(CHANGES, json=done, headers=w.ctx.as_("owner"))
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    [a] = (await get(client, w, m["id"], "approver"))["action_items"]
+    assert (a["status"], a["can_change"]) == ("done", True)
