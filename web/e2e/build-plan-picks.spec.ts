@@ -133,9 +133,11 @@ for (const v of SIZES) {
       await expect(rows.first()).toBeVisible();
       for (const r of await rows.all()) {
         const numbers = r.getByTestId('prio-numbers');
-        const m = /^·value ([\d.]+)·confidence ([\d.]+)·([\d.]+) weeks?·score ([\d.]+)$/.exec(
-          (await numbers.textContent()) ?? '',
-        );
+        // prio-ux (#1774): the model's numbers are the value's hover detail.
+        const m =
+          /^Goal value ([\d.]+) · confidence ([\d.]+) · ([\d.]+) weeks? · score ([\d.]+)$/.exec(
+            (await r.getByTestId('prio-value').getAttribute('title')) ?? '',
+          );
         expect(m, (await r.textContent()) ?? '').not.toBeNull();
         const [, value, conf, effort, score] = m!.map(Number);
         expect(Math.abs((value * conf) / effort - score)).toBeLessThan(0.011);

@@ -4,14 +4,14 @@ import { expect, test, type Locator, type Page } from './test';
 
 /*
  * BGD 2026-10-30, "Clamp above the line": on /simple/priorities with a dated plan (the mock's
- * "simple-plan" scenario, Nov 2 – Feb 12), what makes the line is listed first: 12 features (Oracle's suggested dates count as estimates),
- * whose ranks run to #39 (the Goal map's features, P-1, rank among them; the alerts roadmap's work is
+ * "simple-plan" scenario, Nov 2 – Feb 12), what makes the line is listed first: 20 features (the plan's items in its span, prio-ux #1739),
+ * whose ranks run to #40 (the Goal map's features, P-1, rank among them; the alerts roadmap's work is
  * dated past this quarter, board-quarters). A row dragged onto a row above the line lands at the last rank still
- * above the line (#12), never at the target's own rank when that rank sits below it.
+ * above the line (#20), never at the target's own rank when that rank sits below it.
  *
- * protects: dragging Bulk import (#33) onto Pricing page words (#39, the last row above the line)
- *   asks for rank 12, says it lands above the line, and moves it to #12, still above the line.
- * fails_when: the move asks for rank 39 (the target's rank, past the 12 ranks above the line).
+ * protects: dragging Bulk import (#33) onto Pricing questions page (#40, the last row above the line)
+ *   asks for rank 20, says it lands above the line, and moves it to #20, still above the line.
+ * fails_when: the move asks for rank 40 (the target's rank, past the 20 ranks above the line).
  * protects (review of the clamp): a drop onto any other row above the line keeps that row's rank:
  *   Pricing page words (#39) dragged up onto Bulk import (#33) asks for rank 33, not 12.
  * fails_when: every drop onto a row above the line ranked past 12 asks for rank 12.
@@ -55,23 +55,24 @@ for (const [where, size] of [
     await page.goto('/simple/priorities');
     await expect(page.getByTestId('simple-priorities')).toBeVisible();
     const above = page.locator('[data-testid="prio-row"][data-above="true"]');
-    await expect(above).toHaveCount(12);
+    // prio-ux (#1739): what makes the line is the plan's items in its span, as Goal buckets count them.
+    await expect(above).toHaveCount(20);
     const last = above.last();
-    await expect(last.getByTestId('prio-title')).toHaveText('Pricing page words');
-    await expect(last.getByTestId('prio-rank')).toHaveText('39');
+    await expect(last.getByTestId('prio-title')).toHaveText('Pricing questions page');
+    await expect(last.getByTestId('prio-rank')).toHaveText('40');
     const bulk = rowByTitle(page, 'Bulk import');
     await expect(bulk.getByTestId('prio-rank')).toHaveText('33');
 
     await dragOnto(page, 'Bulk import (F-07)', last);
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading')).toHaveText('Move Bulk import (F-07) to rank 12');
+    await expect(dialog.getByRole('heading')).toHaveText('Move Bulk import (F-07) to rank 20');
     await expect(dialog.getByTestId('move-lands')).toContainText('above the line');
     await dialog.getByLabel('Reason').fill('Ship it with the first launch');
     await dialog.getByRole('button', { name: 'Move', exact: true }).click();
     await expect(
-      page.getByRole('status').filter({ hasText: 'Moved Bulk import (F-07) to rank 12' }),
+      page.getByRole('status').filter({ hasText: 'Moved Bulk import (F-07) to rank 20' }),
     ).toBeVisible();
-    await expect(bulk.getByTestId('prio-rank')).toHaveText('12');
+    await expect(bulk.getByTestId('prio-rank')).toHaveText('20');
     await expect(bulk).toHaveAttribute('data-above', 'true');
   });
 }

@@ -51,7 +51,7 @@ async def push(db: AsyncSession, principal: Any, task: Any) -> None:
 async def retry(db: AsyncSession, principal: Any, task_id: uuid.UUID) -> Any:
     """Retry: push the task again. Whoever changes the task directly (an owner, the item's
     decider) may (403 otherwise); 404 for no such task. Returns the task as the read shows it."""
-    from oracle.simple import drafts, service
+    from oracle.simple import drafts, service, task_reads
     from oracle.simple.changes import ChangeError
     from oracle.simple.models import RoadmapItemTask
 
@@ -77,4 +77,4 @@ async def retry(db: AsyncSession, principal: Any, task_id: uuid.UUID) -> Any:
     await db.commit()
     names = {u.id: display_name(u.email, u.name) for u in await drafts.all_users(db)
              if u.id == row.owner_id}  # fmt: skip
-    return service.task_out(row, names, await service.task_records(db, [row]))
+    return task_reads.task_out(row, names, await task_reads.task_records(db, [row]))

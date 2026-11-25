@@ -82,6 +82,7 @@ import {
   type PriorityKeyResults,
 } from './key-results';
 import { useCodedMilestone } from './milestone-codes';
+import { pinAt, placed } from './places';
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
 import {
@@ -174,6 +175,16 @@ const SUBTITLE: Record<Tab, string> = {
   buckets: 'Where the engineer-weeks go, goal by goal.',
 };
 
+/** prio-ux (#1739): why All counts more lines than the line's "N of M miss", which counts the ranked features. */
+function allWords(data: Out, all: number): string {
+  const twins = data.rows.reduce((n, r) => n + (r.twins?.length ?? 0), 0);
+  const parts = [`${data.rows.length} ranked features`];
+  if (twins) parts.push(`${twins} same-name ${twins === 1 ? 'line' : 'lines'}`);
+  const rest = all - data.rows.length - twins;
+  if (rest) parts.push(`${rest} ${rest === 1 ? 'item' : 'items'} not ranked yet`);
+  return `All ${all}: ${parts.join(', ')}. "Miss" counts the ranked features only.`;
+}
+
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
 const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
   const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
@@ -188,10 +199,6 @@ const BUCKETS_WORDS = (data: Out): string => {
   const dated = (data.lines ?? []).some((l) => l.kind === 'milestone' || l.kind === 'key_date');
   return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : 'No dated plan yet, so the work is not placed by milestone.'}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${weeksWords(data.weeks_total)} in all.` : ''}`;
 };
-
-/** The calendar quarter a date falls in, as people say it: "Q4 2026". */
-const quarterOf = (date: string): string =>
-  `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
 
 type Sent =
   | { ok: true; change: Schemas['SimpleChangeOut'] }
@@ -316,7 +323,7 @@ export function Priorities() {
   };
   // kr-in-priorities: a key result's features read, count and draw as its goal's.
   const kr = usePriorityKeyResults();
-  const data = useMemo(() => topGoalPriorities(q.data, kr.krs), [q.data, kr.krs]);
+  const data = useMemo(() => placed(topGoalPriorities(q.data, kr.krs)), [q.data, kr.krs]);
   // Running today: each feature's word pill, and the Show filter that counts each kind.
   const marks = useFeatureMarks();
   const [show, setShow] = useState<ShowKind | null>(null);
@@ -439,9 +446,11 @@ export function Priorities() {
           {/* Demo 9 / P-7: the view's explanation sits behind an (i); the line under the heading says only which quarter or plan. */}
           <p className="flex items-center gap-1.5 text-text2">
             <span data-testid="prio-subtitle">
-              {/* mk-goalbuckets: Goal buckets names the plan's quarter ("Q4 2026"); its card gives the plan's dates. */}
+              {/* prio-ux (#1777): one period on every tab, the plan's dates when there is a plan. */}
               {data
-                ? `${tab === 'buckets' && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}`
+                ? data.plan?.span
+                  ? `This plan, ${planSpan(data.plan.span)}`
+                  : data.quarter.label
                 : ''}
             </span>
             <InfoTip
@@ -563,7 +572,14 @@ export function Priorities() {
         )}
         {data && !blank && tab === 'ranked' && marks && (
           <div className="mb-3" data-testid="cs-prio-bar">
-            <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
+            <div className="flex items-center gap-2">
+              <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
+              {allCount !== data.rows.length && (
+                <InfoTip label="the All count" testId="prio-all-help" id="prio-all-text">
+                  {allWords(data, allCount)}
+                </InfoTip>
+              )}
+            </div>
             {show && (
               <p className="mt-2 text-[length:var(--simple-small)] text-text2">
                 {SHOW_NOTE[show](showCounts[show])}{' '}
@@ -749,11 +765,10 @@ function Ranked({
     requestAnimationFrame(() =>
       document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus(),
     );
-  // qa4-simple-plan-6: beside Oracle's order (half the width) each card's details take a line of their own.
+  // prio-ux (#1773): each card's details take a line of their own under the name (qa4-simple-plan-6's half-width rule, on every row).
   const list = (
     <YourList
       data={data}
-      half={compare && !phone}
       mayChange={mayChange}
       onMove={(row, position) => setMove({ row, position })}
       changed={changed}
@@ -837,7 +852,6 @@ function Ranked({
 
 function YourList({
   data,
-  half = false,
   mayChange,
   onMove,
   changed,
@@ -845,7 +859,6 @@ function YourList({
   onDelete,
 }: {
   data: Out;
-  half?: boolean;
   mayChange: boolean;
   onMove: (row: Row, position: number) => void;
   changed: Changed;
@@ -867,15 +880,24 @@ function YourList({
   const rows = byLine(data).filter(
     (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName),
   );
+  const topValue = Math.max(0, ...data.rows.map((r) => r.goal_value ?? 0));
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   // qa-simple-plan-34: a look-alike's link (?show=<its item or feature>) marks its row and brings it into view.
   const show = useSearchParams().get('show');
   const shown = (r: Row) => !!show && (r.feature_id === show || r.item_id === show);
+  // prio-ux: once per link, when its row is on the page, a frame after the router's own scroll to the top.
+  const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (show) document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: 'center' });
-  }, [show]);
+    if (!show || scrolledFor.current === show) return;
+    if (!document.querySelector('[data-shown="true"]')) return;
+    scrolledFor.current = show;
+    const frame = requestAnimationFrame(() =>
+      document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: 'center' }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [show, rows]);
 
   // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
   // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
@@ -1094,10 +1116,23 @@ function YourList({
                   {!r.own_key && <NotInGt />}
                   <PartOf r={r} />
                 </span>
+                {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it; prio-ux (#1773): at the name's line end on every row, the details under both. */}
+                {mayChange && r.item_id && (
+                  <span
+                    className="flex-none max-sm:absolute max-sm:right-1.5 max-sm:top-1.5"
+                    data-testid="prio-row-menu"
+                  >
+                    <FeatureMenu
+                      title={nameOf(r)}
+                      propose={!r.applies}
+                      onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })}
+                    />
+                  </span>
+                )}
                 {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
                 <span
                   data-testid="prio-details"
-                  className={`${half ? 'basis-full sm:pl-12' : ''} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}
+                  className="flex min-w-0 max-w-full basis-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
                 >
                   {/* The chips stay together, wrapping as one group. */}
                   <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
@@ -1132,21 +1167,8 @@ function YourList({
                     </span>
                   )}
                   {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
-                  <Numbers r={r} mayChange={mayChange} changed={changed} />
+                  <Numbers r={r} top={topValue} mayChange={mayChange} changed={changed} />
                 </span>
-                {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-                {mayChange && r.item_id && (
-                  <span
-                    className="flex-none max-sm:absolute max-sm:right-1.5 max-sm:top-1.5"
-                    data-testid="prio-row-menu"
-                  >
-                    <FeatureMenu
-                      title={nameOf(r)}
-                      propose={!r.applies}
-                      onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })}
-                    />
-                  </span>
-                )}
               </div>
               {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
               {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
@@ -1477,7 +1499,11 @@ function MoveDialog({
       op: 'override_priority',
       target: targetOf(row),
       before: { override: row.before_override ?? null },
-      after: { position, reason: reason.trim(), ...(confirm ? { confirm: true } : {}) },
+      after: {
+        position: pinAt(rows, position),
+        reason: reason.trim(),
+        ...(confirm ? { confirm: true } : {}),
+      },
       reason: reason.trim(),
     });
     setBusy(false);
@@ -2892,7 +2918,15 @@ function ValueEffort({
         </ul>
       </section>
       <section aria-label="Ranked side list" className="min-w-0">
-        <h2 className="mb-2 text-xl font-[650] leading-7">Ranked</h2>
+        {/* prio-ux (#1776): why the numbers can skip, behind an (i): they are the Ranked list's ranks. */}
+        <h2 className="mb-2 flex items-center gap-1.5 text-xl font-[650] leading-7">
+          Ranked
+          <InfoTip label="the ranks" align="start" testId="side-ranks-help">
+            Each number is the feature&apos;s rank in the Ranked list. What makes the line is listed
+            first
+            {quad === null ? '' : ', and only the picked corner'}, so the numbers can skip.
+          </InfoTip>
+        </h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
           {listed.flatMap((r, i) => {
@@ -3394,15 +3428,22 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
 /** A row's numbers, each keeping its "·" with it so a wrapped line never starts or ends with a stray dot. */
 function Numbers({
   r,
+  top,
   mayChange = false,
   changed,
 }: {
   r: Row;
+  /** The highest goal value in the list: a value reads High, Medium or Low against it. */
+  top: number;
   mayChange?: boolean;
   changed?: Changed;
 }) {
+  // prio-ux (#1774): words and a rounded score on the row; the model's numbers on hover.
+  const detail = `Goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)}${r.effort == null ? '' : ` · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}`;
   const parts = [
-    <span key="value">value {fmt(r.goal_value)}</span>,
+    <span key="value" data-testid="prio-value" title={detail}>
+      {valueWord(r.goal_value, top)}
+    </span>,
     ...(r.effort == null
       ? // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
         [
@@ -3416,14 +3457,15 @@ function Numbers({
           ...(mayChange && changed ? [<EffortEdit key="effort" r={r} changed={changed} />] : []),
         ]
       : [
-          <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>
-            confidence {fmt(r.confidence, 2)}
-          </span>,
           <span key="weeks">{weeksWords(r.effort)}</span>,
           <span key="score">
             score{' '}
-            <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>
-              {fmt(r.score, 2)}
+            <span
+              className="font-semibold text-text"
+              data-testid="prio-score"
+              title={`${detail}. ${SCORE_WORDS}`}
+            >
+              {fmt(r.score, 1)}
             </span>
           </span>,
         ]),
@@ -3443,6 +3485,14 @@ function Numbers({
       </span>
     </span>
   );
+}
+
+/** prio-ux (#1774): a goal value as a word against the list's highest ("High value"), never the model's number. */
+function valueWord(v: number | null | undefined, top: number): string {
+  if (v == null) return 'No goal value';
+  if (top > 0 && v >= (top * 2) / 3) return 'High value';
+  if (top > 0 && v >= top / 3) return 'Medium value';
+  return 'Low value';
 }
 
 /** prio-company: a PM-owned row's effort, set in place; its score then appears. */
