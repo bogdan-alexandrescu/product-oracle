@@ -1,8 +1,9 @@
 """The ⌘K palette's index (build-palette, issue 1794): ``GET /v1/simple/palette``, viewer
 and up, people only. One company's PRDs (those the person may see, not in Trash), its confirmed
 live goals with their measure, its key results (the confirmed live subgoals, each under its top
-goal) and the goal milestones the person's own Simple roadmap read shows, one per roadmap code.
-Features come from that read.
+goal), the milestones the person's own Simple roadmap read shows (its tracks' and its goals'),
+one per roadmap code, and the confirmed live Ground Truth features no roadmap item holds.
+Features on a roadmap come from that read.
 """
 
 import uuid
@@ -16,6 +17,7 @@ from oracle.base_model import BaseModel
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.docs.visibility import visible_to
+from oracle.roadmap import codes as roadmap_codes_of
 from oracle.routing import APIRouter
 from oracle.simple import goal_reads, roadmap_codes, service
 from oracle.simple.goal_buckets import is_live
@@ -55,11 +57,19 @@ class PaletteMilestone(BaseModel):
     date: str
 
 
+class PaletteFeature(BaseModel):
+    id: uuid.UUID
+    # Its Ground Truth code (oracle.roadmap.codes.feature_codes); null: none yet.
+    code: str | None
+    name: str
+
+
 class PaletteOut(BaseModel):
     prds: list[PalettePrd]
     goals: list[PaletteGoal]
     key_results: list[PaletteKeyResult]
     milestones: list[PaletteMilestone]
+    features: list[PaletteFeature]
 
 
 def _goals(by_id: dict[uuid.UUID, Entity]) -> tuple[list[PaletteGoal], list[PaletteKeyResult]]:
@@ -97,17 +107,16 @@ def _day(tracks: list[SimpleMilestone], goal_ms: list[SimpleGoalMilestone]) -> d
 
 
 def _milestones(read: SimpleRoadmapOut) -> list[PaletteMilestone]:
-    """The read's goal milestones, one per roadmap code (twins folded, as every page shows them)."""
-    groups: dict[str, list[SimpleGoalMilestone]] = {}
-    for m in read.goal_milestones:
-        if m.roadmap_code:
-            groups.setdefault(m.roadmap_code, []).append(m)
+    """The read's milestones, its tracks' and its goals', one per roadmap code (twins folded, as
+    every page shows them)."""
+    codes = {m.roadmap_code for m in [*read.milestones, *read.goal_milestones] if m.roadmap_code}
     out = []
-    for code, of in sorted(groups.items(), key=lambda x: int(x[0][1:])):
+    for code in sorted(codes, key=lambda c: int(c[1:])):
         tracks = [m for m in read.milestones if m.roadmap_code == code]
+        of = [m for m in read.goal_milestones if m.roadmap_code == code]
         day = _day(tracks, of)
-        # The row opens the goal's own milestone, else the first (a PRD's).
-        first = next((m for m in of if m.goal_id and m.prd is None), of[0])
+        # The row opens the goal's own milestone, else the first (a PRD's), else the track's.
+        first = next((m for m in of if m.goal_id and m.prd is None), of[0] if of else tracks[0])
         out.append(
             PaletteMilestone(
                 id=first.id,
@@ -117,6 +126,21 @@ def _milestones(read: SimpleRoadmapOut) -> list[PaletteMilestone]:
             )
         )
     return out
+
+
+async def _features(db: TenantDB) -> list[PaletteFeature]:
+    """The confirmed Ground Truth features not in Trash that no roadmap item holds, by code."""
+    held = {r.feature_id for r in await roadmap_codes_of.item_links(db) if r.feature_id}
+    codes = await roadmap_codes_of.feature_codes(db)
+    rows = await db.scalars(
+        select(Entity).where(Entity.type == "feature", Entity.status == "confirmed")
+    )
+    found = [
+        PaletteFeature(id=f.id, code=codes.get(f.id), name=f.title)
+        for f in rows
+        if f.id not in held
+    ]
+    return sorted(found, key=lambda f: (f.code is None, f.code or "", f.name))
 
 
 @router.get("", response_model=PaletteOut)
@@ -130,4 +154,7 @@ async def get_palette(principal: Reader, db: TenantDB) -> PaletteOut:
     goals, key_results = _goals(await goal_reads.goals_by_id(db))
     # Their rights, codes and folding are the roadmap read's own.
     milestones = _milestones(await service.build(db, principal))
-    return PaletteOut(prds=prds, goals=goals, key_results=key_results, milestones=milestones)
+    features = await _features(db)
+    return PaletteOut(
+        prds=prds, goals=goals, key_results=key_results, milestones=milestones, features=features
+    )

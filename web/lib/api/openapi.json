@@ -103514,6 +103514,37 @@
         "type": "object",
         "title": "PagePatch"
       },
+      "PaletteFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "PaletteFeature"
+      },
       "PaletteGoal": {
         "properties": {
           "id": {
@@ -103626,6 +103657,13 @@
             },
             "type": "array",
             "title": "Milestones"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteFeature"
+            },
+            "type": "array",
+            "title": "Features"
           }
         },
         "type": "object",
@@ -103633,7 +103671,8 @@
           "prds",
           "goals",
           "key_results",
-          "milestones"
+          "milestones",
+          "features"
         ],
         "title": "PaletteOut"
       },

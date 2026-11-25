@@ -34224,6 +34224,18 @@ export interface components {
             /** Status */
             status?: ("active" | "paused") | null;
         };
+        /** PaletteFeature */
+        PaletteFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
         /** PaletteGoal */
         PaletteGoal: {
             /**
@@ -34277,6 +34289,8 @@ export interface components {
             key_results: components["schemas"]["PaletteKeyResult"][];
             /** Milestones */
             milestones: components["schemas"]["PaletteMilestone"][];
+            /** Features */
+            features: components["schemas"]["PaletteFeature"][];
         };
         /** PalettePrd */
         PalettePrd: {
