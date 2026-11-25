@@ -6936,9 +6936,12 @@ function take(plainRead: boolean): Db {
 }
 
 /** What an answered call leaves: a plain read of the `stored` text waits for the burst's last call;
- * any other call saves now, if it saves at all. */
-function keep(db: Db, stored: string | false | null, saves: boolean) {
-  if (typeof stored === 'string') {
+ * any other call saves now, if it saves at all. A read that seeded a part of the db the stored text
+ * lacked (`had`: its parts before the call) saves now too, so the stored db holds it once the read
+ * answers, as it did before the burst's saves were put off. */
+function keep(db: Db, stored: string | false | null, saves: boolean, had?: Set<string>) {
+  const seeded = had && Object.keys(db).some((k) => db[k as keyof Db] !== undefined && !had.has(k));
+  if (typeof stored === 'string' && !seeded) {
     cached = { raw: stored, db };
     unsaved = true;
   } else if (saves) save(db);
@@ -6951,7 +6954,7 @@ if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
  * draw and take a click between two answers, as reads of a server do (a message, not a timer: a
  * spec's stopped clock never holds it). A read past a burst's first six (as many as a browser asks a
  * server at once) waits for the page to have nothing else to do: a server's answers take none of the
- * page's own thread. A write never waits for that itself.
+ * page's own thread. A write never waits for that itself. Only the Roadmap's calls take turns.
  */
 const AT_ONCE = 6;
 let answered = 0;
@@ -6960,10 +6963,14 @@ const turn = typeof MessageChannel === 'undefined' ? null : new MessageChannel()
 if (turn) turn.port1.onmessage = () => turns.shift()?.();
 type Idle = { postTask?: (run: () => void, how: { priority: 'background' }) => Promise<unknown> };
 const idle = (globalThis as { scheduler?: Idle }).scheduler;
+/** Turns and the idle wait are the Roadmap's alone: other pages' calls answer one after another, as before. */
+const onRoadmap = () =>
+  typeof location !== 'undefined' && location.pathname.startsWith('/simple/roadmap');
 function ownTurn(read: boolean): Promise<void> {
   answered += 1;
   return new Promise((r) => {
-    if (read && answered > AT_ONCE && idle?.postTask) {
+    if (!onRoadmap()) r();
+    else if (read && answered > AT_ONCE && idle?.postTask) {
       void idle.postTask(r, { priority: 'background' });
     } else if (turn) {
       turns.push(r);
@@ -16375,6 +16382,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     const db = take(plainRead);
     // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
     const stored = localStorage.getItem(STORAGE_KEY);
+    const had = new Set(Object.keys(db).filter((k) => db[k as keyof Db] !== undefined));
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
     // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
@@ -16421,7 +16429,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
     // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
     const overwrites = req.method === 'GET' && localStorage.getItem(STORAGE_KEY) !== stored;
-    if (!overwrites) keep(db, plainRead && stored, !chatPoll || readerWrote);
+    if (!overwrites) keep(db, plainRead && stored, !chatPoll || readerWrote, had);
     return res;
   };
   const next = queue
