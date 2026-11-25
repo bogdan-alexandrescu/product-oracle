@@ -34,20 +34,22 @@ export function SentActionItems({
     });
   };
   return (
-    <ul className="flex flex-col gap-2 pl-5" data-testid="sent-action-items">
+    <ul className="list-disc space-y-1 pl-5" data-testid="sent-action-items">
       {items.map((a) => (
-        <li key={a.id} className="flex list-disc flex-wrap items-center gap-2">
-          <span className={a.status === 'open' ? '' : 'line-through'} data-user-content>
-            {a.title}
-          </span>
+        <li key={a.id}>
           <span>
+            <span className={a.status === 'open' ? '' : 'line-through'} data-user-content>
+              {a.title}
+            </span>{' '}
             · {a.owner_name ?? 'no owner'}
             {a.due_date ? ` · by ${dayWords(a.due_date)}` : ''}
           </span>
-          {a.status !== 'open' && <Chip kind="line">Done</Chip>}
-          {a.can_change && a.status === 'open' && (
-            <ActionItemControls key={`${a.id}-${a.due_date}`} a={a} onActed={onActed} />
-          )}
+          <span className="ml-2 inline-flex flex-wrap items-center gap-2 align-middle">
+            {a.status !== 'open' && <Chip kind="line">Done</Chip>}
+            {a.can_change && a.status === 'open' && (
+              <ActionItemControls key={`${a.id}-${a.due_date}`} a={a} onActed={onActed} />
+            )}
+          </span>
         </li>
       ))}
     </ul>
