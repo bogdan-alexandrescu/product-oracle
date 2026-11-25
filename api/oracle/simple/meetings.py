@@ -1321,13 +1321,8 @@ async def send(
     # Action items through the change engine (each commits on its own), into a session
     # of the sender's: the meeting's is closed. One recorded in the meeting has its row
     # already: by its id, or by its title when a person's edit dropped the id (the review).
-    have = list(
-        await db.execute(
-            select(SimpleActionItem.id, SimpleActionItem.title).where(
-                SimpleActionItem.meeting_id == m.id
-            )
-        )
-    )
+    q = select(SimpleActionItem.id, SimpleActionItem.title)
+    have = list(await db.execute(q.where(SimpleActionItem.meeting_id == m.id)))
     ids = {str(i) for i, _ in have}
     titles = {frozenset(minutes_mod.words(t)) for _, t in have}
     for a in minutes.get("action_items") or []:

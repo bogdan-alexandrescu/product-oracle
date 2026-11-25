@@ -1671,19 +1671,16 @@ class InboxOut(BaseModel):
     # decisions on my proposals of the last 30 days.
     simple_proposals: list[InboxSimpleChange] = []
     simple_decisions: list[InboxSimpleChange] = []
-    # Simple S3b: versions from Simple drafts waiting for my approval as a required
-    # reviewer (in ``total``).
+    # Simple S3b: Simple drafts' versions awaiting my approval as required reviewer (in ``total``).
     simple_approvals: list[InboxSimpleApproval] = []
     # inbox-meeting-proposals fix: Oracle's open date suggestions and the goals' open
     # suggestions I may decide (each in ``total``).
     simple_date_suggestions: list[InboxSimpleDateSuggestion] = []
     simple_goal_suggestions: list[InboxSimpleGoalSuggestion] = []
-    # tracks-goal: newly accepted PRDs of mine on no track, each with the track Oracle
-    # suggests (in ``total``).
+    # tracks-goal: my newly accepted PRDs on no track, each with Oracle's track (in ``total``).
     simple_track_suggestions: list[InboxSimpleTrackSuggestion] = []
-    # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
+    # S8: minutes sent to me as attendee (not in ``total``); #1817: action items I own (in it).
     simple_minutes: list[InboxSimpleMinutes] = []
-    # #1817: open meeting action items I own (each in ``total``).
     simple_action_items: list[InboxSimpleActionItem] = []
 
 
