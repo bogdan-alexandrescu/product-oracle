@@ -33,6 +33,8 @@ import { NotInGt } from '@/components/simple/FeatureName';
 import { OpenFeatureContext } from '@/components/simple/OpenFeature';
 import { FeaturePanel, type PanelFeature } from '../../roadmap/_panel';
 
+import { SentActionItems } from './_action-items';
+
 // Chat actions (notes, open questions): optional until schema.d.ts carries them.
 type Meeting = Schemas['SimpleMeetingOut'] & { notes?: MeetingNote[] };
 type Mode = Meeting['change_mode'];
@@ -1460,7 +1462,13 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <p className="simple-small">None.</p>
               )}
               <h3 className="font-semibold">Action items</h3>
-              {minutes?.action_items.length ? (
+              {m.action_items?.length ? (
+                <SentActionItems
+                  items={m.action_items}
+                  dayWords={(d) => dayWords(d, zone)}
+                  reload={reload}
+                />
+              ) : minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
                   {minutes.action_items.map((a, i) => (
                     <li key={i}>

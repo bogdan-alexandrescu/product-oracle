@@ -16,8 +16,8 @@ type ActionItem = Schemas['InboxSimpleActionItem'];
 
 /**
  * #1817: a meeting's action item waiting on its owner (the API's `simple_action_items`,
- * counted): what it is, its due date and linked item, and the meeting it came from. Done closes
- * it (set_action_item_status), its Undo in the Inbox's banner; Open goes to the meeting.
+ * counted): what it is, its due date and linked item, and the meeting it came from. Its due
+ * date changes in place and Done closes it, each Undo in the Inbox's banner; Open goes to the meeting.
  */
 export function actionItemRows(
   rows: ActionItem[],
@@ -47,7 +47,7 @@ export function actionItemRows(
     group: 'minutes',
     action: (
       <span className="flex items-center gap-2">
-        <DoneButton a={a} onActed={onActed} />
+        <ActionItemControls key={`${a.id}-${a.due_date}`} a={a} onActed={onActed} />
         {a.meeting_id && (
           <LinkButton
             href={`/simple/meetings/${a.meeting_id}`}
@@ -61,27 +61,39 @@ export function actionItemRows(
   }));
 }
 
-function DoneButton({ a, onActed }: { a: ActionItem; onActed: OnActed }) {
+type Changeable = Pick<ActionItem, 'id' | 'title' | 'due_date' | 'item_id'>;
+
+/**
+ * An action item's own controls, in the Inbox row and on its meeting: its due date, changed in
+ * place (edit_action_item), and Done (set_action_item_status); each one Undo through `onActed`.
+ */
+export function ActionItemControls({ a, onActed }: { a: Changeable; onActed: OnActed }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const done = async () => {
+  const [due, setDue] = useState(a.due_date ?? '');
+  const target = { action_item_id: a.id, ...(a.item_id ? { item_id: a.item_id } : {}) };
+  const change = async (
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
+    message: string,
+  ) => {
     setBusy(true);
     setError(null);
     try {
       const r = await unwrap(
         api.POST('/v1/simple/changes', {
           body: {
-            op: 'set_action_item_status',
-            target: { action_item_id: a.id, ...(a.item_id ? { item_id: a.item_id } : {}) },
-            before: { status: 'open' },
-            after: { status: 'done' },
+            op: before.status ? 'set_action_item_status' : 'edit_action_item',
+            target,
+            before,
+            after,
           },
         }),
       );
       const id = r.change.id;
       onActed({
         id,
-        message: `Done: ${a.title}`,
+        message,
         undo: () =>
           unwrap(
             api.POST('/v1/simple/changes/{change_id}/undo', {
@@ -95,9 +107,33 @@ function DoneButton({ a, onActed }: { a: ActionItem; onActed: OnActed }) {
       setBusy(false);
     }
   };
+  const moveDue = () => {
+    if (!due || due === (a.due_date ?? '')) return;
+    void change(
+      { due_date: a.due_date ?? null },
+      { due_date: due },
+      `Due ${calendarDay(due)}: ${a.title}`,
+    );
+  };
   return (
     <>
-      <Button disabled={busy} onClick={() => void done()} aria-label={`Done: ${a.title}`}>
+      <input
+        type="date"
+        className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]"
+        aria-label={`Due date of ${a.title}`}
+        value={due}
+        disabled={busy}
+        onChange={(e) => setDue(e.target.value)}
+        onBlur={moveDue}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') moveDue();
+        }}
+      />
+      <Button
+        disabled={busy}
+        onClick={() => void change({ status: 'open' }, { status: 'done' }, `Done: ${a.title}`)}
+        aria-label={`Done: ${a.title}`}
+      >
         Done
       </Button>
       {error && (

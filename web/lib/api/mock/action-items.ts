@@ -1,10 +1,11 @@
 import { mockNowMs } from './clock';
-import { roadmapId, type SimpleDb } from './simple-roadmap';
+import { canDecideItem, roadmapId, type SimpleDb } from './simple-roadmap';
 
 import type { Schemas } from '../client';
 
 type Row = Schemas['InboxSimpleActionItem'];
 type Minutes = Schemas['SimpleMinutes'];
+type Me = Parameters<typeof canDecideItem>[2];
 
 /**
  * #1817: the mock of oracle.simple.meeting_actions. A meeting's action items are stored with
@@ -79,4 +80,37 @@ export function actionItemRows(
       };
     })
     .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
+}
+
+/**
+ * meeting_actions.of_meeting: a sent meeting's recorded action items; `can_change` for its
+ * owner, or one who decides its item (an owner when it has none).
+ */
+export function meetingActionItems(
+  db: SimpleDb,
+  meetingId: string,
+  me: Me,
+  nameOf: (id: string) => string | null,
+): Schemas['SimpleMeetingActionItem'][] {
+  const decides = (item: string | null) => {
+    const key = item ? Object.keys(db.ids).find((k) => db.ids[k] === item) : undefined;
+    const s = key ? db.items.find((x) => x.key === key) : undefined;
+    return s ? canDecideItem(db, s, me) : me.role === 'owner';
+  };
+  return Object.entries(db.targets ?? {})
+    .filter(([, t]) => t.kind === 'action_item' && t.meeting_id === meetingId)
+    .map(([id, t]) => {
+      const owner = String(t.owner_id);
+      const item = (t.item_id as string | null) ?? null;
+      return {
+        id,
+        title: String(t.title),
+        owner_id: owner,
+        owner_name: nameOf(owner),
+        due_date: (t.due_date as string | null) ?? null,
+        item_id: item,
+        status: String(t.status),
+        can_change: owner === me.id || decides(item),
+      };
+    });
 }

@@ -8,8 +8,11 @@ import { expect, test, type Page } from './test';
  * Card action-item-inbox: protects = the minutes editor links an action item to one of the
  * agenda's features; once sent, its owner's Inbox lists it under Needs you with its due date
  * and linked item, and Home lists it too; its owner (an approver) marks it Done, it leaves,
- * and the banner's one Undo brings it back; fails_when = the link is lost, the row never
- * reaches its owner, or Done or Undo does nothing; no_claim = the API's rights
+ * and the banner's one Undo brings it back; its owner moves its due date from the row, with one
+ * Undo; on the sent meeting a company owner who does not own it moves its due date and marks
+ * it Done, each with one Undo in the toast; fails_when = the link is lost, the row never
+ * reaches its owner, the sent meeting lists it read-only, or Done, a due date change or Undo
+ * does nothing; no_claim = the API's rights
  * (api/tests/test_simple_meeting_action_items.py).
  */
 
@@ -48,6 +51,23 @@ test('an action item reaches its owner, who marks it done once', async ({ page }
     .click();
   await expect(page.getByRole('status', { name: 'Sent' })).toBeVisible();
 
+  // On the sent meeting, a company owner (not its owner) changes it and marks it done.
+  const sent = page.getByTestId('sent-action-items').getByRole('listitem');
+  const toasts = page.getByTestId('toasts');
+  await expect(sent).toContainText('Write the checklist copy');
+  await expect(sent).toContainText('by Wed Dec 2');
+  await sent.getByLabel('Due date of Write the checklist copy').fill('2026-12-04');
+  await sent.getByLabel('Due date of Write the checklist copy').press('Enter');
+  await expect(sent).toContainText('by Fri Dec 4');
+  await expect(toasts).toContainText('Due Dec 4: Write the checklist copy');
+  await toasts.getByRole('button', { name: 'Undo' }).click();
+  await expect(sent).toContainText('by Wed Dec 2');
+  await sent.getByRole('button', { name: 'Done: Write the checklist copy' }).click();
+  await expect(sent).toContainText('Done');
+  await expect(sent.getByRole('button', { name: 'Done: Write the checklist copy' })).toHaveCount(0);
+  await toasts.getByRole('button', { name: 'Undo' }).click();
+  await expect(sent.getByRole('button', { name: 'Done: Write the checklist copy' })).toBeVisible();
+
   await page.goto('/home');
   await switchTo(page, 'approver@example.com');
   await page.goto('/simple/inbox');
@@ -63,6 +83,14 @@ test('an action item reaches its owner, who marks it done once', async ({ page }
   await expect(page.getByRole('row').filter({ hasText: 'Write the checklist copy' })).toHaveCount(
     1,
   );
+  // Its owner moves its due date from the row, with one Undo.
+  const again = page.getByRole('row').filter({ hasText: 'Write the checklist copy' });
+  await again.getByLabel('Due date of Write the checklist copy').fill('2026-12-09');
+  await again.getByLabel('Due date of Write the checklist copy').press('Enter');
+  await expect(banner).toContainText('Due Dec 9: Write the checklist copy');
+  await expect(again.getByTestId('action-item-context')).toContainText('Due Dec 9');
+  await banner.getByRole('button', { name: 'Undo' }).click();
+  await expect(again.getByTestId('action-item-context')).toContainText('Due Dec 2');
 
   await page.goto('/simple');
   await expect(page.getByText('Action item · Write the checklist copy')).toBeVisible();

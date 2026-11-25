@@ -43,7 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from '@/lib/api/client';
-import { recordActionItems } from './action-items';
+import { meetingActionItems, recordActionItems } from './action-items';
 import {
   agendaOut,
   decidedOutsideRows,
@@ -1112,6 +1112,10 @@ function one(
       (i) => ref(ctx, i),
     ),
     minutes: m.minutes,
+    action_items:
+      m.minutes_state === 'sent'
+        ? meetingActionItems(ctx.roadmap, m.id, ctx.me, (i) => nameOf(ctx, i))
+        : [],
     minutes_job:
       m.status === 'ended' && m.minutes_state === 'drafting' ? (m.minutes_job ?? 'drafting') : null,
     delivery: deliveryOut(ctx, m),
