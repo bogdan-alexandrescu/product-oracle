@@ -6874,6 +6874,21 @@ function leave() {
   flush();
 }
 
+/** The db a call reads: a plain read takes it as the burst has it, any other call once it is saved. */
+function take(plainRead: boolean): Db {
+  if (!plainRead) flush();
+  return load();
+}
+
+/** What an answered call leaves: a plain read of the `stored` text waits for the burst's last call;
+ * any other call saves now, if it saves at all. */
+function keep(db: Db, stored: string | false | null, saves: boolean) {
+  if (typeof stored === 'string') {
+    cached = { raw: stored, db };
+    unsaved = true;
+  } else if (saves) save(db);
+}
+
 if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
 
 /**
@@ -16289,8 +16304,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     req.method === 'GET' && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname);
   const plainRead = req.method === 'GET' && !chatPoll && !url.searchParams.has('mark_seen');
   const answer = async () => {
-    if (!plainRead) flush();
-    const db = load();
+    const db = take(plainRead);
     // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
     const stored = localStorage.getItem(STORAGE_KEY);
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
@@ -16339,10 +16353,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
     // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
     const overwrites = req.method === 'GET' && localStorage.getItem(STORAGE_KEY) !== stored;
-    if (!overwrites && plainRead && stored !== null) {
-      cached = { raw: stored, db };
-      unsaved = true;
-    } else if (!overwrites && (!chatPoll || readerWrote)) save(db);
+    if (!overwrites) keep(db, plainRead && stored, !chatPoll || readerWrote);
     return res;
   };
   const next = queue
