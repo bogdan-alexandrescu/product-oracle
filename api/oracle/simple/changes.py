@@ -204,6 +204,7 @@ FLAG_KINDS = (
     "outside_milestone",
     "cut_with_dependents",
     "draft_without_owner",
+    "depends_on_draft",
 )
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
@@ -1217,12 +1218,17 @@ async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> N
     """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
     any code the read takes from a title: service.coded_title) gives the item that code: it is
     checked as set_code checks it, in its words. ``entry`` None: an item being added."""
-    if entry is not None and _inherited(entry):
-        return  # its feature's or PRD's code stays its code; the title is only words
     lead = service.coded_title(title, None)[0]
-    if lead and (entry is None or lead != service.coded_title(entry.row.title, None)[0]):
-        new = SimpleNamespace(row=SimpleNamespace(id=None))
-        await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
+    if not lead:
+        return
+    if entry is not None:
+        # panel-stages (#1815): every item, its code from its feature or PRD too; only the
+        # code it reads already is no new code.
+        await service.item_codes(db, [entry])
+        if lead in (service.coded_title(entry.row.title, None)[0], _code_of(entry)):
+            return
+    new = SimpleNamespace(row=SimpleNamespace(id=None))
+    await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
 
 
 def _with_code(code: str, name: str) -> str:

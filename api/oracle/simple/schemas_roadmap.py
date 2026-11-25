@@ -18,6 +18,7 @@ FlagKind = Literal[
     "outside_milestone",
     "cut_with_dependents",
     "draft_without_owner",
+    "depends_on_draft",
 ]
 FixKind = Literal[
     "shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"

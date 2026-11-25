@@ -30,6 +30,9 @@ def status_after(entry: Any, body: Any, target: dict[str, Any], me: str) -> dict
         raise ChangeError(422, "Say why it moves back")
     if back:
         target["reason"] = why[:NOTE_MAX]
+    if back and now == "done" and status == "planned" and not row.shipped:
+        # Done from its tracker's records, not a mark: no mark here undoes that (Draft does).
+        raise ChangeError(422, "Its tracker says it is done: reopen it there")
     # Planned clears only the panel's own mark: a shipped mark from elsewhere (the tracker,
     # the item's talk) stays, so planned never undoes what the panel did not do; a move back
     # from Done reopens it (the mark stays in the change's ``before``).
