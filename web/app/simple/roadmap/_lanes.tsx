@@ -109,13 +109,23 @@ const P_BAR_H = 14;
 
 /** "Nov 27": fix4 qa-simple-roadmap-28, the one way the Roadmap writes a day (month first),
  * with its year when it is not this year's ("Jan 1, 2027"). */
-const dm = (day: string) =>
-  calendarDay(
-    day,
-    day.slice(0, 4) === String(new Date().getUTCFullYear())
-      ? { month: 'short', day: 'numeric' }
-      : { month: 'short', day: 'numeric', year: 'numeric' },
-  );
+const dmSeen = new Map<string, string>();
+// #1870: worded once per day and year (500 bars ask for the same few hundred days on every draw).
+const dm = (day: string) => {
+  const year = String(new Date().getUTCFullYear());
+  const key = `${year}|${day}`;
+  let out = dmSeen.get(key);
+  if (out === undefined) {
+    out = calendarDay(
+      day,
+      day.slice(0, 4) === year
+        ? { month: 'short', day: 'numeric' }
+        : { month: 'short', day: 'numeric', year: 'numeric' },
+    );
+    dmSeen.set(key, out);
+  }
+  return out;
+};
 
 // ---------------------------------------------------------------- text widths
 
