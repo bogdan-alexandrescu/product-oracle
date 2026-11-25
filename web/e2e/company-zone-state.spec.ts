@@ -20,7 +20,7 @@ async function openInspector(page: Page) {
   return inspector;
 }
 
-test('an unreadable Company time zone is said beside the date', async ({ page }) => {
+test('an unreadable Company time zone is said once, in the page tip', async ({ page }) => {
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
     MOCK_ZONE_STATE_KEY,
     'unavailable',
