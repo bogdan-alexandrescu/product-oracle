@@ -1,3 +1,56 @@
+# inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
+
+## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
+- format:check: prettier on inbox-ux, inbox-runs, track-alerts, inbox-track-alerts-walk specs.
+- lint: `npm run lint -- --prune-suppressions` dropped the stale import-x/order entries (only those).
+- Age cell (web/app/inbox/_needs.tsx, shared with Home): the text is the age only again; the label is the
+  clock wrapped in role="img" aria-label="Age". dod-meet-minutes.spec.ts unchanged and passes;
+  inbox-ux.spec.ts checks the named clock and the exact age text.
+- Tab counts: next-draft.spec.ts:184 and :251, runs-sent-back.spec.ts:75 now expect 'Seen0' / 'New0'.
+- Already fixed at base (no code change): #1783's first point, the Inbox opens on New, or on Seen when New is
+  empty (qa-company-2 rule in web/app/inbox/_inbox.tsx); inbox-ux.spec.ts proves it.
+- Minors left as is: on a phone a 0 tab count stays hidden (qa-company-47); the Simple Roadmap still counts
+  tracks while the Plan chip counts items, each now named.
+
+## Gates this round
+- Playwright --retries=0: dod-meet-minutes, next-draft, runs-sent-back, inbox-ux, inbox-runs, track-alerts,
+  inbox-track-alerts-walk: 40 passed. format:check exit 0. Full `npm run lint` exit 0. tsc exit 0.
+- No API change this round, so the API suite, timing tests, pyright and frozen migrations were not rerun.
+
+# task-push handoff (#1816, fix round 1: review NOT_YET, two blockers)
+
+## Fixed (exactly the two blockers in verdict.json)
+- Head pins: `api/tests/test_migrations.py:196` (and 'task-push' added to its 'renumbered on merge' list),
+  `test_stale_settled_on_approval.py:178`, `test_unique_item_codes.py:134` and
+  `test_stale_by_meaning_migration.py:61` now pin `0139_task_tracker_push_error`. The down_revision check at
+  `test_stale_settled_on_approval.py:177` is unchanged (0138).
+- Read digests re-pinned in `api/tests/test_simple_read_speed.py` (roadmap, roadmap-viewer) and
+  `api/tests/test_simple_roadmap_speed.py` (goal, track, prd, one-roadmap, viewer). Each JSON body from base
+  4ecbc5620 was diffed against the head body (all keys, all list items). The only change in each of the 7 reads
+  is three keys added to each of the seed's 268 tasks: `.items[].tasks[].tracker_ref`, `tracker_url` and
+  `tracker_error`, all null. Nothing else is added, removed or changed. The other digests match at both commits.
+  Full diff: `read-digest-json-diff.txt` in the artifacts.
+
+## Gates
+- Whole API suite (`-m "not timing"`, split into 8 groups of files, run with -n 4 or -n 6): every group green, 0 failures
+  (1080+1355+1388+1512+1659+1414+1457+1413 passed). The first try at groups 02 and 03 hit Postgres's 'out of shared
+  memory' lock table, an environment limit, not the code. Both were rerun with max_locks_per_transaction=1024 and passed.
+- ruff check and format: clean. tests/test_frozen_migrations.py passed (in the 36 targeted tests).
+- Timing tests in the touched files: one failure, `test_simple_roadmap_speed::test_reads_answer_within_budget`
+  (0.37 s). It fails at base 4ecbc5620 in the same environment, and is slower there (0.42 s). This is environment
+  noise, as the review also found. The rest of the `-m timing` suite was not rerun for lack of time. The review ran
+  405 of 409, and every failure it found was environment noise.
+- pyright: NOT RUN. Pyright is not installed here (no web/node_modules). This round changes only test strings and
+  comments under api/tests, and the CI job checks api/oracle, so its count cannot move. It stays at the review's 1269
+  (the same as the baseline).
+- Web: no change this round (the review's tsc, lint, format and Playwright runs still stand).
+
+## Left (minors from the review, not in scope for this round)
+- Inline push inside the request transaction: move it to a background job when a real connector lands
+  (owner question open).
+- A stale tracker_push_error is kept after two-way sync is turned off, so Retry seems to do nothing.
+- The mock pushes on the undo of an add (harmless).
+
 # codes-at-write handoff (PR #1811, fix round 3)
 
 ## Write paths that number an item at write (file:line, at this branch)
@@ -314,3 +367,89 @@ fixed; the first round's "7 of 8" was wrong about #1753).
 - Red check: with the three app files at 2acfd1e (title attribute, pad) and the new spec, #1740 fails
   (locator.focus timeout: no tip trigger) and #1753 passes, as an already-fixed issue should.
 - Not run: the 248-spec roadmap sweep; no API change, so no API gates.
+
+# task-push (#1816) handoff
+
+## Built (branch head: see git log; subjects start "task-push: ")
+- API: `oracle.roadmap.tracker.push_task` is the one gate. It refuses through `refuse_push`, as `push_track_to_tracker`
+  does, because no connector is verified. `oracle/simple/task_push.py` has push() and retry(). push() runs at the end
+  of `targets._apply` for every task op except an undone add. It runs in a savepoint and never fails the change. A
+  failure goes into `roadmap_item_tasks.tracker_push_error` (migration 0139_task_tracker_push_error, the only head).
+  The read (`SimpleItemTask`) has new fields tracker_ref, tracker_url and tracker_error. The Retry route is
+  `POST /v1/simple/tasks/{task_id}/tracker-push`: per item (can_decide), denied as an Ask Oracle action (outward).
+- Web: `web/app/simple/roadmap/_tasks.tsx` TrackerMark shows the record link, the failure behind an (i), and Retry
+  (a failed Retry shows a toast). Mock: `web/lib/api/mock/task-push.ts` ("task-tracker" scenario), wired in
+  simple-changes.ts, simple-roadmap.ts (taskOut) and server.ts (route, seed).
+
+## What today's behaviour means
+- Two-way sync off (default) means no tracker is connected: nothing is pushed and nothing shows.
+- Sync on: every push is refused, honestly, with the "no connector verified" reason and Retry on the task. A real
+  connector (Linear or Jira) is a new client and so needs the owner's go. The pytest stubs one to prove create,
+  link, status-follows and Retry.
+
+## Gates
+- pytest tests/test_simple_task_push.py: red first (a78011a), then green.
+- All 19 files touching tasks or trackers, plus test_frozen_migrations, test_ask_oracle_actions and
+  test_capabilities: green.
+- ruff check and format: green. pyright: 1269 errors, baseline 1269 (OK). alembic: one head.
+- Web: tsc 0, full npm run lint 0, format:check 0, test:unit 49 files / 308 tests green.
+- Playwright (--retries=0): task-push 3/3 (2 fail without the _tasks.tsx change); feature-panel-gaps,
+  walkc-roadmap-tasks, simple-home, goal-buckets-accept and prose-guard green (prose-guard with
+  PROSE_BASE=4ecbc56, because no origin/main is fetched here).
+- goal-buckets-tasks: 2 of the first run failed. "heading clears its feature count" then passed 6/6 with
+  --repeat-each=3. The drag test passed on the next run. Both pass at base. Read as flaky.
+- Postgres needs max_locks_per_transaction=1024 for -n 6. With 256, DROP SCHEMA runs out of shared memory and the
+  run stalls or errors.
+- Whole API suite: run in 8 chunks of $TMPDIR/files.txt (see below for how far it got).
+  - Green: chunk 00 (test_accept... to test_connections_browse_slack, 1815 passed), chunk 01 (1282 passed) and
+    chunk 05 (test_run_frozen_reads to test_simple_goal_map_scoreboard_api, 1149 passed).
+  - NOT RUN, out of time: chunks 02, 03, 04, 06 and 07. Their task and tracker files did run in the targeted group
+    above. Command: `split -n l/8 -d <(ls tests/test_*.py) c8_`, then `uv run pytest -q -n 6 -m "not timing" $(cat c8_0N)`.
+- Timing tests (`-m timing`): NOT finished. 28 passed with 0 failures before the 400 s foreground limit cut the run.
+  Next step: run them in parts.
+
+## Left
+- The rest of the whole-suite chunks and the timing tests, as above.
+- The owner's call: a real tracker connector (Linear or Jira) is a new client and so needs the owner's go.
+
+# prio-ux fix round (review NOT_YET on 6c73c29; issues #1738, #1739, #1773–#1777)
+
+## Fixed (each verdict.json blocker and major)
+- B1 mock "this quarter" read the roadmap's span without a dated plan: `web/lib/api/mock/simple-priorities.ts`
+  `thisQuarter` takes the span only when `planOf` gives a plan (as `priorities.plan_quarter`).
+  goal-buckets-accept.spec.ts:94 and edit-goals-prds-move.spec.ts:70 green.
+- B2 one rule, in the API: "this quarter" = the items whose dates put them in Now plus, with a dated plan, the
+  plan's items in its span (`api/oracle/simple/priorities.py` `plan_quarter`'s `inside`); the line and the goal
+  buckets read that one set; the mock follows. Red pytest first:
+  `api/tests/test_simple_priorities_one_quarter_api.py::test_an_item_dated_into_now_outside_the_plan_makes_the_line_and_its_bucket`.
+  prio-company.spec.ts:123 x4 and simple-plan-charts.spec.ts:143 x4 green, specs unchanged.
+- B3 `web/e2e/qa4-simple-plan.spec.ts` reads the one row layout (details under the title).
+- M4 `web/e2e/fix2-simple-plan-review.spec.ts`: the precondition is back (the row under the picked one is not
+  rank + 1), so the test fails again for "ArrowDown asks for the on-screen neighbour".
+- M5 `web/app/simple/priorities/feature-order.tsx`: writes the API rank (pinOf), the note names the list's place.
+  Spec `prio-ux.spec.ts` "#1738 a move on Goal buckets names the place..." red without it (Expected 13, Received 12).
+- M6 an (i) by the All chip (`prio-all-help`, `allWords` in priorities.tsx) says All counts ranked features,
+  same-name lines and items not ranked yet, while "Miss" counts ranked features. Spec in prio-ux.spec.ts on the
+  priorities-twins and ground-truth-flags scenarios (existing mock scenarios: one carries twins, one an unranked
+  item); both red without the tip.
+
+## Already fixed before this lane / minors
+- #1775: prio-ux.spec.ts:112 passes on the base build too (the mock already stripped the code); the red proof is
+  `api/tests/test_simple_priorities_titles_api.py` (red at 83b3594).
+- #1776 overlap: the chart already spread or grouped marks at base (mark-counts.tsx, qa-simple-plan-11); only the
+  side list's tip about skipped numbers is new.
+- Minors left as they are (not blocker/major): the mock drops a row when its own item is Done while the API drops
+  a feature only when all its items are Done; the mock's span set takes only the plan PRD's items; Goal map chips of
+  Done features sort last (out of scope).
+
+## Gates this round
+- Playwright: every spec that drives /simple/priorities (99 files, `grep -l "simple/priorities"`), mock build,
+  4 workers, --retries=0: 1064 passed, 0 failed. prose-guard green with PROSE_BASE=83b3594.
+- web: tsc 0, full `npm run lint` 0, format:check 0.
+- api: every pytest file that reads priorities, the plan or the goal buckets (37 files, `grep -l
+  "simple/priorities|plan_quarter|goal_buckets|/v1/simple/plan"`) plus tests/test_frozen_migrations.py: 408 passed,
+  1 skipped. ruff clean. pyright vs baseline: 1269 = 1269.
+- NOT RUN (time): the WHOLE API suite and the timing tests. A quarter of the suite takes over 10 minutes; its first
+  run (-n 4, timed out at 64%) showed one F at 57% whose name the timeout did not print; a second run (-n 5, more
+  Postgres locks) passed that range to 62% with no failure (a load flake likely, unproven). A -n 6 run hit Postgres
+  "out of shared memory" on DROP SCHEMA (max_locks_per_transaction=256): use 1024. Next step: run the whole suite.

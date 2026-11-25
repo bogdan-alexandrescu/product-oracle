@@ -860,9 +860,6 @@
     "design-system/no-raw-button": {
       "count": 1
     },
-    "import-x/order": {
-      "count": 4
-    },
     "max-lines": {
       "count": 1
     },
@@ -876,9 +873,6 @@
     },
     "design-system/no-raw-button": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 12
     },
     "max-lines": {
       "count": 1
@@ -1136,9 +1130,6 @@
   "app/plan/page.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 2
-    },
-    "import-x/order": {
-      "count": 5
     },
     "max-lines": {
       "count": 1
@@ -5616,11 +5607,6 @@
       "count": 1
     }
   },
-  "e2e/inbox-runs.spec.ts": {
-    "import-x/order": {
-      "count": 2
-    }
-  },
   "e2e/inbox-section-number-proposal.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -5630,11 +5616,6 @@
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
-    "import-x/order": {
-      "count": 2
-    }
-  },
-  "e2e/inbox-track-alerts-walk.spec.ts": {
     "import-x/order": {
       "count": 2
     }
@@ -8418,11 +8399,6 @@
       "count": 2
     }
   },
-  "e2e/track-alerts.spec.ts": {
-    "import-x/order": {
-      "count": 2
-    }
-  },
   "e2e/track-prds.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -8563,11 +8539,6 @@
   "e2e/walk-1023.spec.ts": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "e2e/walk-514.spec.ts": {
-    "import-x/order": {
-      "count": 1
     }
   },
   "e2e/walk-brief.spec.ts": {
@@ -9377,9 +9348,6 @@
     },
     "import-x/no-cycle": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 7
     },
     "max-lines": {
       "count": 1

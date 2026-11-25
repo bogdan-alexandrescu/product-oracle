@@ -112,7 +112,12 @@ test.describe('QA pass 2: simple-plan, the Ranked list', () => {
       const digest = row(page, 'alert-digest');
       const numbers = digest.getByTestId('prio-numbers');
       // build-plan QP2 "Numbers, no bar": value · confidence · weeks · score, each number kept whole.
-      await expect(numbers).toHaveText(/^·value 5·confidence [\d.]+·2 weeks·score 1\.25$/);
+      // prio-ux (#1774): a word for the value and a rounded score; the model's numbers on hover.
+      await expect(numbers).toHaveText(/^·(High|Medium|Low) value·2 weeks·score 1\.3$/);
+      await expect(digest.getByTestId('prio-value')).toHaveAttribute(
+        'title',
+        /^Goal value 5 · confidence [\d.]+ · 2 weeks · score 1\.25$/,
+      );
       expect(
         await numbers
           .locator(':scope > span > span')
@@ -362,7 +367,7 @@ test.describe('QA pass 2: simple-plan, Goal buckets', () => {
     await expect(head).not.toContainText(/\d\.0\b/);
     await expect(page.getByTestId('buckets-footnote')).not.toContainText('PRD');
     // mk-goalbuckets (train AL's picked frame): Goal buckets' line names the plan's quarter; its summary gives the dates.
-    await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
+    await expect(page.getByTestId('prio-subtitle')).toHaveText('This plan, Nov 2 – Feb 12');
     // Demo 9: the intro is behind the (i).
     await expect(page.locator('#prio-about-text')).toHaveText(
       'Where the engineer-weeks go, goal by goal.',

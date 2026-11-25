@@ -308,6 +308,8 @@ class RoadmapItemTask(TenantScoped, Base):
     tracker_record_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("tracker_records.id", ondelete="SET NULL")
     )
+    # task-push (#1816): why the last push to the connected tracker failed; None once it lands.
+    tracker_push_error: Mapped[str | None] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
 

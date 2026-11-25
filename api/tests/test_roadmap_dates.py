@@ -4,6 +4,8 @@ withdrawing the basis removes the date, from the item, the track's headline and 
 checks; a date outside Now is dropped on import with a recorded problem. Against
 Postgres with the FakeRuntime."""
 
+from datetime import timedelta
+
 from sqlalchemy import select
 
 from oracle.docs.models import Document
@@ -11,7 +13,10 @@ from oracle.roadmap.models import RoadmapItem
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     ITEMS,
+    OTHER_DAY,
     PRD,
     ROADMAP,
     ROADMAP_MD,
@@ -28,7 +33,9 @@ from tests.test_tracks import track_of
 
 URL = f"/v1/roadmaps/{ROADMAP}/items"
 PUT = f"/v1/roadmaps/{ROADMAP}/versions/1/items"
-DEC = "date: 2026-12-15"
+DEC = f"date: {OTHER_DAY}"
+# The tracker's day for payment, after the Beta date (was 2026-12-20).
+SLIP_DAY = (ENG_412_ON + timedelta(days=20)).isoformat()
 
 
 async def other_prd(tenant_id) -> str:
@@ -39,14 +46,15 @@ async def other_prd(tenant_id) -> str:
 
 
 async def record(client, auth, **body) -> dict:
-    body = {"kind": "estimate", "supports_date": "2026-12-15", **body}
+    body = {"kind": "estimate", "supports_date": OTHER_DAY, **body}
     resp = await client.post("/v1/schedule-bases", json=body, headers=auth)
     assert resp.status_code == 201, resp.text
     return resp.json()
 
 
-def dated(source: str, day: str = "2026-12-15") -> str:
-    return ITEMS.replace("date: 2026-11-30", f"date: {day}").replace("ENG-412 estimate", source)
+def dated(source: str, day: str = OTHER_DAY) -> str:
+    assert f"date: {ENG_412_DAY}" in ITEMS
+    return ITEMS.replace(f"date: {ENG_412_DAY}", f"date: {day}").replace("ENG-412 estimate", source)
 
 
 async def test_the_eng_412_probe_is_refused(client, owner, runtime):  # noqa: F811
@@ -58,7 +66,7 @@ async def test_the_eng_412_probe_is_refused(client, owner, runtime):  # noqa: F8
     billing = await other_prd(tenant_id)
 
     # A basis needs its PRD.
-    body = {"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-12-15"}
+    body = {"kind": "estimate", "reference": "ENG-412", "supports_date": OTHER_DAY}
     resp = await client.post("/v1/schedule-bases", json=body, headers=auth)
     assert resp.status_code == 422, resp.text
     # Another PRD's basis supports nothing on this roadmap.
@@ -69,8 +77,8 @@ async def test_the_eng_412_probe_is_refused(client, owner, runtime):  # noqa: F8
     # Nor is it offered to this PRD's run.
     run = await start(client, auth, await create(client, auth, source=PRD, document="r2"))
     prompt = runtime.submitted[-1].steps[-1].prompt
-    assert "- ENG-412 (estimate) supports 2026-11-30" in prompt
-    assert "supports 2026-12-15" not in prompt, prompt
+    assert f"- ENG-412 (estimate) supports {ENG_412_DAY}" in prompt
+    assert f"supports {OTHER_DAY}" not in prompt, prompt
     assert run["status"] == "running"
 
     # A basis for this PRD but another item supports only that item.
@@ -117,14 +125,14 @@ async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  
     resp = await client.post(
         "/v1/tracker/records",
         json={"tracker": "jira", "records": [
-            {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+            {"external_ref": "ENG-412", "state": "in_progress", "target_date": SLIP_DAY,
              "track_id": track["id"], "item_key": "payment-step"}]},
         headers=auth,
     )  # fmt: skip
     assert resp.status_code == 200, resp.text
     track = await track_of(client, auth)
-    assert track["next_milestone"]["target_date"] == "2026-11-30"
-    assert "Nov 30" in track["headline"], track["headline"]
+    assert track["next_milestone"]["target_date"] == ENG_412_DAY
+    assert f"{ENG_412_ON:%b} {ENG_412_ON.day}" in track["headline"], track["headline"]
     assert "date_slip" in {d["kind"] for d in track["drift"]}
 
     bases = (await client.get("/v1/schedule-bases", headers=auth)).json()
@@ -136,13 +144,13 @@ async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  
 
     pay = (await client.get(URL, headers=auth)).json()["items"][0]
     assert pay["milestone"]["date"] is None and pay["milestone"]["basis_ids"] == []
-    assert pay["milestone"]["refused_date"] == "2026-11-30"
+    assert pay["milestone"]["refused_date"] == ENG_412_DAY
     assert pay["milestone"]["name"] == "Beta"
     track = await track_of(client, auth)
     assert track["next_milestone"]["name"] == "Beta"
     assert track["next_milestone"]["target_date"] is None
     assert track["next_milestone"]["dated"] is False
-    assert "2026-11-30" not in track["headline"], track["headline"]
+    assert ENG_412_DAY not in track["headline"], track["headline"]
     assert not {d["kind"] for d in track["drift"]} & {"date_slip", "overdue"}
     report = (await client.get(f"/v1/roadmaps/{ROADMAP}/alignment", headers=auth)).json()
     by = {i["item_key"]: i for i in report["items"]}
@@ -153,7 +161,7 @@ async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  
     # The approved record is not rewritten: the date is withheld when read.
     async with tenant_session(tenant_id) as s:
         row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "payment-step"))
-        assert row.milestone["date"] == "2026-11-30"
+        assert row.milestone["date"] == ENG_412_DAY
 
 
 async def test_a_date_outside_now_is_dropped_on_import(client, owner, runtime):  # noqa: F811

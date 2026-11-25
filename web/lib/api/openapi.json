@@ -46547,6 +46547,60 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/tasks/{task_id}/tracker-push": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Push Simple Task To Tracker",
+        "description": "task-push (#1816): Retry a task's push to the connected tracker. The task as the\nroadmap read shows it, with the push's outcome (``tracker_error`` None once it lands).\nWhoever changes the task directly may (403 otherwise); 404 for no such task.",
+        "operationId": "push_simple_task_to_tracker",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleItemTask"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
     "/v1/simple/changes/{change_id}/undo": {
       "post": {
         "tags": [
@@ -118155,6 +118209,17 @@
             ],
             "title": "Roadmap Read"
           },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
           "estimate_usd": {
             "anyOf": [
               {
@@ -119040,6 +119105,17 @@
               }
             ],
             "title": "Roadmap Read"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
           },
           "estimate_usd": {
             "anyOf": [
@@ -128592,6 +128668,39 @@
               }
             ],
             "title": "Due Date"
+          },
+          "tracker_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Ref"
+          },
+          "tracker_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Url"
+          },
+          "tracker_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Error"
           }
         },
         "type": "object",
@@ -130035,6 +130144,35 @@
         ],
         "title": "SimpleNotApproved",
         "description": "A roadmap a meeting's session worked on that the caller does not approve."
+      },
+      "SimpleNoteCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "feature",
+              "milestone"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "title": "SimpleNoteCode",
+        "description": "#1866: a goal, feature or milestone whose code a note writes, with its name, so the\npage shows the code with its name (\"F-104 Quiet hours\"); the company's own only."
       },
       "SimpleOldMilestone": {
         "properties": {
@@ -133279,6 +133417,14 @@
               }
             ],
             "title": "Note"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleNoteCode"
+            },
+            "type": "array",
+            "title": "Codes",
+            "default": []
           }
         },
         "type": "object",
@@ -133356,6 +133502,14 @@
               }
             ],
             "title": "Note"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleNoteCode"
+            },
+            "type": "array",
+            "title": "Codes",
+            "default": []
           },
           "trail": {
             "items": {
@@ -133875,6 +134029,39 @@
               }
             ],
             "title": "Due Date"
+          },
+          "tracker_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Ref"
+          },
+          "tracker_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Url"
+          },
+          "tracker_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Error"
           },
           "item_id": {
             "anyOf": [
@@ -143516,6 +143703,17 @@
               }
             ],
             "title": "Item Title"
+          },
+          "item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
           },
           "kind": {
             "type": "string",

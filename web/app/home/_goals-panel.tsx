@@ -20,7 +20,8 @@ import { percent } from '@/lib/goal-tree';
 
 import { buildRun, type BaselineState } from './_setup';
 import {
-  assess,
+  atRisk,
+  cardProgress,
   changeText,
   formatFigure,
   shownGoals,
@@ -50,7 +51,8 @@ function GoalCard({
 }) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
-  const p = assess(g, history);
+  // #1742: no "Target met" on a figure never read; the Goal map's at-risk rule beats the ring.
+  const p = cardProgress(g, history);
   // prod-2: no current value, no confidence ring: a number beside "–" reads as the goal's score.
   const noValue = p.state === 'none' || !g.currentText;
   return (
@@ -121,7 +123,14 @@ function GoalCard({
             </span>
           )}
         </span>
-        {!noValue &&
+        {!noValue && atRisk(g, p) ? (
+          <span className="ml-auto flex-none" data-testid="goal-at-risk">
+            <Chip kind="warn" dot data-status="at_risk">
+              At risk
+            </Chip>
+          </span>
+        ) : (
+          !noValue &&
           (g.confidence == null ? (
             // qa4-plan-24: no score yet says so and why, never an empty ring with a dash.
             <span
@@ -141,7 +150,8 @@ function GoalCard({
                 confidence
               </span>
             </span>
-          ))}
+          ))
+        )}
       </div>
       {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
           grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}
@@ -233,7 +243,7 @@ function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
           {subs.map((s) => (
             <li
               key={s.id}
-              className="flex min-w-0 items-center gap-2"
+              className="flex min-w-0 items-start gap-2"
               data-testid={`home-goal-${s.tag}`}
             >
               <span className="flex min-w-0 flex-1">
@@ -243,6 +253,7 @@ function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
                   title={s.title}
                   code={s.code}
                   proposed={s.proposed}
+                  whole
                 />
               </span>
               <span className="tnum flex-none text-text2">

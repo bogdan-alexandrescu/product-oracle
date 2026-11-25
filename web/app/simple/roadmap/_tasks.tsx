@@ -7,9 +7,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { Button, InfoTip, toast } from '@/components/ds';
 import { api, unwrap } from '@/lib/api/client';
 import { formatDay } from '@/lib/format';
-import { useQuery } from '@/lib/use-query';
+import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
 import type { Act } from './_card';
 import type { ChangeWords, Item } from './_lib';
@@ -138,6 +139,43 @@ function DueInput({ task, save, done }: { task: Task; save: Save; done: () => vo
   );
 }
 
+/** task-push (#1816): the task's record in the connected tracker, and a failed push with Retry. */
+function TrackerMark({ task, canChange }: { task: Task; canChange: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const retry = () => {
+    setBusy(true);
+    const path = { task_id: task.id };
+    void unwrap(api.POST('/v1/simple/tasks/{task_id}/tracker-push', { params: { path } }))
+      .catch((e: unknown) => toast({ message: errorMessage(e) }))
+      .finally(() => (setBusy(false), dataChanged()));
+  };
+  return (
+    <>
+      {task.tracker_url && (
+        <a
+          href={task.tracker_url}
+          target="_blank"
+          rel="noreferrer"
+          data-testid="task-tracker-link"
+          className="flex-none text-accent-ink hover:underline"
+        >
+          {task.tracker_ref ?? task.tracker_url} ↗
+        </a>
+      )}
+      {task.tracker_error && (
+        <span data-testid="task-tracker-error" className="flex flex-none items-center text-warn">
+          <InfoTip label={`Tracker push of ${task.title}`}>{task.tracker_error}</InfoTip>
+          {canChange && (
+            <Button variant="ghost" className="h-6 px-1.5" disabled={busy} onClick={retry}>
+              Retry
+            </Button>
+          )}
+        </span>
+      )}
+    </>
+  );
+}
+
 function TaskRow({
   task,
   canChange,
@@ -162,6 +200,7 @@ function TaskRow({
           <span className="min-w-0 flex-1">
             {owner} · {due}
           </span>
+          <TrackerMark task={task} canChange={false} />
           <span data-testid="task-status">{STATUS_WORDS[task.status]}</span>
         </div>
       </li>
@@ -264,6 +303,7 @@ function TaskRow({
             </Pop>
           )}
         </span>
+        <TrackerMark task={task} canChange />
         <span className="relative flex-none">
           <button
             type="button"

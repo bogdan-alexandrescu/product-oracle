@@ -567,6 +567,15 @@ class SimpleQuestion(BaseModel):
     edited_by: SimplePersonRef | None = None
 
 
+class SimpleNoteCode(BaseModel):
+    """#1866: a goal, feature or milestone whose code a note writes, with its name, so the
+    page shows the code with its name ("F-104 Quiet hours"); the company's own only."""
+
+    code: str
+    name: str
+    kind: Literal["goal", "feature", "milestone"]
+
+
 class SimpleRunStepOut(BaseModel):
     """One decision at a run's stop: what was done ("Sent back", "Approved"), by whom, the
     day (the company's) and the note given."""
@@ -575,6 +584,8 @@ class SimpleRunStepOut(BaseModel):
     who: str | None = None
     day: dt.date | None = None
     note: str | None = None
+    # #1866: the codes the note writes that name something, in the note's order.
+    codes: list[SimpleNoteCode] = []
 
 
 class SimpleRunStopOut(BaseModel):
@@ -593,6 +604,8 @@ class SimpleRunStopOut(BaseModel):
     role: str | None = None
     day: dt.date | None = None
     note: str | None = None
+    # #1866: the codes the note writes that name something, in the note's order.
+    codes: list[SimpleNoteCode] = []
     trail: list[SimpleRunStepOut] = []
 
 

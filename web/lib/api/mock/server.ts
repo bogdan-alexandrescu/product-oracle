@@ -13,6 +13,7 @@ import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { routePalette } from './palette';
 import { mockName as displayName } from './people';
+import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
@@ -509,7 +510,7 @@ import {
   seedHeldGoalSuggestion,
   seedPersonGoalSuggestion,
 } from './simple-suggestions';
-import { runGroupsOut } from './simple-runs';
+import { noteCodeNames, runGroupsOut } from './simple-runs';
 import { roadmapRead } from './roadmap-read';
 import { questionInboxRows } from './simple-questions';
 import { rebuildsOut } from './rebuilds';
@@ -4303,6 +4304,60 @@ function seedRunDecisionsScenario(many: boolean): Db {
   return db;
 }
 
+/** #1866, as note_codes.names: the codes the runs' notes write, named from the company's features, goals and milestones. */
+function runNoteNames(db: Db) {
+  const live = db.baseline.entities;
+  const features = live.filter((e) => e.type === 'feature');
+  const codes = featureCodes(features, db.roadmap?.section_code, db.plan_edits, db);
+  return noteCodeNames(
+    (db.runs?.runs ?? []).flatMap((r) => r.checkpoints.map((c) => c.note)),
+    {
+      features: features.flatMap((e) =>
+        codes[e.id] ? [{ code: codes[e.id], title: e.title }] : [],
+      ),
+      goals: live.filter((e) => e.type === 'goal' && e.status === 'confirmed'),
+      milestones: db.simple_roadmap?.goal_milestones ?? [],
+    },
+  );
+}
+
+/** #1866 "run-note-codes": the run-decisions company with a goal G-2, a feature F-104 and a milestone M7, and a note naming them. */
+function seedRunNoteCodes(): Db {
+  const db = seedRunDecisionsScenario(false);
+  const goal = db.baseline.entities.find((e) => e.type === 'goal' && e.status === 'confirmed')!;
+  const feature = db.baseline.entities.find((e) => e.type === 'feature')!;
+  db.baseline.entities.push(
+    {
+      ...goal,
+      id: stableUuid('run-note/goal'),
+      key: 'G-2',
+      title: 'Faster first alert',
+      parent_id: null,
+    },
+    { ...feature, id: stableUuid('run-note/feature'), key: 'F-104', title: 'Quiet hours' },
+  );
+  const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+  rm.goal_milestones = [
+    ...(rm.goal_milestones ?? []).filter((m) => m.code !== 'M7'),
+    {
+      id: stableUuid('run-note/m7'),
+      roadmap: 'onboarding-roadmap',
+      code: 'M7',
+      name: 'Pilot teams live',
+      date: null,
+      goal: null,
+      gates: [],
+      counts_when: '',
+      progress: 'not_started',
+    },
+  ];
+  const stop = db
+    .runs!.runs.flatMap((r) => r.checkpoints)
+    .find((c) => c.note === 'Good to build from version 3.')!;
+  stop.note = 'Hold G-2 until F-104 has a date; M7 after. F-999 can wait.';
+  return db;
+}
+
 function seedEngReview(): Db {
   const db = seed();
   db.members.find((x) => x.email === 'commenter@example.com')!.engineering_lead = true;
@@ -6937,9 +6992,15 @@ function load(): Db {
                               ? seedEngReview
                               : scenario === 'eng-check'
                                 ? seedEngCheck
-                                : scenario === 'run-decisions' || scenario === 'run-decisions-many'
+                                : scenario === 'run-decisions' ||
+                                    scenario === 'run-decisions-many' ||
+                                    scenario === 'run-note-codes'
                                   ? () =>
-                                      seedRunDecisionsScenario(scenario === 'run-decisions-many')
+                                      scenario === 'run-note-codes'
+                                        ? seedRunNoteCodes()
+                                        : seedRunDecisionsScenario(
+                                            scenario === 'run-decisions-many',
+                                          )
                                   : scenario === 'eng-check-answered-by-id'
                                     ? seedEngCheckAnsweredById
                                     : scenario === 'eng-check-no-lead'
@@ -14069,6 +14130,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const nudges = db.simple_roadmap.items.find((x) => x.key === 'setup-ideas');
     if (invites && nudges) nudges.looks_like = [invites.id];
   }
+  // task-push (#1816): the "task-tracker" scenario's task already linked to its tracker record.
+  if (freshRoadmap) seedTrackedTask(db.simple_roadmap, db.simple_roadmap.ids['alert-export']);
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
@@ -14175,6 +14238,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       )
     )
       return json(422, { detail: 'after.feature_id: a feature' });
+  }
+  // task-push (#1816): Retry a task's push to the connected tracker.
+  if (p[1] === 'simple' && p[2] === 'tasks' && p[4] === 'tracker-push' && m === 'POST') {
+    if (!atLeast(me.role, 'commenter')) return forbidden('commenter');
+    return retryTask(db.simple_roadmap, p[3], me);
   }
   const simpleRoles = Object.fromEntries(
     db.members.filter((x) => x.status !== 'disabled').map((x) => [x.id, x.role]),
@@ -14714,7 +14782,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     meetingsCtx.runs = (prd) => {
       db.runs ??= seeded('runs', () => seedRuns(runsContext(db)));
       const docs = db.documents.filter((d) => d.kind === 'prd');
-      return runGroupsOut(db.runs.runs, docs, meetingsCtx.members, prd);
+      return runGroupsOut(db.runs.runs, docs, meetingsCtx.members, prd, runNoteNames(db));
     };
     meetingsCtx.othersWaiting = () => {
       db.runs ??= seeded('runs', () => seedRuns(runsContext(db)));

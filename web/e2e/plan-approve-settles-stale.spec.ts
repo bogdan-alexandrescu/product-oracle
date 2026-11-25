@@ -46,7 +46,7 @@ test('approving a version that keeps a flagged item settles it on the Plan and i
   );
   await login(page);
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 1 need you');
   await expect(alertRows(page).filter({ hasText: STALE })).toHaveCount(1);
 
   await rail(page).getByRole('link', { name: 'Plan', exact: true }).click();

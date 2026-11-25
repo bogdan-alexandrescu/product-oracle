@@ -114,6 +114,7 @@ _WHY: dict[str, tuple[str, ...]] = {
         "publish_changelog_entry",
         "publish_composition",
         "publish_version",
+        "push_simple_task_to_tracker",
         "push_track_to_tracker",
         "put_public_page",
         "put_public_text",

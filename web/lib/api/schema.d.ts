@@ -13713,6 +13713,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/tasks/{task_id}/tracker-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Simple Task To Tracker
+         * @description task-push (#1816): Retry a task's push to the connected tracker. The task as the
+         *     roadmap read shows it, with the push's outcome (``tracker_error`` None once it lands).
+         *     Whoever changes the task directly may (403 otherwise); 404 for no such task.
+         */
+        post: operations["push_simple_task_to_tracker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/changes/{change_id}/undo": {
         parameters: {
             query?: never;
@@ -39350,6 +39372,8 @@ export interface components {
             theme?: string | null;
             /** Roadmap Read */
             roadmap_read?: string | null;
+            /** Repo */
+            repo?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -39625,6 +39649,8 @@ export interface components {
             theme?: string | null;
             /** Roadmap Read */
             roadmap_read?: string | null;
+            /** Repo */
+            repo?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -43139,6 +43165,12 @@ export interface components {
             owner?: components["schemas"]["SimplePersonRef"] | null;
             /** Due Date */
             due_date?: string | null;
+            /** Tracker Ref */
+            tracker_ref?: string | null;
+            /** Tracker Url */
+            tracker_url?: string | null;
+            /** Tracker Error */
+            tracker_error?: string | null;
         };
         /**
          * SimpleKeyDate
@@ -43736,6 +43768,22 @@ export interface components {
             document: components["schemas"]["SimpleDocRef"];
             /** Reason */
             reason: string;
+        };
+        /**
+         * SimpleNoteCode
+         * @description #1866: a goal, feature or milestone whose code a note writes, with its name, so the
+         *     page shows the code with its name ("F-104 Quiet hours"); the company's own only.
+         */
+        SimpleNoteCode: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "feature" | "milestone";
         };
         /**
          * SimpleOldMilestone
@@ -45083,6 +45131,11 @@ export interface components {
             day?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Codes
+             * @default []
+             */
+            codes: components["schemas"]["SimpleNoteCode"][];
         };
         /**
          * SimpleRunStopOut
@@ -45117,6 +45170,11 @@ export interface components {
             day?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Codes
+             * @default []
+             */
+            codes: components["schemas"]["SimpleNoteCode"][];
             /**
              * Trail
              * @default []
@@ -45318,6 +45376,12 @@ export interface components {
             owner?: components["schemas"]["SimplePersonRef"] | null;
             /** Due Date */
             due_date?: string | null;
+            /** Tracker Ref */
+            tracker_ref?: string | null;
+            /** Tracker Url */
+            tracker_url?: string | null;
+            /** Tracker Error */
+            tracker_error?: string | null;
             /** Item Id */
             item_id?: string | null;
             /** Item Title */
@@ -48747,6 +48811,8 @@ export interface components {
             item_key: string | null;
             /** Item Title */
             item_title: string | null;
+            /** Item Code */
+            item_code?: string | null;
             /**
              * Kind
              * @enum {string}
@@ -77411,6 +77477,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: components["schemas"]["SimpleChangeConflict"];
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_simple_task_to_tracker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleItemTask"];
                 };
             };
             /** @description Validation Error */

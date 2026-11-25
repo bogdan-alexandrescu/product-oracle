@@ -59,9 +59,13 @@ const COUNT_BUTTON =
 
 function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   const d = r.document_id ? docs.get(r.document_id) : undefined;
-  // rirs-23: the document alone (the Flow column names the flow), in full.
-  return d ? docLabel(d) : runName(r);
+  // rirs-23: the document alone (the Flow column names the flow), in full; #1789: a code map
+  // run by the repo it maps, so its row is not one more "Code map".
+  return d ? docLabel(d) : (r.repo ?? runName(r));
 }
+
+/** When a run last moved: the Updated column's moment. */
+const updatedAt = (r: RunSummary) => r.finished_at ?? r.started_at ?? r.created_at;
 
 function RunsPage() {
   const q = useQuery('runs', () => unwrap(api.GET('/v1/runs')));
@@ -75,7 +79,10 @@ function RunsPage() {
   const [picked, setPicked] = useState<string | null>(null);
   // detailed-b 5: the header's count shows only the runs it counts; pressed again, every run.
   const [onlyWaiting, setOnlyWaiting] = useState(false);
-  const runs = (q.data ?? []).filter((r) => r.status !== 'draft');
+  // #1789: newest Updated first, as the column reads.
+  const runs = (q.data ?? [])
+    .filter((r) => r.status !== 'draft')
+    .sort((a, b) => Date.parse(updatedAt(b)) - Date.parse(updatedAt(a)));
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
@@ -203,12 +210,13 @@ function RunsPage() {
       phoneLabel: 'Updated',
       narrow: 'hide',
       cell: (r) => {
-        const at = r.finished_at ?? r.started_at ?? r.created_at;
+        const at = updatedAt(r);
         return (
           <span
             className="tnum text-sm text-text2"
             title={formatDateTime(at)}
             data-testid="run-updated"
+            data-at={at}
           >
             {formatShortDate(at)}
           </span>

@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
-import { ADMIN, login, signOut } from './helpers';
+import { ADMIN, lineOptionsSettled, login, signOut } from './helpers';
 import { expect, test, type Locator, type Page } from './test';
 
 /*
@@ -93,6 +93,7 @@ test.describe('QA pass 3: simple-plan, the line', () => {
   test("the line's options run in date order and every line splits the list", async ({ page }) => {
     await setUp(page);
     await open(page);
+    await lineOptionsSettled(page);
     const options = await page.locator('#prio-line option').allTextContents();
     const dated = options.filter((o) => / · /.test(o));
     expect(dated.length).toBeGreaterThan(1);
@@ -137,6 +138,7 @@ test.describe('QA pass 3: simple-plan, the line', () => {
   test("a line change never shows one line's marks on another line's list", async ({ page }) => {
     await setUp(page);
     await open(page);
+    await lineOptionsSettled(page);
     await page.evaluate((slow) => {
       localStorage.setItem(slow, '/v1/simple/priorities');
       const w = window as unknown as { seen: { line: string; above: string; heads: string[] }[] };
@@ -412,7 +414,7 @@ test.describe('QA pass 3: simple-plan, a dated plan', () => {
     await setUp(page, { scenario: 'simple-plan', phone: true, scheme: 'dark' });
     await open(page, '?tab=buckets');
     // mk-goalbuckets frames: the intro says where the weeks go and names the plan's quarter.
-    await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
+    await expect(page.getByTestId('prio-subtitle')).toHaveText('This plan, Nov 2 – Feb 12');
     // Demo 9: the intro is behind the (i).
     await expect(page.locator('#prio-about-text')).toHaveText(
       'Where the engineer-weeks go, goal by goal.',
