@@ -14,6 +14,7 @@ Test cards (protects / fails_when / no_claim):
 """
 
 from datetime import UTC, date, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -27,7 +28,7 @@ URL = "/v1/simple/palette"
 
 
 async def world(prefix: str = "") -> Ctx:
-    ctx = await make_ctx()
+    ctx = await make_ctx(f"{prefix}Example Co {uuid4().hex[:8]}")
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
         await seed.doc(f"{prefix}usage-alerts")
