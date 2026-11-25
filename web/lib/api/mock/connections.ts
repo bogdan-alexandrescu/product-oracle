@@ -169,9 +169,16 @@ function companyParts(at: string | Date): Record<string, string> {
 }
 
 /** "2026-10-12": the Company time zone's day at `at`, as oracle.company_time.day (#463). */
+let lastDay = { zone: '', minute: NaN, day: '' };
 export function companyDayIso(at: string | Date): string {
-  const p = companyParts(at);
-  return `${p.year}-${p.month}-${p.day}`;
+  // draw-time (#1870): a 500-item read asks for the same minute's day for every item.
+  const zone = companyZone();
+  const minute = Math.floor(new Date(at).getTime() / 60_000);
+  if (lastDay.zone !== zone || lastDay.minute !== minute) {
+    const p = companyParts(at);
+    lastDay = { zone, minute, day: `${p.year}-${p.month}-${p.day}` };
+  }
+  return lastDay.day;
 }
 
 /**

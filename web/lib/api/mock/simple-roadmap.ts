@@ -1289,18 +1289,45 @@ function betFlow(db: SimpleDb, s: SeedItem): Schemas['SimpleFlow'] | null {
 }
 
 const DAY = 86_400_000;
-const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
-const ms = (day: string): number => Date.parse(`${day}T00:00:00Z`);
+/** draw-time (#1870): `make`'s answer for each argument, made once: a 500-item read asks for the
+ * same few hundred days thousands of times, on the page's own thread. */
+function once<K, V>(make: (k: K) => V): (k: K) => V {
+  const seen = new Map<K, V>();
+  return (k) => {
+    let out = seen.get(k);
+    if (out === undefined) {
+      out = make(k);
+      seen.set(k, out);
+    }
+    return out;
+  };
+}
+/** The items by each key they name, in the items' order (draw-time: one pass, not one per item). */
+function byKeys<T>(items: T[], keysOf: (x: T) => Iterable<string | undefined>): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const x of items)
+    for (const k of new Set(keysOf(x))) {
+      if (k === undefined) continue;
+      const held = out.get(k);
+      if (held) held.push(x);
+      else out.set(k, [x]);
+    }
+  return out;
+}
+const isoOfDay = once((n: number) => new Date(n * DAY).toISOString().slice(0, 10));
+const iso = (ms: number): string => isoOfDay(Math.floor(ms / DAY));
+const ms = once((day: string): number => Date.parse(`${day}T00:00:00Z`));
 const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
 /** Today: the company's day (its time zone), as oracle.company_time.company_today (qa-shell-6). */
 export const companyToday = (): string => companyDayIso(new Date(mockNowMs()));
 const span = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY) + 1;
-const word = (day: string): string =>
+const word = once((day: string): string =>
   new Date(ms(day)).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
-  });
+  }),
+);
 
 function addMonths(day: string, months: number): string {
   const d = new Date(ms(day));
@@ -3059,6 +3086,8 @@ export function roadmapOut(
     );
   // roadmap-edit-fixes: a dependency names an item by its key, else by its code or feature key.
   const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
+  const dependents = byKeys(seeds, (x) => (x.depends ?? []).map(depOf));
+  const partsOf = byKeys(seeds, (x) => (x.merged_into ? [] : [x.parent ?? undefined]));
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
     // unique-codes (Nov 23): its own code, its title's, before its feature's or PRD section's.
@@ -3173,8 +3202,8 @@ export function roadmapOut(
       depends_on: [
         ...new Set((s.depends ?? []).map(depOf).filter((k): k is string => !!k && k !== s.key)),
       ].map((k) => db.ids[k]),
-      needed_by: seeds
-        .filter((x) => x.key !== s.key && (x.depends ?? []).some((k) => depOf(k) === s.key))
+      needed_by: (dependents.get(s.key) ?? [])
+        .filter((x) => x.key !== s.key)
         .map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon], !!itemOwnerId(db, s.key)),
       owner: ownerOf(db, s, me?.names),
@@ -3226,7 +3255,7 @@ export function roadmapOut(
       part_of: pathOf(s).at(-1) ?? null,
       part_path: pathOf(s),
       // additions._parts: in roadmap order, open and cut mixed; never a merged one.
-      parts: seeds.filter((x) => x.parent === s.key && !x.merged_into).map((x) => partRef(x)),
+      parts: (partsOf.get(s.key) ?? []).map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       // As additions: a draft's flow is its draft_item visual (numbered notes, comments).
       flow: s.draft

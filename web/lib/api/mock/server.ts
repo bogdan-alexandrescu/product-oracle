@@ -6853,6 +6853,26 @@ function runsContext(db: Db): Omit<RunsContext, 'db'> & { db?: RunsDb } {
  * the stored text, which drops the cache.
  */
 let cached: { raw: string; db: Db } | null = null;
+/**
+ * draw-time (#1870): a page's burst of reads saves the db once, after the last of them, not after
+ * each: writing the whole 500-item db out as text took longer than answering most of its reads.
+ * `cached` is then ahead of the stored text (`unsaved`); a write, a leaving page and the burst's
+ * last call save it first, unless another tab has written since (the next load reads theirs).
+ */
+let unsaved = false;
+let inFlight = 0;
+
+function flush() {
+  if (unsaved && cached && localStorage.getItem(STORAGE_KEY) === cached.raw) save(cached.db);
+  unsaved = false;
+}
+
+function leave() {
+  inFlight -= 1;
+  if (inFlight === 0) flush();
+}
+
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
 
 /** qa-nov17: a seeded item that is a Ground Truth feature (SeedItem.gt_key) is linked to it (RoadmapItem.feature_id), as the API serves it. */
 function linkSeededFeatures(db: Db): void {
@@ -9849,6 +9869,7 @@ function save(db: Db) {
   // A read that changed nothing writes nothing (qa-plan-10).
   if (localStorage.getItem(STORAGE_KEY) !== raw) localStorage.setItem(STORAGE_KEY, raw);
   cached = { raw, db };
+  unsaved = false;
 }
 
 /** Drops all mock state (used by the "Reset mock data" control). */
@@ -16212,6 +16233,7 @@ export async function mockFetch(req: Request): Promise<Response> {
   // Tests act as Oracle's ticker (POST /v1/internal/tick) through this, as they would with page.request against the API.
   (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
+  inFlight += 1;
   await new Promise((r) => setTimeout(r, LATENCY_MS));
   // A path fails every GET of it; a path with its query ("/v1/documents?kind=prd") only that one.
   const failing = localStorage.getItem(MOCK_FAIL_KEY);
@@ -16219,6 +16241,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     req.method === 'GET' &&
     (url.pathname === failing || `${url.pathname}${url.search}` === failing)
   ) {
+    leave();
     return new Response(JSON.stringify({ detail: 'Mock failure' }), {
       status: 500,
       headers: { 'content-type': 'application/json' },
@@ -16226,12 +16249,19 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
     localStorage.removeItem(MOCK_FAIL_ONCE_KEY);
+    leave();
     return new Response(JSON.stringify({ detail: 'Mock failure' }), {
       status: 500,
       headers: { 'content-type': 'application/json' },
     });
   }
-  const next = queue.then(async () => {
+  // A read whose save may wait for the burst's last call: not one that marks something seen, nor
+  // a meeting chat's poll, which saves nothing of its own (S9).
+  const chatPoll =
+    req.method === 'GET' && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname);
+  const plainRead = req.method === 'GET' && !chatPoll && !url.searchParams.has('mark_seen');
+  const answer = async () => {
+    if (!plainRead) flush();
     const db = load();
     // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -16281,14 +16311,13 @@ export async function mockFetch(req: Request): Promise<Response> {
     // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
     // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
     const overwrites = req.method === 'GET' && localStorage.getItem(STORAGE_KEY) !== stored;
-    if (
-      !overwrites &&
-      (!(req.method === 'GET' && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) ||
-        readerWrote)
-    )
-      save(db);
+    if (!overwrites && plainRead && stored !== null) {
+      cached = { raw: stored, db };
+      unsaved = true;
+    } else if (!overwrites && (!chatPoll || readerWrote)) save(db);
     return res;
-  });
+  };
+  const next = queue.then(answer).finally(leave);
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   const prefix = slow?.endsWith('*') ? slow.slice(0, -1) : null;
