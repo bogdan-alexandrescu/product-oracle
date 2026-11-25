@@ -163,14 +163,14 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
         **third,
         "segment_title": "Feature set, dependencies and design",
         "decided_by_role": "owner",
-        # The seeded owner, who has no name: their email.
-        "decided_by_name": "admin@example.com",
+        # The seeded owner, who has no name: one made from their email (#1763).
+        "decided_by_name": "Admin",
         "via": "oracle",
         "note": NOTE,
         "edits": None,
         "review": None,
         "delivered": True,
-        "summary": f"Feature set · approved by admin@example.com, an owner · note: {NOTE}",
+        "summary": f"Feature set · approved by Admin, an owner · note: {NOTE}",
     }
     assert second["summary"] == (
         "Ground Truth · approved by Pat Example, an approver · note: Good enough"
@@ -365,10 +365,10 @@ async def test_a_held_console_approval_is_absent_until_an_approver_confirms_it(
     [d] = await decisions(client, auth, run["id"])
     assert d["checkpoint_id"] == cp["id"] and d["status"] == "approved"
     assert d["via"] == "swarmcloud_console" and d["decided_by_role"] == "viewer"
-    # A member without a name is named by their email.
-    assert d["decided_by_name"] == "viewer.console@example.com"
+    # A member without a name is named from their email, never by it (#1763).
+    assert d["decided_by_name"] == "Viewer Console"
     assert d["summary"].startswith(
-        "Ground Truth · approved by viewer.console@example.com, a viewer in SwarmCloud's console"
+        "Ground Truth · approved by Viewer Console, a viewer in SwarmCloud's console"
     )
 
 
@@ -395,7 +395,7 @@ async def test_a_console_approval_held_before_its_author_was_kept_names_them(
     run = await decide(client, auth, run, "confirm")
     [d] = await decisions(client, auth, run["id"])
     assert d["via"] == "swarmcloud_console" and d["decided_by_role"] == "viewer"
-    assert d["decided_by_name"] == "viewer.console@example.com"
+    assert d["decided_by_name"] == "Viewer Console"
 
 
 async def test_a_personal_tokens_decision_names_its_owner(client, owner, runtime):
