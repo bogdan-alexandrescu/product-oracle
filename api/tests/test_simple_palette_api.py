@@ -31,7 +31,7 @@ async def world(prefix: str = "") -> Ctx:
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
         await seed.doc(f"{prefix}usage-alerts")
-        hidden = await seed.doc(f"{prefix}board-update", kind="update", visibility="approvers")
+        hidden = await seed.doc(f"{prefix}board-update", visibility="approvers")
         hidden.title = f"{prefix}Board update"
         gone = await seed.doc(f"{prefix}old-plan")
         gone.deleted_at = datetime(2026, 11, 1, tzinfo=UTC)
