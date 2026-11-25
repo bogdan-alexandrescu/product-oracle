@@ -69,8 +69,9 @@ def _goals(by_id: dict[uuid.UUID, Entity]) -> tuple[list[PaletteGoal], list[Pale
     goals, results = [], []
     for g in sorted(live.values(), key=lambda g: (g.title, str(g.id))):
         top = g
-        while top.parent_id in live:  # is_live: the walk up ends at a top goal
-            top = live[top.parent_id]
+        # is_live: the walk up ends at a top goal.
+        while (up := top.parent_id) is not None and up in live:
+            top = live[up]
         if top is g:
             measure = str((g.attrs or {}).get("metric") or "")
             goals.append(PaletteGoal(id=g.id, name=g.title, measure=measure))
