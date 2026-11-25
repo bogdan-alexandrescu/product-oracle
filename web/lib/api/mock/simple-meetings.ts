@@ -481,6 +481,18 @@ export function ensureMeetings(
           { kind: 'document', id: alerts.id },
         ],
       }),
+      // #1818: the roadmap's open decision on the digest (simple-roadmap.ts), by the same id.
+      ...(digest
+        ? [
+            d(7, 'Send the digest weekly or daily?', {
+              id: stableUuid('simple-decision/7'),
+              origin: 'oracle',
+              status: 'proposed',
+              approver_id: null,
+              subjects: [{ kind: 'roadmap_item', id: digest.id, ref: digest.key }],
+            }),
+          ]
+        : []),
       // F-26 ("long-decision" scenario): a decision whose title wraps on a phone.
       ...(typeof localStorage !== 'undefined' &&
       localStorage.getItem('po-mock-scenario') === 'long-decision'
