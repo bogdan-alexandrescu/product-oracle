@@ -1,3 +1,46 @@
+# panel-stages handoff (#1815, #1879, fix round 2: re-review NOT_YET, one major)
+
+## Merge
+- origin/main (the Nov 24 merge train, up to dcf1e64c #1881) merged into the branch, no conflict (91416774).
+  The platform's fetch was busy (503), so origin/main is as of that train; no newer main was seen.
+- Commit messages carry no Co-Authored-By line: the platform's push refuses a commit whose message carries
+  it ("foreign_author", field "message"); the branch's earlier commits have none either.
+
+## Fixed
+- Major, Roadmap's drafts (web/e2e/panel-stages.spec.ts, the move-back test): the Roadmap shows a draft as its
+  timeline row's Draft tag (data-testid draft-tag, web/app/simple/roadmap/_zoom.tsx lookOf). After Save with
+  "Planned too early" the spec checks that alert-export's row carries the tag and that the rows' tags go up by
+  one. After it is planned again, it checks that the tag is gone and the count is back. (draft-count and draft-layer
+  are the working draft's change count and the PRD draft layer; a status move touches neither.) The count is
+  taken only from timeline rows: the open panel shows a Draft tag too. Planted with web/scripts/mutate.mjs:
+  the mock's Roadmap read leaves the moved item out of the drafts (simple-roadmap.ts `draft: !!s.draft`).
+  The guard turned red at panel-stages.spec.ts:102 on a rebuilt mock ("MUTATE: OK 1/1"), and the file was restored.
+  Test-only, one commit (c4ae8f6a).
+- Minor, code_take.plan: the holder's code is read with service.coded_title, as the item's own is (d1cd0e18).
+  Both use the same regex, so behaviour is unchanged. test_panel_stages + test_unique_item_codes pass.
+
+## Not done (said so)
+- Minor, timing test: tests/test_simple_roadmap_speed.py::test_reads_answer_within_budget is flaky in the
+  container (the reviewer saw 1 of 2 fail at head and at base 771c5c633 alike). Not caused by this lane;
+  not rerun this round. The earlier round's timing run had no verdict.
+- Minor, "Use <word>" when the item's feature has no code (_fields.tsx:412-420): the guard is one line, but a
+  test that fails without it needs new mock data (a feature with no code), so it is left for a later pass.
+- Carried from round 1: history wording ("<name> moved X back to Draft: <reason>"; changing it changes visible
+  words in the API and the mock), the lazy ChangeError imports in stages.py and code_take.py (changes.py
+  imports these modules, so a top-level import is circular), and the read check that a draft's plan data is
+  hidden (what "hidden" covers is not stated in what this lane has, so no test was written).
+- Owner question (Planned on an item done only in its tracker: refused, as built) is written to this
+  round's questions.json artifact, non-blocking, built "Refuse it in plain words".
+
+## Gates (this round)
+- Playwright e2e/panel-stages.spec.ts --retries=0 on a fresh mock build: 6 passed.
+- pytest tests/test_panel_stages.py tests/test_unique_item_codes.py -n 2: 22 passed.
+- ruff check + format --check: All checks passed, 1776 files already formatted.
+- pyright: `pyright: 1267 errors, baseline 1267`, exit 0.
+- web tsc exit 0; `npm run lint` exit 0; `npm run format:check` "All matched files use Prettier code style!".
+- Prose guard: not run, no visible word changed. Alembic: no migration. docs/contracts: no YAML changed.
+- The specs that the merge brought from main were not run (main's own CI ran them).
+
 # panel-stages handoff (#1815, #1879, review fix round 1: verdict NOT_YET, four blockers, three majors)
 
 ## Fixed (each blocker and major in verdict.json)
