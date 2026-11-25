@@ -16,6 +16,14 @@
 - Web red-first: `node scripts/mutate.mjs` with the API's old rule (`x.name || x.email`) planted in the mock's
   meetings members (`web/lib/api/mock/server.ts`): baseline green, mutant red, file restored
   ("MUTATE: OK 1/1"; spec and logs in artifacts: mut-1763.json, mutate-1763-*.log).
+- Gates this round: ruff and ruff format clean on the touched files. The 44 meetings/decisions/walkc/dod/home/
+  read-speed/module-size files: 323 passed, 1 skipped. Pyright vs baseline: 1267 = 1267, check exit 0.
+  test_frozen_migrations: 8 passed. One alembic head (0139). Timing (-m timing, -n 3): 417 passed, 2 over budget
+  under -n 3 contention; serial, `test_simple_roadmap_speed.py::test_reads_answer_within_budget` is over budget on
+  base 771c5c633 too (0.38-0.43 s on both machines' runs), so machine noise, not this change.
+- Whole API suite, run in chunks (-n 6; one run is past the 10-minute command limit): first 132 files 2229
+  passed; then 600 files in 8 chunks of 75 ($TMPDIR/q_00..07, from `ls tests/test_*.py`): q_00 1088 passed,
+  q_01 973 passed, q_02 1254 passed. CHUNKS_LEFT
 - Left as is (minors in verdict.json): the zone-state spec title, the X-Company-Time-Zone-State header (not a
   fix item), Plan's Documents tab, the repeated One-pagers title.
 
