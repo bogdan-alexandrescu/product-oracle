@@ -1,4 +1,50 @@
-# names-wording handoff (#1763, #1787, #1721; fix round 1: review NOT_YET, two blockers, one major)
+# names-wording handoff (#1763, #1787, #1721)
+
+## Fix round 3 (re-review NOT_YET: two blockers, one major), Nov 25
+- Merged origin/main (dcf1e64ce, the Nov 24 merge train) first: clean, no conflict (VersionView.tsx
+  auto-merged). PUSH NOT DONE: the platform's push tool refuses every commit whose message carries
+  the Co-Authored-By trailer the brief requires ("foreign_author ... its message carries attribution").
+  The commits are on the local branch for the worker to publish.
+- Blocker 1 (pinned roadmap digests): re-pinned the five views in `api/tests/test_simple_roadmap_speed.py`
+  and the two roadmap views in `test_simple_read_speed.py`. JSON diff of each body, main dcf1e64ce vs head
+  (artifacts roadmap-digest-diff.txt, read-speed-digest-diff.txt): the only changes are
+  `items[].owner.name` and `items[].decided_in[].decided_by.name` going from "x@example.com" to "X".
+  Order and every other field are the same. The digests include this round's owner-name change (major 3).
+- Blocker 2 (Decisions runs): red test `test_simple_decisions_runs.py::test_runs_group_names_a_member_without_a_name`
+  (red: 'approver@example.com' == 'Approver'), then `oracle/runs/reads.py::_people_named` names through
+  display_name (API-token-name fallback kept). `test_run_decisions.py` re-pinned 3 no-name members
+  (admin -> "Admin", viewer.console -> "Viewer Console"). Web: `people-by-name.spec.ts` gained a run-stop test
+  (scenario run-decisions; "Approver (approver)" shown, the email never). mutate.mjs planting `name || email`
+  in the mock's run names (server.ts runGroupsOut call): "MUTATE: OK 1/1".
+- Major 3 (name maps): red test `tests/test_people_by_name_maps.py` (behaviour of changes/questions/goal_buckets/
+  rebuilds `_names`, rebuilds `_owner_name`, goal_map `_who`; plus a guard that none of the listed files
+  still writes `name or email`), then every listed line goes through display_name. A new `names_of`
+  helper in oracle/members/names.py keeps changes.py and drafts.py under their module-size limits
+  (entries lowered 2610 -> 2609, 2125 -> 2120). Tests that expected the bare email now expect the name:
+  priorities_api (2), roadmap_decide, dod_engine_cells_api, targets_api (stale_before x6), roadmap_draft_prds,
+  removed_tracks and track_order (their who() helper). pyright baseline 1267 -> 1265 (two gone).
+  NOT changed (not listed by the review): oracle/simple/drafts.py:~631 `users[i].name or users[i].email`.
+- Minors: people-by-name Home check now asserts "N attendees: ... Approver" is shown; company-zone-state
+  spec title now "said once, in the page tip". LEFT on purpose: the X-Company-Time-Zone-State header
+  (not a fix item), Plan's "Documents" tab (owner question, built as recommended), Simple One-pagers'
+  repeated title (another page, a later pass).
+
+## Gates this round
+- ruff check / format --check: clean on every touched api file.
+- pytest: all 158 test_simple_*/rebuild*/goal_map*/one_pager* files in 4 chunks (-n 3), then the failing
+  files again: all green except the timing tests, which also fail on unchanged main in this container
+  (test_simple_roadmap_card card_fields_keep_the_read_bulk, test_simple_roadmap_api 500_items,
+  test_simple_roadmap_speed within_budget: main 0.73/0.43/0.54 s vs head 0.83/0.36/0.45 s); CI runs them alone.
+  test_module_size, test_people_by_name_maps, test_run_decisions, test_stop_answers, test_runs_delivery green.
+- pyright baseline: "pyright: 1265 errors, baseline 1265", exit 0.
+- web: tsc exit 0; `npm run lint` exit 0; prettier --check on the two touched specs clean.
+- Playwright (--retries=0, mock build): people-by-name.spec.ts 2 passed; company-zone-state.spec.ts 2 passed.
+- Prose guard NOT RUN: no visible word changed (test-only web changes).
+- Whole API suite: see "Suite chunks" below for what ran; anything not listed there did NOT run.
+
+## Suite chunks (the other 619 test files, 8 chunks $TMPDIR/rq_00..07)
+- (filled in as they run)
+
 
 ## This round
 - #1763 is fixed on this branch. Red test restored first (`api/tests/test_simple_meeting_names.py`, red on
