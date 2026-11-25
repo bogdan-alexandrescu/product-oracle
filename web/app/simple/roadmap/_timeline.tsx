@@ -1520,6 +1520,8 @@ export function Chart({
                   <g
                     key={m.id}
                     data-testid="track-milestone"
+                    data-track-milestone={m.id}
+                    tabIndex={-1}
                     data-row={mk.row}
                     data-keep-clear
                     transform={`translate(${mk.x}, ${cy})`}

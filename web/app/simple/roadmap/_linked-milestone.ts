@@ -1,6 +1,8 @@
 // build-palette (#1794): /simple/roadmap?milestone=<id> opens that milestone's own card, once per
 // link (the palette's Enter on a milestone); the card closed, the address drops it, so a reload
-// does not open it again and the same link opens it anew.
+// does not open it again and the same link opens it anew. A track's milestone: the link brings its
+// mark into view and opens its card where the chart has one (else puts the focus on the mark),
+// then drops from the address.
 import { useEffect, useRef } from 'react';
 
 import { useSearchParams } from '@/lib/nav';
@@ -13,6 +15,8 @@ export function useLinkedMilestone(
   ready: boolean,
   /** Any pick that hides the linked milestone is put aside. */
   widen: () => void,
+  /** The roadmap's track milestones (each drawn as a mark with its id). */
+  tracks: { id: string }[] = [],
 ): void {
   const asked = useSearchParams().get('milestone');
   const opened = useRef<string | null>(null);
@@ -27,7 +31,18 @@ export function useLinkedMilestone(
     }
     if (!ms || !ready || opened.current === asked) return;
     const m = ms.list.find((x) => x.id === asked);
-    if (m) {
+    const mark = tracks.some((t) => t.id === asked)
+      ? document.querySelector<HTMLElement | SVGElement>(`[data-track-milestone="${asked}"]`)
+      : null;
+    if (mark) {
+      opened.current = asked;
+      mark.scrollIntoView({ block: 'center', inline: 'center' });
+      if (mark instanceof HTMLButtonElement) mark.click();
+      else mark.focus();
+      const next = new URL(window.location.href);
+      next.searchParams.delete('milestone');
+      window.history.replaceState(window.history.state, '', next);
+    } else if (m) {
       opened.current = asked;
       shown.current = false;
       ms.edit(m);

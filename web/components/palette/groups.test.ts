@@ -19,6 +19,7 @@ const index = indexHits({
   goals: [{ id: 'g1', name: 'Growth', measure: 'sign-ups' }],
   key_results: [{ id: 'k1', name: 'Sign-ups per rep per day', goal: 'Growth', goal_id: 'g1' }],
   milestones: [{ id: 'm1', code: 'M3', name: '50 sign-ups per rep', date: 'Dec 2' }],
+  features: [],
 });
 const all = [...features, ...index];
 const ask: Hit = { key: 'a-ask', kind: 'Action', name: 'Ask Oracle', where: '' };

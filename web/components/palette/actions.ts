@@ -66,6 +66,7 @@ export function noMatchChoices(
 
 /** Tab on a feature: its own actions. */
 export function featureActions(h: Hit, onPanel: (h: Hit, onRoadmap?: boolean) => void): Hit[] {
+  const named = [h.code, h.name].filter(Boolean).join(' ');
   return [
     {
       key: 'x-open',
@@ -84,9 +85,9 @@ export function featureActions(h: Hit, onPanel: (h: Hit, onRoadmap?: boolean) =>
     {
       key: 'x-ask',
       kind: 'Action',
-      name: `Ask Oracle about ${h.code} ${h.name}`,
+      name: `Ask Oracle about ${named}`,
       where: 'Opens beside the page',
-      run: () => askWith(`Tell me about ${h.code} ${h.name}`),
+      run: () => askWith(`Tell me about ${named}`),
     },
   ];
 }

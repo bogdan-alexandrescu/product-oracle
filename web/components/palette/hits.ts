@@ -51,26 +51,37 @@ type Item = Pick<
   track?: { title: string } | null;
 };
 
-/** The roadmap's features: each with its code and name, its track (else its PRD) and status. */
+/** The roadmap's features: each with its code (none yet: its name alone) and name, its track (else
+ * its PRD) and status. */
 export function featureHits(items: Item[]): Hit[] {
   return items
-    .filter((i) => !!i.code && !i.merged_into)
+    .filter((i) => !i.merged_into)
     .map((i) => ({
       key: `f-${i.id}`,
       kind: 'Feature' as const,
-      code: i.code!,
+      code: i.code || undefined,
       name: i.title,
       where: [i.track?.title || i.prd?.title || 'Roadmap', word(i.status)]
         .filter(Boolean)
         .join(' · '),
-      feature: { id: i.id, code: i.code!, name: i.title, prd: i.prd ?? null },
+      feature: { id: i.id, code: i.code ?? '', name: i.title, prd: i.prd ?? null },
     }));
 }
 
-/** PRDs, goals, key results and milestones, each opening where it lives. */
+/** PRDs, goals, key results, milestones and the Ground Truth features on no roadmap, each opening
+ * where it lives. */
 export function indexHits(p: Schemas['PaletteOut'] | undefined): Hit[] {
   if (!p) return [];
   return [
+    // On no roadmap, so no item panel: its own place on the Ground Truth.
+    ...p.features.map((f) => ({
+      key: `e-${f.id}`,
+      kind: 'Feature' as const,
+      code: f.code || undefined,
+      name: f.name,
+      where: 'Ground Truth',
+      href: `/ground-truth?entity=${f.id}`,
+    })),
     ...p.prds.map((d) => ({
       key: `d-${d.id}`,
       kind: 'PRD' as const,
@@ -98,7 +109,7 @@ export function indexHits(p: Schemas['PaletteOut'] | undefined): Hit[] {
       code: m.code || undefined,
       name: m.name,
       where: ['Roadmap', m.date].filter(Boolean).join(' · '),
-      // Its own card on the Roadmap, opened by address (useLinkedMilestone).
+      // Its own card on the Roadmap, opened by address (useLinkedMilestone); a track's, its mark.
       href: `/simple/roadmap?milestone=${m.id}`,
     })),
   ];

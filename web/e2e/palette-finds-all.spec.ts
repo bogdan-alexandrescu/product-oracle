@@ -13,11 +13,11 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-test('A track milestone is found by its code and Enter brings its mark into view', async ({
+test('A track milestone is found by its code and Enter opens its card on the Roadmap', async ({
   page,
 }) => {
   // protects: a roadmap code only a track milestone holds ("Beta") is a palette row
-  // fails_when: typing its code gives Nothing matches, or Enter does not reach its mark
+  // fails_when: typing its code gives Nothing matches, or Enter does not open its card
   await signIn(page, ADMIN.email, '/simple');
   await pressFind(page);
   await paletteBox(page).fill('Beta');
@@ -28,7 +28,7 @@ test('A track milestone is found by its code and Enter brings its mark into view
   await expect(rows(page).filter({ hasText: 'Beta' })).toHaveCount(1);
   await page.keyboard.press('Enter');
   await expect(palette(page)).toBeHidden();
-  await expect(page.locator('[data-track-milestone]:focus')).toHaveCount(1);
+  await expect(page.getByTestId('timeline-milestone-card')).toContainText('Beta');
   await expect(page).toHaveURL(/\/simple\/roadmap$/);
 });
 
