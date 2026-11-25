@@ -6874,6 +6874,22 @@ function leave() {
 
 if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
 
+/**
+ * draw-time (#1870): each call is answered in a turn of its own, so a page's burst of reads lets it
+ * draw and take a click between two answers, as reads of a server do (a message, not a timer: a
+ * spec's stopped clock never holds it).
+ */
+const turns: (() => void)[] = [];
+const turn = typeof MessageChannel === 'undefined' ? null : new MessageChannel();
+if (turn) turn.port1.onmessage = () => turns.shift()?.();
+function ownTurn(): Promise<void> {
+  if (!turn) return Promise.resolve();
+  return new Promise((r) => {
+    turns.push(r);
+    turn.port2.postMessage(null);
+  });
+}
+
 /** qa-nov17: a seeded item that is a Ground Truth feature (SeedItem.gt_key) is linked to it (RoadmapItem.feature_id), as the API serves it. */
 function linkSeededFeatures(db: Db): void {
   for (const it of db.simple_roadmap?.items ?? []) {
@@ -16317,7 +16333,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     } else if (!overwrites && (!chatPoll || readerWrote)) save(db);
     return res;
   };
-  const next = queue.then(answer).finally(leave);
+  const next = queue.then(ownTurn).then(answer).finally(leave);
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   const prefix = slow?.endsWith('*') ? slow.slice(0, -1) : null;

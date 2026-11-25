@@ -24,6 +24,51 @@ export type MockBody<P extends MockPath, M extends MockMethod> = {
     : never;
 }[keyof Responses<P, M>];
 
+/**
+ * draw-time (#1870): a JSON answer that keeps its text. A plain Response turns its text into bytes and
+ * back for each of its copies (lib/api/shared-reads makes two), about 45 ms of the page's own thread
+ * for the 500-item roadmap's 1.1 MB, which a server's answer never takes.
+ */
+class JsonReply extends Response {
+  #text: string;
+  #used = false;
+  constructor(text: string, init: ResponseInit) {
+    super(null, init);
+    this.#text = text;
+  }
+  #take(): string {
+    if (this.#used) throw new TypeError('body stream already read');
+    this.#used = true;
+    return this.#text;
+  }
+  override get bodyUsed() {
+    return this.#used;
+  }
+  override get body() {
+    return new Response(this.#text).body;
+  }
+  override async text() {
+    return this.#take();
+  }
+  override async json() {
+    return JSON.parse(this.#take());
+  }
+  override async arrayBuffer() {
+    return new Response(this.#take()).arrayBuffer();
+  }
+  override async blob() {
+    return new Response(this.#take(), { headers: this.headers }).blob();
+  }
+  override clone(): Response {
+    if (this.#used) throw new TypeError('body already used');
+    return new JsonReply(this.#text, {
+      status: this.status,
+      statusText: this.statusText,
+      headers: this.headers,
+    });
+  }
+}
+
 /** A success reply of `path` + `method` whose body must match the schema. */
 export function reply<P extends MockPath, M extends MockMethod>(
   path: P,
@@ -31,9 +76,10 @@ export function reply<P extends MockPath, M extends MockMethod>(
   body: MockBody<P, M>,
   status = 200,
 ): Response {
-  return new Response(body === undefined ? null : JSON.stringify(body), {
+  if (body === undefined) return new Response(null, { status });
+  return new JsonReply(JSON.stringify(body), {
     status,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json' },
   });
 }
 
