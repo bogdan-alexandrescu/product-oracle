@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from '../lib/api/mock/server';
+
 import { login, openSection } from './helpers';
 import { expect, test } from './test';
 
