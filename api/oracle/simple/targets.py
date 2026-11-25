@@ -9,7 +9,8 @@ its rules.
 (oracle.simple.service.can_decide: an owner, the roadmap's decider, else its owner apply;
 approvers and commenters propose to the decider, else the roadmap's owner, else the
 company's owners). An action item under no item is an owner's: others propose to the
-company's owners. A proposal writes nothing, an add creates no row, until accepted.
+company's owners. An action item's owner changes and closes it (#1817). A proposal
+writes nothing, an add creates no row, until accepted.
 
 **Ops** (``before``: the fields as the caller saw them; ``after``: what is written):
 
@@ -889,6 +890,12 @@ async def create(
     the meeting does not review is a proposal for the item's decider."""
     me, now = changes._me(principal), company_time.now()
     entry, applies, routed = await _who(db, principal, body.target.get("item_id"), body.op)
+    if not applies and body.op in ("edit_action_item", "set_action_item_status"):
+        # #1817: an action item's owner changes or closes it.
+        from oracle.simple.meeting_actions import may_close
+
+        if await may_close(db, principal, body.target):
+            applies, routed = True, []
     if entry is None and KIND.get(body.op) == "override" and body.target.get("feature_id"):
         # prio-company (Nov 4): moving a feature not on the company roadmap adds it there,
         # an owner's right; then the move is the item's.

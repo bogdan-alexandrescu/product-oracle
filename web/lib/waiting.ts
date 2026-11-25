@@ -120,7 +120,8 @@ export function drawnOnHome(
       (inbox.rituals ?? []).filter((r) => r.counts && (r.state === 'new' || r.state === 'open'))
         .length +
       (inbox.metrics ?? []).filter((m) => m.counts).length +
-      (inbox.requests ?? []).filter((r) => r.counts).length,
+      (inbox.requests ?? []).filter((r) => r.counts).length +
+      (inbox.simple_action_items ?? []).length,
   };
   return (Object.keys(counted) as (keyof DrawnOnHome)[]).reduce(
     (n, k) => n + Math.min(counted[k], here[k]),

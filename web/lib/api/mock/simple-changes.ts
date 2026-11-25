@@ -23,6 +23,7 @@
  * owners' to apply and others' to propose, kept in `db.targets` and undone like the rest.
  */
 import type { Schemas } from '@/lib/api/client';
+import { ownsActionItem } from './action-items';
 import { mockNowMs } from './clock';
 import { draftDecisionNotes } from './decision-notes';
 import { stableUuid } from './ids';
@@ -533,6 +534,18 @@ function roadmapOfDoc(db: SimpleDb, docId: unknown): string | undefined {
 }
 
 /** Whether the caller applies a change to this item (service.can_decide); no item: owners. */
+/** #1817: an action item's owner changes or closes it (targets.create, meeting_actions.may_close). */
+function closesActionItem(
+  db: SimpleDb,
+  ctx: SimpleChangesCtx,
+  body: Schemas['SimpleChangeIn'],
+): boolean {
+  return (
+    ['edit_action_item', 'set_action_item_status'].includes(body.op) &&
+    ownsActionItem(db, body.target ?? {}, ctx.id)
+  );
+}
+
 function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean {
   const key = itemId ? keyOf(db, itemId) : undefined;
   return key ? canDecideItem(db, seed(db, key), ctx) : ctx.role === 'owner';
@@ -1491,7 +1504,10 @@ function createTarget(
   if (target.item_id && !keyOf(db, target.item_id))
     return json(404, { detail: 'No such roadmap item' });
   // A feature ask is filed directly by every commenter and up (targets.py _who).
-  const applies = body.op === 'add_feature_ask' || decides(db, ctx, target.item_id);
+  const applies =
+    body.op === 'add_feature_ask' ||
+    decides(db, ctx, target.item_id) ||
+    closesActionItem(db, ctx, body);
   // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
   const ranking = body.op === 'override_priority' || body.op === 'estimate_feature';
   if (ranking && !target.item_id) {
@@ -2513,7 +2529,7 @@ async function create(
       : null;
   const applies = cutAll
     ? cutAll.every((id) => decides(db, ctx, id))
-    : decides(db, ctx, target.item_id);
+    : decides(db, ctx, target.item_id) || closesActionItem(db, ctx, body);
   let session: Session | undefined;
   if (body.session_id) {
     session = (db.sessions ?? []).find((s) => s.id === body.session_id && s.started_by === ctx.id);

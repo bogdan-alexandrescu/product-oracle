@@ -43,6 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from '@/lib/api/client';
+import { meetingActionItems, recordActionItems } from './action-items';
 import {
   agendaOut,
   decidedOutsideRows,
@@ -1111,6 +1112,10 @@ function one(
       (i) => ref(ctx, i),
     ),
     minutes: m.minutes,
+    action_items:
+      m.minutes_state === 'sent'
+        ? meetingActionItems(ctx.roadmap, m.id, ctx.me, (i) => nameOf(ctx, i))
+        : [],
     minutes_job:
       m.status === 'ended' && m.minutes_state === 'drafting' ? (m.minutes_job ?? 'drafting') : null,
     delivery: deliveryOut(ctx, m),
@@ -2465,6 +2470,7 @@ export async function routeSimpleMeetings(
             owner_name: owner ? nameOf(ctx, owner) : null,
             due_date: a.due_date ?? null,
             action_item_id: a.action_item_id ?? null,
+            item_id: a.item_id ?? null,
           };
         }),
       waits: m.minutes?.waits ?? [],
@@ -2527,6 +2533,8 @@ export async function routeSimpleMeetings(
     m.minutes_state = 'sent';
     m.minutes_job = null;
     m.sent_at = now;
+    // #1817 (meetings.send): each action item is recorded, under its linked item.
+    recordActionItems(ctx.roadmap, m.id, m.minutes, ctx.me.id);
     return reply('/v1/simple/meetings/{meeting_id}/send', 'post', meetingBody());
   }
   return null;

@@ -1321,13 +1321,8 @@ async def send(
     # Action items through the change engine (each commits on its own), into a session
     # of the sender's: the meeting's is closed. One recorded in the meeting has its row
     # already: by its id, or by its title when a person's edit dropped the id (the review).
-    have = list(
-        await db.execute(
-            select(SimpleActionItem.id, SimpleActionItem.title).where(
-                SimpleActionItem.meeting_id == m.id
-            )
-        )
-    )
+    q = select(SimpleActionItem.id, SimpleActionItem.title)
+    have = list(await db.execute(q.where(SimpleActionItem.meeting_id == m.id)))
     ids = {str(i) for i, _ in have}
     titles = {frozenset(minutes_mod.words(t)) for _, t in have}
     for a in minutes.get("action_items") or []:
@@ -1336,9 +1331,12 @@ async def send(
             continue
         owner = a.get("owner_id") or str(_me(principal))
         try:
+            # #1817: under the item it is linked to, while that item is there.
+            item = a.get("item_id") and await db.get(RoadmapItem, uuid.UUID(a["item_id"]))
             await changes.create(db, principal, SimpleChangeIn(
                 op="add_action_item",
-                target={"meeting_id": str(m.id), "action_item_id": str(uuid.uuid4())},
+                target={"meeting_id": str(m.id), "action_item_id": str(uuid.uuid4()),
+                        **({"item_id": a["item_id"]} if item else {})},
                 before={},
                 after={"title": a["title"], "owner_id": owner, "due_date": a.get("due_date")},
             ))  # fmt: skip
