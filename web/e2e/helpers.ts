@@ -657,3 +657,17 @@ export async function searchSources(page: Page, words: string) {
   }).toPass();
   await button.click();
 }
+
+/**
+ * The Priorities line picker is settled: its milestone options carry their codes ("Milestone: M6
+ * Beta"). The picker first draws them by name alone and takes the code when the roadmap read
+ * lands, so a spec that reads the options before this finds a label that is renamed under it.
+ */
+export async function lineOptionsSettled(page: Page): Promise<void> {
+  await expect(
+    page
+      .locator('#prio-line option')
+      .filter({ hasText: /^Milestone: M\d+ / })
+      .first(),
+  ).toBeAttached();
+}

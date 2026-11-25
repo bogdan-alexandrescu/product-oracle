@@ -132,7 +132,7 @@ export const BASELINE_STALE_SCENARIO = 'baseline-stale';
 /** qa5-plan-at-risk: paid conversion carries a long name (Priorities' Goal column wraps it whole). */
 export const LONG_GOAL_SCENARIO = 'long-goal';
 export const LONG_GOAL_NAME =
-  'Growth for small teams on the yearly plan, the monthly plan and the new starter plan in every region we sell in';
+  'Growth for small teams on the yearly plan, the monthly plan and the new starter plan in every region we sell in, paid by card or by invoice';
 /**
  * priorities-words: goals and features named with long single words, as a production company's
  * ("G-B Conversion" beside its code, "(instrumentation)" in Depends on): Detailed › Priorities
