@@ -18,8 +18,8 @@ import { DOCS_ONLY, FRESHNESS, approachParts, readerText, sizeText } from '@/com
 import { Loading, LoadError } from '@/components/ui';
 import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
-import { useQuery } from '@/lib/use-query';
 import { PRD_LIST } from '@/lib/prd-list-name';
+import { useQuery } from '@/lib/use-query';
 
 type TechBrief = Schemas['TechBriefOut'];
 

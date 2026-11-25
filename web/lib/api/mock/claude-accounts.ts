@@ -18,6 +18,7 @@ import type { Schemas } from '@/lib/api/client';
 import { inWords } from '@/lib/format';
 
 import { MOCK_ZONE_STATE_KEY, mockSettingValue, mockZone } from './connections';
+import { reply } from './typed';
 
 /** #1721: the pool's own read of the zone; "pool-unavailable" fails only this read, not GET /v1/me's. */
 const poolZoneState = () =>
@@ -25,7 +26,6 @@ const poolZoneState = () =>
   localStorage.getItem(MOCK_ZONE_STATE_KEY) === 'pool-unavailable'
     ? 'unavailable'
     : mockZone().company_timezone_state;
-import { reply } from './typed';
 
 type Account = Schemas['AccountOut'];
 type Stored = Omit<Account, 'stale' | 'takes_calls' | 'spent_by' | 'spent_until'>;

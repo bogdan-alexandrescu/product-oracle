@@ -39,10 +39,10 @@ import { unwrapProblems, ProblemsError } from '@/lib/api/problems';
 import { assess, goalViews } from '@/app/home/_goals';
 import { useMe } from '@/lib/me';
 import { holdLeaving } from '@/lib/leave-guard';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { useLive } from '@/lib/use-live';
 import { errorMessage, useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
-import { PRD_LIST } from '@/lib/prd-list-name';
 
 type Kind = 'prd' | 'roadmap';
 type PrdAnswers = Schemas['PrdAnswers'];

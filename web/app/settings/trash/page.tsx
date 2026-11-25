@@ -21,8 +21,8 @@ import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { artifactsChanged } from '@/lib/artifacts';
 import { formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
-import { errorMessage, useQuery } from '@/lib/use-query';
 import { PRD_LIST } from '@/lib/prd-list-name';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
 type Entry = Schemas['TrashEntryOut'];
 

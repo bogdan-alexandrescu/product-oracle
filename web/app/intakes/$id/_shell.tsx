@@ -23,9 +23,9 @@ import { Menu, TabBar } from '@/components/review/parts';
 import { ApiError, api, unwrap } from '@/lib/api/client';
 import { plural } from '@/lib/format';
 import { useMe } from '@/lib/me';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 import { errorMessage, useQuery } from '@/lib/use-query';
-import { PRD_LIST } from '@/lib/prd-list-name';
 
 import { DraftSheet } from './_draft-sheet';
 import { FindingsTab } from './_findings';

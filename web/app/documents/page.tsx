@@ -34,10 +34,10 @@ import { formatDate, formatDateTime, plural } from '@/lib/format';
 import { docLabel } from '@/lib/labels';
 import { useArtifactsChanged } from '@/lib/artifacts';
 import { useMe } from '@/lib/me';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { sortPrds } from '@/lib/prd-order';
 import { NAMES_FAILED, useTemplateNames, type TemplateNames } from '@/lib/template-names';
 import { useQuery } from '@/lib/use-query';
-import { PRD_LIST } from '@/lib/prd-list-name';
 
 /** The one empty marker on this page (qa-docs-42). */
 const NONE = '–';
