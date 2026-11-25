@@ -23,6 +23,7 @@ import { useCompanyZone, dayIn } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import { sortPrds } from '@/lib/prd-order';
 import { errorMessage, useQuery } from '@/lib/use-query';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 import '@/components/simple/SimplePrd.css';
 
@@ -95,7 +96,7 @@ function OnePagers() {
   return (
     <SimplePage title="One-pagers">
       <SimpleSection
-        title="PRDs"
+        title={PRD_LIST}
         testId="simple-one-pagers"
         action={
           // NP1: New PRD, opening the guided sheet.
@@ -143,7 +144,7 @@ function OnePagers() {
           <SimpleEmpty testId="simple-one-pagers-empty">
             No PRDs yet. A one-pager is made from a PRD: start one in{' '}
             <Link href="/documents" className="font-semibold text-accent-ink underline">
-              Detailed › PRDs
+              Detailed › {PRD_LIST}
             </Link>
             , and its one-pager shows here.
           </SimpleEmpty>

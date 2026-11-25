@@ -25,6 +25,7 @@ import { plural } from '@/lib/format';
 import { useMe } from '@/lib/me';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 import { errorMessage, useQuery } from '@/lib/use-query';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 import { DraftSheet } from './_draft-sheet';
 import { FindingsTab } from './_findings';
@@ -176,8 +177,7 @@ export function BeforeDrafting({ id }: { id: string }) {
     if (
       !(await confirmInPage({
         action: 'Archive',
-        message:
-          'Archive this brief? It leaves PRDs › Ideas and Oracle stops asking its questions.',
+        message: `Archive this brief? It leaves ${PRD_LIST} › Ideas and Oracle stops asking its questions.`,
       }))
     )
       return;
@@ -439,7 +439,7 @@ export function BeforeDrafting({ id }: { id: string }) {
       {error && <Notice tone="error">{error}</Notice>}
       {archived && (
         <Notice testId="intake-archived">
-          This brief is archived: it has left PRDs › Ideas and Oracle asks nothing more.
+          This brief is archived: it has left {PRD_LIST} › Ideas and Oracle asks nothing more.
         </Notice>
       )}
       {phone && (
@@ -591,7 +591,7 @@ function BackToPrds() {
       className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline"
     >
       <Icon name="back" size={16} />
-      {from?.label ?? 'PRDs'}
+      {from?.label ?? PRD_LIST}
     </Link>
   );
 }

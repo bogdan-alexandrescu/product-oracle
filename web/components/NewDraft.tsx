@@ -42,6 +42,7 @@ import { holdLeaving } from '@/lib/leave-guard';
 import { useLive } from '@/lib/use-live';
 import { errorMessage, useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 type Kind = 'prd' | 'roadmap';
 type PrdAnswers = Schemas['PrdAnswers'];
@@ -1127,7 +1128,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
       className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
     >
       <Icon name="back" size={16} />
-      {kind === 'roadmap' ? 'Plan' : 'PRDs'}
+      {kind === 'roadmap' ? 'Plan' : PRD_LIST}
     </Link>
   );
 
