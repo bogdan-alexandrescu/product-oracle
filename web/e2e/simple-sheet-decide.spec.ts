@@ -19,12 +19,17 @@ async function addDecision(page: Page, title: string, decider: string) {
   await s.getByRole('textbox', { name: 'Title', exact: true }).fill(title);
   await s.getByRole('textbox', { name: 'Option 1', exact: true }).fill('Yes, through spring');
   await s.getByRole('button', { name: 'Pick' }).click();
-  await s.getByRole('group', { name: 'Who decides' }).getByRole('button', { name: decider }).click();
+  await s
+    .getByRole('group', { name: 'Who decides' })
+    .getByRole('button', { name: decider })
+    .click();
   await s.getByRole('button', { name: 'Add decision' }).click();
   await expect(s).toHaveCount(0);
 }
 
-test("a one-option decision opened from Home is decided on Simple's sheet", async ({ page }) => {
+test("a one-option decision opened from Home is decided on Simple's sheet, never Detailed", async ({
+  page,
+}) => {
   await login(page);
   await addDecision(page, 'Keep the example beta open', 'Avery Stone');
 
@@ -33,7 +38,21 @@ test("a one-option decision opened from Home is decided on Simple's sheet", asyn
   await row.getByRole('link', { name: 'Open' }).click();
   const s = sheet(page);
   await expect(s).toContainText('Keep the example beta open');
-  await s.getByRole('button', { name: 'Decide: Yes, through spring' }).click();
+  // One option: the decide call needs two, so Decide waits until Edit adds one.
+  const decide = s.getByRole('button', { name: 'Decide', exact: true });
+  await expect(decide).toBeDisabled();
+  await s.getByRole('button', { name: 'Edit' }).click();
+  await s.getByRole('button', { name: '+ Add an option' }).click();
+  await s.getByRole('textbox', { name: 'Option 2', exact: true }).fill('No, close it in winter');
+  await s.getByRole('button', { name: 'Save' }).click();
+  await expect(s).toHaveCount(0);
+
+  await page.getByTestId('decision-open').filter({ hasText: 'Keep the example beta open' }).click();
+  await decide.click();
+  await s
+    .getByRole('group', { name: 'Decide' })
+    .getByRole('button', { name: 'Yes, through spring' })
+    .click();
 
   await expect(s.getByTestId('decision-sheet-decided')).toHaveText('Decided: Yes, through spring');
   await expect(s.getByRole('button', { name: 'Edit' })).toHaveCount(0);
@@ -45,7 +64,8 @@ test("a one-option decision opened from Home is decided on Simple's sheet", asyn
   ).toHaveCount(0);
 
   await page.goto('/simple');
-  await expect(page.getByTestId('home-decision').first()).toBeVisible();
+  // Home has loaded (its PRD questions show) and no longer lists the decision.
+  await expect(page.getByRole('button', { name: 'Decide as recommended' }).first()).toBeVisible();
   await expect(
     page.getByTestId('home-decision').filter({ hasText: 'Keep the example beta open' }),
   ).toHaveCount(0);
