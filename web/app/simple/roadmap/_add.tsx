@@ -3,6 +3,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { Button, Icon, Sheet } from '@/components/ds';
+import { lastUsed, rememberUsed, useNewItemAsk } from '@/components/palette/events';
 
 import { mark, trackAt, whereAt } from './_add-drop';
 import { AddForm } from './_add-form';
@@ -88,6 +89,7 @@ export function QuickAdd({
       return;
     }
     if (await onAdd(t, where, chosen, onTrack)) {
+      rememberUsed({ roadmap: chosen, track: onTrack });
       setTitle('');
       setTried(false);
       trk.setInvalid(false);
@@ -102,6 +104,30 @@ export function QuickAdd({
     if (title.trim() && ask && !chosen) picker.current?.focus();
     if (ready && options[0]) void send(options[0]);
   };
+
+  // build-palette (#1794): the palette's New item hands its words here; with "new …" typed, an
+  // editor's item is added at once on the roadmap and track used last (else the first).
+  const titleBox = useRef<HTMLInputElement>(null);
+  useNewItemAsk(options.length > 0, (a) => {
+    const last = lastUsed();
+    const lastRm = roadmaps.find((r) => r.id === last.roadmap)?.id;
+    const lastTrack = tracks.find((t) => t.id === last.track)?.id;
+    const r = ask ? (lastRm ?? (a.add ? roadmaps[0]?.id : undefined)) : undefined;
+    const k = lastTrack ?? trk.picked ?? (a.add ? tracks[0]?.id : undefined);
+    const where = options[0];
+    const onTrack = where.kind === 'track' ? where.value : k;
+    if (a.add && (!ask || r) && (!trk.ask || onTrack)) {
+      void onAdd(a.title, where, r, onTrack).then((ok) => {
+        if (ok) rememberUsed({ roadmap: r, track: onTrack });
+      });
+      return;
+    }
+    setTitle(a.title);
+    if (r) setRm(r);
+    if (k) trk.setValue(k);
+    if (phone) setSheet(true);
+    else setTimeout(() => titleBox.current?.focus(), 0);
+  });
 
   const onDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
@@ -170,6 +196,7 @@ export function QuickAdd({
         if (k) trk.setValue(k);
         const ok = await onAdd(t, w, r, k ?? trk.only);
         if (ok) {
+          rememberUsed({ roadmap: r, track: k ?? trk.only });
           setTitle('');
           setSheet(false);
         }
@@ -230,6 +257,7 @@ export function QuickAdd({
       {trk.ask && <TrackPick {...trk.props} />}
       <input
         id="quick-add-title"
+        ref={titleBox}
         value={title}
         maxLength={200}
         // qa-shell-24, fix4 qa-simple-roadmap-49: short enough to show whole with Ask open; the full words in its title.

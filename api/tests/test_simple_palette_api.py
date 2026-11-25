@@ -95,6 +95,7 @@ async def test_every_role_reads_the_index(client, role):
     assert goals["Growth"]["measure"] == "sign-ups per rep"
     krs = {k["name"]: k for k in body["key_results"]}
     assert krs["Sign-ups per rep per day"]["goal"] == "Growth"
+    assert krs["Sign-ups per rep per day"]["goal_id"] == goals["Growth"]["id"]
     ms = {m["name"]: m for m in body["milestones"]}
     assert ms["50 sign-ups per rep"]["code"] == "M3"
     assert ms["50 sign-ups per rep"]["date"] == "Dec 2"

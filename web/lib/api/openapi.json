@@ -103498,13 +103498,26 @@
           "goal": {
             "type": "string",
             "title": "Goal"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "goal"
+          "goal",
+          "goal_id"
         ],
         "title": "PaletteKeyResult"
       },

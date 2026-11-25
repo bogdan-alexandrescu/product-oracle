@@ -38,6 +38,7 @@ class PaletteKeyResult(BaseModel):
     id: uuid.UUID
     name: str
     goal: str
+    goal_id: uuid.UUID | None
 
 
 class PaletteMilestone(BaseModel):
@@ -86,7 +87,12 @@ async def get_palette(principal: Reader, db: TenantDB) -> PaletteOut:
             for g in goals
         ],
         key_results=[
-            PaletteKeyResult(id=m.id, name=m.title, goal=names[m.goal_id] if m.goal_id else "")
+            PaletteKeyResult(
+                id=m.id,
+                name=m.title,
+                goal=names[m.goal_id] if m.goal_id else "",
+                goal_id=m.goal_id,
+            )
             for m in metrics
         ],
         milestones=[

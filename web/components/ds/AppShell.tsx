@@ -48,6 +48,7 @@ import { Icon, type IconName } from './Icon';
 import { Notice } from './Layout';
 import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
 import { usePageInfo } from './page-info';
+import { PaletteEntry } from './PaletteEntry';
 import { onRadioKeys, radioTabIndex } from './radio-keys';
 import { RAIL_SELECTED, TAB_BAR } from './rail';
 import { Sheet } from './Sheet';
@@ -764,6 +765,7 @@ function Navs() {
           <Mark size={44} tone="sky" className="block" />
         </Link>
         <ModeSwitch placement="rail" documentHome={home} />
+        <PaletteEntry where="detailed-rail" />
         {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
         {DESTINATIONS.map((d) => (
           <RailLink
@@ -1040,6 +1042,7 @@ function PhoneHeader() {
             </span>
           )}
         </span>
+        {me && <PaletteEntry where="phone-header" />}
         {me && !panelHidden(pathname) && askButton}
         {me && <UserMenu placement="header" />}
       </header>

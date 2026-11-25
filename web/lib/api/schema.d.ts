@@ -34225,6 +34225,8 @@ export interface components {
             name: string;
             /** Goal */
             goal: string;
+            /** Goal Id */
+            goal_id: string | null;
         };
         /** PaletteMilestone */
         PaletteMilestone: {

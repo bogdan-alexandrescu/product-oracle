@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, usePathname, useRouter } from '@/lib/nav';
 import {
   useCallback,
   useEffect,
@@ -14,15 +13,17 @@ import { createPortal } from 'react-dom';
 import { Mark } from '@/components/ds/Brand';
 import { Icon, type IconName } from '@/components/ds/Icon';
 import { ModeSwitch, SEGMENTED } from '@/components/ds/ModeSwitch';
+import { PaletteEntry } from '@/components/ds/PaletteEntry';
 import { TAB_BAR } from '@/components/ds/rail';
 import { Sheet } from '@/components/ds/Sheet';
 import { setPanelOpen, usePanelOpen } from '@/components/hop/open-state';
-import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
-import { useMe } from '@/lib/me';
-import { LINK_KINDS } from '@/lib/roadmap-links';
 import { api, unwrap } from '@/lib/api/client';
 import { onReadChanged, onReadFailed, STALE_OK } from '@/lib/api/shared-reads';
+import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
 import { inboxCounts } from '@/lib/inbox-counts';
+import { useMe } from '@/lib/me';
+import { Link, usePathname, useRouter } from '@/lib/nav';
+import { LINK_KINDS } from '@/lib/roadmap-links';
 import {
   onWaitingChanged,
   railInbox,
@@ -504,6 +505,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           </span>
         </Link>
         <ModeSwitch placement="wide" />
+        <PaletteEntry where="simple-rail" />
         {SIMPLE_DESTINATIONS.map((d) => {
           const n = counts?.[d.label] ?? 0;
           const failed = failedOf(d.label);

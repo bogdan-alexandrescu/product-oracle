@@ -631,6 +631,7 @@ import {
   seedStuckPrdAsk,
 } from './simple-milestones';
 import { knowPrdOrder } from './prd-rank';
+import { routePalette } from './palette';
 import { codedTitle, openDraft, roadmapId, targetRead } from './simple-roadmap';
 import {
   appliedVersionOf,
@@ -16231,6 +16232,9 @@ export async function mockFetch(req: Request): Promise<Response> {
       headers: { 'content-type': 'application/json' },
     });
   }
+  // build-palette: composed from the mock's own reads, outside the queue (./palette.ts).
+  const palette = await routePalette(req, mockFetch);
+  if (palette) return palette;
   const next = queue.then(async () => {
     const db = load();
     // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
