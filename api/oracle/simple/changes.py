@@ -115,7 +115,7 @@ from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import dates, drafts, service
+from oracle.simple import dates, drafts, service, stages
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -178,9 +178,6 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_code": ("code",),
 }
 CONFIDENCES = ("low", "medium", "high")
-# set_status: the statuses a person sets (the others come from the tracker or a merge).
-STATUSES = ("draft", "planned", "done", "cut")
-PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
 SHOWN = {
@@ -909,35 +906,8 @@ async def _plan(
         ):
             raise await _conflict(db, shown, {str(row.id)}, "Changed since you saw it")
     if op == "set_status":
-        status = body.after.get("status")
-        if status not in STATUSES:
-            raise ChangeError(422, "after.status: draft, planned, done or cut")
-        # panel-stages (#1879): any stage to any other; a move back (Done to Planned or Draft,
-        # Planned to Draft) says why, kept on the change for its history.
-        now = entry.status
-        rank = {"draft": 0, "planned": 1, "in_progress": 1, "done": 2}
-        back = now in rank and status in rank and rank[status] < rank[now]
-        why = " ".join(str(body.after.get("reason") or body.reason or "").split())
-        if back and not why:
-            raise ChangeError(422, "Say why it moves back")
-        if back:
-            target["reason"] = why[:NOTE_MAX]
-        # Planned clears only the panel's own mark: a shipped mark from elsewhere (the
-        # tracker, the item's talk) stays, so planned never undoes what the panel did not do;
-        # a move back from Done reopens it (the mark stays in this change's ``before``).
-        shipped = None if (row.shipped or {}).get("note") == PANEL_DONE else row.shipped
-        if back and now == "done":
-            shipped = None
-        if status == "done":
-            shipped = row.shipped or {
-                "note": PANEL_DONE,
-                "by": str(_me(principal)),
-                "on": company_time.today().isoformat(),
-            }
-        # Draft keeps the plan (dates, horizon, track, milestone, dependencies) stored.
-        after = {"cut": status == "cut", "shipped": shipped}
-        if status != "cut":  # a cut draft stays a draft, so Restore brings it back as one
-            after["draft"] = status == "draft"
+        # panel-stages (#1879): any stage to any other (oracle.simple.stages).
+        after = stages.status_after(entry, body, target, str(_me(principal)))
         return entry, target, read(row, tuple(after), target), after
     if op in SHOWN:
         current = seen_ = {}
