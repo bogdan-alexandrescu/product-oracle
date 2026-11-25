@@ -163,6 +163,9 @@ export function changePhrase(
     case 'set_goal_measure':
       return `changed how the goal of ${x} is measured`;
     case 'set_status':
+      // panel-stages (#1879): a move back says why.
+      if (target.reason)
+        return `moved ${x} back to ${after.draft ? 'Draft' : 'Planned'}: ${String(target.reason)}`;
       return `marked ${x} ${after.cut ? 'cut' : after.shipped ? 'done' : 'planned'}`;
     case 'set_decider':
       return `changed the decider of ${x}`;
