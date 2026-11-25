@@ -24,6 +24,7 @@ import {
 import { useAccessRequestRows } from './_access';
 import { useActed } from './_actions';
 import { BrokenLinks } from './_broken';
+import { actionItemRows } from './_action-items';
 import { minutesRows } from './_minutes';
 import {
   allNeeds,
@@ -177,6 +178,7 @@ function Inbox() {
         ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore),
         ...trackSuggestionRows(inbox.simple_track_suggestions ?? [], busy, act, seenBefore),
         ...minutesRows(inbox.simple_minutes ?? []),
+        ...actionItemRows(inbox.simple_action_items ?? [], onActed, seenBefore),
       ]
     : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;

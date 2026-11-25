@@ -58,7 +58,7 @@ async def test_action_item_reaches_its_owner_and_is_done_once(client):
     [mine] = got["simple_action_items"]
     assert (mine["id"], mine["title"], mine["due_date"], mine["item_id"]) == (
         aid, "Write the QA plan", "2026-12-01", item_id)  # fmt: skip
-    assert mine["item_title"] and mine["meeting_id"] == m["id"]
+    assert mine["item_title"] and mine["roadmap_id"] and mine["meeting_id"] == m["id"]
     assert mine["meeting_title"] == m["title"]
     assert got["total"] == before_total + 1
     assert f"action:{aid}" in await waiting_keys(client, w, "approver")

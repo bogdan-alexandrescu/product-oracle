@@ -29041,6 +29041,8 @@ export interface components {
             item_id?: string | null;
             /** Item Title */
             item_title?: string | null;
+            /** Roadmap Id */
+            roadmap_id?: string | null;
             /** Meeting Id */
             meeting_id?: string | null;
             /** Meeting Title */

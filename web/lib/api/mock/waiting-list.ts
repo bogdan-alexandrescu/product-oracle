@@ -281,6 +281,19 @@ export async function waitingItems(
           r.at ?? null,
         ),
       );
+  // #1817: my open meeting action items, closed in the Inbox.
+  for (const a of inbox?.simple_action_items ?? [])
+    out.push(
+      row(
+        `action:${a.id}`,
+        `Action item · ${a.title}`,
+        [a.due_date && `Due ${day(a.due_date)}`, a.item_title, a.meeting_title]
+          .filter(Boolean)
+          .join(' · '),
+        '/simple/inbox',
+        a.at,
+      ),
+    );
   return out;
 }
 

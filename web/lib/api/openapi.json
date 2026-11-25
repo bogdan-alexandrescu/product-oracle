@@ -89560,6 +89560,18 @@
             ],
             "title": "Item Title"
           },
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          },
           "meeting_id": {
             "anyOf": [
               {

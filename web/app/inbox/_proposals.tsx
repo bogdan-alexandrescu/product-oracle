@@ -22,7 +22,7 @@ const panelHref = (documentId: string, itemId: string) =>
   `/simple/roadmap?roadmap=${documentId}&item=${itemId}`;
 
 /** The feature's name, opening its feature panel when it is on a roadmap. */
-function FeatureName({
+export function FeatureName({
   name,
   itemId,
   documentId,

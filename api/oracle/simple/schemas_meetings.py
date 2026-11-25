@@ -718,6 +718,7 @@ class InboxSimpleActionItem(BaseModel):
     late: bool = False
     item_id: uuid.UUID | None = None
     item_title: str | None = None
+    roadmap_id: uuid.UUID | None = None
     meeting_id: uuid.UUID | None = None
     meeting_title: str | None = None
     at: dt.datetime

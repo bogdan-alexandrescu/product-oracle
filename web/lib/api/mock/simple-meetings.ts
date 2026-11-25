@@ -42,6 +42,7 @@
  * stands for S10 having drawn one for Team invite nudges. A scheduled review has at most one
  * meeting (409 naming it).
  */
+import { recordActionItems } from './action-items';
 import type { Schemas } from '@/lib/api/client';
 import {
   agendaOut,
@@ -2465,6 +2466,7 @@ export async function routeSimpleMeetings(
             owner_name: owner ? nameOf(ctx, owner) : null,
             due_date: a.due_date ?? null,
             action_item_id: a.action_item_id ?? null,
+            item_id: a.item_id ?? null,
           };
         }),
       waits: m.minutes?.waits ?? [],
@@ -2527,6 +2529,8 @@ export async function routeSimpleMeetings(
     m.minutes_state = 'sent';
     m.minutes_job = null;
     m.sent_at = now;
+    // #1817 (meetings.send): each action item is recorded, under its linked item.
+    recordActionItems(ctx.roadmap, m.id, m.minutes, ctx.me.id);
     return reply('/v1/simple/meetings/{meeting_id}/send', 'post', meetingBody());
   }
   return null;

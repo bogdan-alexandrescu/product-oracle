@@ -64,6 +64,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             late=r.due_date is not None and r.due_date < today,
             item_id=r.item_id,
             item_title=titles.get(r.item_id, r.item_key) if r.item_id else None,
+            roadmap_id=r.roadmap_document_id,
             meeting_id=r.meeting_id,
             meeting_title=meetings.get(r.meeting_id) if r.meeting_id else None,
             at=r.created_at,
