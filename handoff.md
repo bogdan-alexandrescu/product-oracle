@@ -23,7 +23,7 @@
   base 771c5c633 too (0.38-0.43 s on both machines' runs), so machine noise, not this change.
 - Whole API suite, run in chunks (-n 6; one run is past the 10-minute command limit): first 132 files 2229
   passed; then 600 files in 8 chunks of 75 ($TMPDIR/q_00..07, from `ls tests/test_*.py`): q_00 1088 passed,
-  q_01 973 passed, q_02 1254 passed. CHUNKS_LEFT
+  q_01 973 passed, q_02 1254 passed, q_03 1163 passed; q_04 reached 87% with no failure before the time limit killed it. NOT RUN (out of time): the rest of q_04 and q_05..q_07 (about 260 files): the next lane or CI runs them.
 - Left as is (minors in verdict.json): the zone-state spec title, the X-Company-Time-Zone-State header (not a
   fix item), Plan's Documents tab, the repeated One-pagers title.
 
