@@ -3,7 +3,6 @@
  * into openapi-fetch as its `fetch`, so pages call the typed client exactly as they
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
-import { actionItemRows } from './action-items';
 import type { Schemas } from '@/lib/api/client';
 import { addMonths, todayIn } from '@/lib/dates';
 import { sectionDiff } from '@/lib/diff';
@@ -11,6 +10,7 @@ import { inboxCounts } from '@/lib/inbox-counts';
 import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
+import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';

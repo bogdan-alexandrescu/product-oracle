@@ -39,7 +39,7 @@ test('an action item reaches its owner, who marks it done once', async ({ page }
   await minutes.getByLabel('Due date of action item 1').fill('2026-12-02');
   const link = minutes.getByLabel('Linked item of action item 1');
   const option = link.locator('option', { hasText: 'Setup checklist' });
-  await link.selectOption((await option.getAttribute('value'))!);
+  await link.selectOption((await option.getAttribute('value')) ?? '');
   await minutes.getByRole('button', { name: 'Save minutes' }).click();
   await expect(minutes.getByRole('button', { name: 'Save minutes' })).toBeDisabled();
   await page

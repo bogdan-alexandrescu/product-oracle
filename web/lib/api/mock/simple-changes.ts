@@ -22,8 +22,8 @@
  * Non-versioned targets (item tasks, action items, priority overrides, launch tasks) are
  * owners' to apply and others' to propose, kept in `db.targets` and undone like the rest.
  */
-import { ownsActionItem } from './action-items';
 import type { Schemas } from '@/lib/api/client';
+import { ownsActionItem } from './action-items';
 import { mockNowMs } from './clock';
 import { draftDecisionNotes } from './decision-notes';
 import { stableUuid } from './ids';

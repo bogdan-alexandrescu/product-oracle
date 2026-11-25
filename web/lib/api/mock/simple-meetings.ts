@@ -42,8 +42,8 @@
  * stands for S10 having drawn one for Team invite nudges. A scheduled review has at most one
  * meeting (409 naming it).
  */
-import { recordActionItems } from './action-items';
 import type { Schemas } from '@/lib/api/client';
+import { recordActionItems } from './action-items';
 import {
   agendaOut,
   decidedOutsideRows,

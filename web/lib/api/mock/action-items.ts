@@ -1,6 +1,7 @@
-import type { Schemas } from '../client';
 import { mockNowMs } from './clock';
 import { roadmapId, type SimpleDb } from './simple-roadmap';
+
+import type { Schemas } from '../client';
 
 type Row = Schemas['InboxSimpleActionItem'];
 type Minutes = Schemas['SimpleMinutes'];
