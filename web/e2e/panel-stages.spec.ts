@@ -120,3 +120,33 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await panel(page).getByTestId('card-status-edit').getByRole('button', { name: 'Save' }).click();
   await expect(panel(page).getByTestId('card-status')).toHaveText('Planned');
 });
+
+test("an item takes its feature's code and the item that had it a new number, with one Undo", async ({
+  page,
+}) => {
+  // protects=Use F-01 in the Code row gives this item the feature's code at once and the item
+  // that read it the next free number; Undo puts both back; fails_when=no such action, both read
+  // F-01, or the old code still shows; no_claim=a commenter's proposal (pytest).
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
+    MOCK_SCENARIO_KEY,
+    UNIQUE_CODES_SCENARIO,
+  ] as const);
+  await login(page);
+  await page.goto('/simple/roadmap');
+  await openRoadmapItem(page, 'setup-import');
+  await expect(panel(page).getByTestId('card-code-text')).toHaveText('F-88');
+  await panel(page).getByTestId('card-code-take').click();
+  await expect(panel(page).getByTestId('card-code-text')).toHaveText('F-01', { timeout: 1500 });
+  await expect(toasts(page)).toContainText(/Code changed/);
+  const other = async () => {
+    await page.keyboard.press('Escape');
+    await openRoadmapItem(page, 'setup-checklist');
+    return panel(page).getByTestId('card-code-text');
+  };
+  await expect(await other()).toHaveText(/^F-\d+$/);
+  await expect(await other()).not.toHaveText('F-01');
+  await toasts(page).getByRole('button', { name: 'Undo' }).click();
+  await expect(toasts(page)).toContainText('Undone');
+  await expect(await other()).toHaveText('F-01');
+});

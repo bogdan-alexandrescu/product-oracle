@@ -151,6 +151,9 @@ export function changePhrase(
       return `changed the goal of ${x}`;
     case 'set_code':
       return target.code ? `gave ${x} the code ${target.code}` : `took the code off ${x}`;
+    // code_take.phrase (#1815 5).
+    case 'take_feature_code':
+      return `gave ${x} the code ${target.code}${target.other ? `; ${target.other} is now ${target.new_code}` : ''}`;
     case 'set_parent': {
       const parent = [target.code, target.title]
         .map((v) => String(v ?? ''))

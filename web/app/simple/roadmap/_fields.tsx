@@ -396,7 +396,7 @@ const CodeText = ({ code }: { code?: string | null }) => (
 );
 
 /** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
-function ownCode(item: Item): ReactNode {
+function ownCode(item: Item, take?: () => void): ReactNode {
   // unique-codes (Nov 23): an item's own code; the Ground Truth feature it is part of stays named.
   const part = item.feature_name ? (
     <InfoTip label="its feature" align="start" testId="card-code-feature">
@@ -408,6 +408,12 @@ function ownCode(item: Item): ReactNode {
     <span className="inline-flex flex-wrap items-center gap-1">
       <CodeText code={item.code} />
       {part}
+      {/* panel-stages (#1815 5): this item takes its feature's code; the one that had it, the next number. */}
+      {part && take && (
+        <button type="button" className={LINK} data-testid="card-code-take" onClick={take}>
+          Use {item.feature_name?.split(' ')[0]}
+        </button>
+      )}
       {item.confirm_feature_id && (
         <>
           <NotInGt className="h-5! px-2! text-xs!" />
@@ -566,7 +572,12 @@ export function PanelFields({
               )}
             </span>
           ) : (
-            (ownCode(item) ?? (
+            (ownCode(
+              item,
+              canChange
+                ? () => void change('Code changed', 'take_feature_code', { code: item.code }, {})
+                : undefined,
+            ) ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
               <span
                 className="inline-flex flex-wrap items-center gap-x-1"

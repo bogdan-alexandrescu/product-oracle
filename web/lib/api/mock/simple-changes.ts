@@ -421,7 +421,7 @@ const FIXES = ['shift_dependents', 'move_dependency'];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
 export const CUT_ALL = 'cut_with_dependents';
 /** The ops that key before/after by item id (changes.py KEYED). */
-const KEYED = [...FIXES, CUT_ALL];
+const KEYED = [...FIXES, CUT_ALL, 'take_feature_code'];
 
 /** changes.dependents: every item waiting on `id`, transitively (breadth first), but those cut or merged already. */
 export function cutDependents(
@@ -2608,6 +2608,34 @@ async function create(
       cut.map((i) => [i.id, read(seen, keyOf(db, i.id)!, ['cut'], target)]),
     );
     after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
+  } else if (body.op === 'take_feature_code') {
+    // code_take.plan (#1815 5): the item drops its own code, so it reads its feature's; the item
+    // that had it takes the next free number. Keyed by item id: one change, one Undo.
+    const s = seed(seen, key);
+    const feature = s.feature_id ? db.feature_codes?.[s.feature_id] : undefined;
+    const [own, name] = codedTitle(s.title, null);
+    if (!feature) return json(422, { detail: 'It is not part of a Ground Truth feature' });
+    if (!own || own === feature) return json(422, { detail: "It already has its feature's code" });
+    if (!('code' in body.before)) return json(422, { detail: 'before: code as you saw it' });
+    if (body.before.code !== own)
+      return conflict(db, ctx, { code: own }, [String(target.item_id)], 'Changed since you saw it');
+    const holder = seen.items.find(
+      (x) =>
+        x.key !== key &&
+        x.feature_id === s.feature_id &&
+        !closed(x) &&
+        !codedTitle(x.title, null)[0],
+    );
+    const rows = holder ? [s, holder] : [s];
+    target.code = feature;
+    target.titles = rows.map((x) => x.title);
+    before = Object.fromEntries(rows.map((x) => [db.ids[x.key], { title: x.title }]));
+    after = { [db.ids[key]]: { title: name } };
+    if (holder) {
+      const next = nextCode(seen);
+      after[db.ids[holder.key]] = { title: `${next} ${holder.title}` };
+      Object.assign(target, { other: holder.title, new_code: next });
+    }
   } else {
     const fields = FIELDS[body.op];
     // roadmap-decide review (changes.py): the page may not see every stored key; only the subject is checked.
