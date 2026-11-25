@@ -75,14 +75,14 @@ VIEWS = {
 # task-push: the two roadmap views gain tracker_ref, tracker_url and tracker_error on each task
 # (null on this seed) and nothing else (JSON diff against 4ecbc5620); the six others are unchanged.
 DIGESTS = {
-    "roadmap": "18d356376efd9c8dfe1b56ef957314ec4c3906217578682139e52b263f102d74",
-    "roadmap-viewer": "3d3d4ce268b8405e79b0b27b3d763bb9f3e8417a6294f3e3834968fa09bd305c",
+    "roadmap": "baf216d64ea3cbafd6e1323acb5ee653074e352c391eb13e2798c16b6f1577b6",
+    "roadmap-viewer": "6f6a16c37ccc439f97e88e82a4153ddbb75023baf3c963981e583175d9675ce8",
     "priorities": "b21526e73c21066f6027f67d6f1e116774a913778868391696c541a197bf6b45",
     "priorities-viewer": "2dca1614aa912c759813d3851df35897be11e298a3a9f9cf4eb6c4eb08b937c0",
-    "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",
-    "decisions-viewer": "990a9f77ce6c52e514901685e5baee279b0d9a6cd8706ef47a556be42a29b12a",
-    "decisions-goal": "cd08b498db9fec8500fb80a6be5209a18d37c790126f4d659a5fd7f5d5c61ca3",
-    "decisions-prd": "0de850205b25e4e0ffa6ec9ce53cc1efcdf916aa90786ba0fc53525c19ee56d4",
+    "decisions": "dca64176c5f3e0187e007563dd47c7eba45c22a8f43b4c2f56ea86bb05c2cc96",
+    "decisions-viewer": "e80e4de138063ab3547b1bc21b304a864959a0a66d66eb2660224f61452a2739",
+    "decisions-goal": "7b5209929302d49645ebc2c562340046a3f36a57440ba838d127c650d05f1cf2",
+    "decisions-prd": "c552dc5f5bf81d5e818a6ed1b64612318b908fad03a37507715ee033ac907971",
 }
 
 
