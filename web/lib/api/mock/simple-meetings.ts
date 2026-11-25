@@ -481,18 +481,6 @@ export function ensureMeetings(
           { kind: 'document', id: alerts.id },
         ],
       }),
-      // #1818: the roadmap's open decision on the digest (simple-roadmap.ts), by the same id.
-      ...(digest
-        ? [
-            d(7, 'Send the digest weekly or daily?', {
-              id: stableUuid('simple-decision/7'),
-              origin: 'oracle',
-              status: 'proposed',
-              approver_id: null,
-              subjects: [{ kind: 'roadmap_item', id: digest.id, ref: digest.key }],
-            }),
-          ]
-        : []),
       // F-26 ("long-decision" scenario): a decision whose title wraps on a phone.
       ...(typeof localStorage !== 'undefined' &&
       localStorage.getItem('po-mock-scenario') === 'long-decision'
@@ -2925,9 +2913,33 @@ async function sheetDecision(
     });
   const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
   if (own) return { d: own, log };
+  const named = roadmapDecision(ctx, id);
+  if (named) return { d: named, log: null };
   if (!log || log.trashed || log.origin === 'checkpoint' || db.decisions.some((x) => x.id === id))
     return { d: null, log: null };
   return { d: fromLog(log), log };
+}
+
+/** #1818: an open decision the roadmap read names on a feature (simple-roadmap.ts), by its id. */
+function roadmapDecision(ctx: MeetingsCtx, id: string): Decision | null {
+  for (const [key, list] of Object.entries(ctx.roadmap.decisions ?? {})) {
+    const hit = list.find((x) => stableUuid(`simple-decision/${x.number}`) === id);
+    if (!hit) continue;
+    const item = items(ctx).find((i) => i.key === key);
+    return {
+      id,
+      number: hit.number,
+      title: hit.title,
+      origin: 'oracle',
+      status: 'proposed',
+      approver_id: null,
+      at: iso(mockNowMs()),
+      subjects: item ? [{ kind: 'roadmap_item', id: item.id, ref: key }] : [],
+      meeting_id: null,
+      change_ids: [],
+    };
+  }
+  return null;
 }
 
 /** A decision-log call as the sheet reads it (its own number, fields and last sheet edit). */
