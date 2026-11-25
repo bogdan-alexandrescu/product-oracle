@@ -69,6 +69,8 @@ class SimpleActionItemIn(BaseModel):
     due_date: dt.date | None = None
     # An action item recorded in the meeting (its row): Send adds only the new ones.
     action_item_id: uuid.UUID | None = None
+    # #1817: the roadmap item it is about (one of the agenda's features), if any.
+    item_id: uuid.UUID | None = None
 
 
 class SimpleActionItemOut(SimpleActionItemIn):
@@ -703,6 +705,22 @@ class InboxSimpleMinutes(BaseModel):
     ended_at: dt.datetime | None
     sent_at: dt.datetime | None
     decisions: int
+    state: Literal["new", "open"]
+
+
+class InboxSimpleActionItem(BaseModel):
+    """#1817: an open meeting action item its owner is to do (``simple_action_items``,
+    counted in ``total``), with its due date, linked item and meeting."""
+
+    id: uuid.UUID
+    title: str
+    due_date: dt.date | None = None
+    late: bool = False
+    item_id: uuid.UUID | None = None
+    item_title: str | None = None
+    meeting_id: uuid.UUID | None = None
+    meeting_title: str | None = None
+    at: dt.datetime
     state: Literal["new", "open"]
 
 

@@ -11,6 +11,7 @@ from oracle.base_model import BaseModel
 from oracle.simple.schemas_meetings import (
     DecisionsView,  # noqa: F401
     DeliveryStatus,  # noqa: F401
+    InboxSimpleActionItem,  # noqa: F401
     InboxSimpleMinutes,  # noqa: F401
     MeetingOrigin,  # noqa: F401
     MeetingStatus,  # noqa: F401

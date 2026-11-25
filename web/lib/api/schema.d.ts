@@ -28732,6 +28732,11 @@ export interface components {
              * @default []
              */
             simple_minutes: components["schemas"]["InboxSimpleMinutes"][];
+            /**
+             * Simple Action Items
+             * @default []
+             */
+            simple_action_items: components["schemas"]["InboxSimpleActionItem"][];
         };
         /**
          * InboxOutcome
@@ -29011,6 +29016,45 @@ export interface components {
              * Format: uuid
              */
             publication_id: string;
+        };
+        /**
+         * InboxSimpleActionItem
+         * @description #1817: an open meeting action item its owner is to do (``simple_action_items``,
+         *     counted in ``total``), with its due date, linked item and meeting.
+         */
+        InboxSimpleActionItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
+            /** Item Id */
+            item_id?: string | null;
+            /** Item Title */
+            item_title?: string | null;
+            /** Meeting Id */
+            meeting_id?: string | null;
+            /** Meeting Title */
+            meeting_title?: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
         };
         /**
          * InboxSimpleApproval
@@ -41572,6 +41616,8 @@ export interface components {
             due_date?: string | null;
             /** Action Item Id */
             action_item_id?: string | null;
+            /** Item Id */
+            item_id?: string | null;
         };
         /** SimpleActionItemOut */
         SimpleActionItemOut: {
@@ -41583,6 +41629,8 @@ export interface components {
             due_date?: string | null;
             /** Action Item Id */
             action_item_id?: string | null;
+            /** Item Id */
+            item_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
         };

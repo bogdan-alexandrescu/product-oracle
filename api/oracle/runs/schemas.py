@@ -13,6 +13,7 @@ from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 from oracle.roadmap.schemas import InboxDateBasis
 from oracle.simple.schemas import (
+    InboxSimpleActionItem,
     InboxSimpleApproval,
     InboxSimpleChange,
     InboxSimpleDateSuggestion,
@@ -1682,6 +1683,8 @@ class InboxOut(BaseModel):
     simple_track_suggestions: list[InboxSimpleTrackSuggestion] = []
     # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
     simple_minutes: list[InboxSimpleMinutes] = []
+    # #1817: open meeting action items I own (each in ``total``).
+    simple_action_items: list[InboxSimpleActionItem] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

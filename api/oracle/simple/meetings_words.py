@@ -247,6 +247,11 @@ def _clean_actions(raw: Any, members: set[uuid.UUID], default: uuid.UUID | None)
             due = None
         row = {"title": " ".join(str(a["title"]).split())[:200],
                "owner_id": str(owner) if owner else None, "due_date": due}  # fmt: skip
+        try:  # #1817: the item it is about
+            if a.get("item_id"):
+                row["item_id"] = str(uuid.UUID(str(a["item_id"])))
+        except ValueError:
+            pass
         if a.get("action_item_id"):  # one recorded in the meeting (Send skips it)
             row["action_item_id"] = str(a["action_item_id"])
         out.append(row)

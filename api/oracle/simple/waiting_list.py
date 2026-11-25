@@ -270,6 +270,29 @@ async def _inbox(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         for r in await request_rows(db, principal)
         if r.counts
     ]
+    # #1817: my open meeting action items, closed in the Inbox.
+    from oracle.simple.meeting_actions import inbox_rows as action_rows
+
+    actions = await action_rows(db, principal, None)
+    today = await company_time.company_today(db) if actions else None
+    out += [
+        row(
+            f"action:{a.id}",
+            f"Action item · {a.title}",
+            " · ".join(
+                x
+                for x in (
+                    a.due_date and f"Due {_day(a.due_date, today)}",
+                    a.item_title,
+                    a.meeting_title,
+                )
+                if x
+            ),
+            "/simple/inbox",
+            a.at,
+        )  # fmt: skip
+        for a in actions
+    ]
     return out
 
 

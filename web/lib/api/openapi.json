@@ -88837,6 +88837,14 @@
             "type": "array",
             "title": "Simple Minutes",
             "default": []
+          },
+          "simple_action_items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleActionItem"
+            },
+            "type": "array",
+            "title": "Simple Action Items",
+            "default": []
           }
         },
         "type": "object",
@@ -89500,6 +89508,104 @@
           "publication_id"
         ],
         "title": "InboxSharedLink"
+      },
+      "InboxSimpleActionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Id"
+          },
+          "meeting_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Title"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleActionItem",
+        "description": "#1817: an open meeting action item its owner is to do (``simple_action_items``,\ncounted in ``total``), with its due date, linked item and meeting."
       },
       "InboxSimpleApproval": {
         "properties": {
@@ -124416,6 +124522,18 @@
               }
             ],
             "title": "Action Item Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           }
         },
         "type": "object",
@@ -124467,6 +124585,18 @@
               }
             ],
             "title": "Action Item Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           },
           "owner_name": {
             "anyOf": [

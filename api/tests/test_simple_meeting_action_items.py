@@ -78,7 +78,7 @@ async def test_action_item_reaches_its_owner_and_is_done_once(client):
     assert f"action:{aid}" not in await waiting_keys(client, w, "approver")
     # One Undo puts it back.
     r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=w.ctx.as_("approver"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     [back] = (await inbox(client, w, "approver"))["simple_action_items"]
     assert back["id"] == aid
     # Its owner changes its due date.
