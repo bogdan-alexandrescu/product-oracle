@@ -365,12 +365,19 @@ function items(ctx: MeetingsCtx) {
   return roadmapOut(ctx.roadmap, 'owner', new URLSearchParams())?.items ?? [];
 }
 
+/** The items of these keys; the roadmap is read for them only when it holds one (draw-time, #1870: the
+ * 500-item plan holds none of the seeded ones). */
+function itemsOf(ctx: MeetingsCtx, ...keys: string[]) {
+  if (!ctx.roadmap.items.some((i) => keys.includes(i.key))) return [];
+  return items(ctx).filter((i) => keys.includes(i.key));
+}
+
 /** Seeds on first use: a scheduled review, one past meeting whose minutes were sent, and
  * decisions outside meetings. */
 /** A commenter's proposal on Team invite nudges for a starting meeting to decide (once, unless one already waits). */
 function seedMeetingProposal(ctx: MeetingsCtx): void {
   const commenter = ctx.members.find((m) => m.email === 'commenter@example.com');
-  const item = items(ctx).find((i) => i.key === 'setup-ideas');
+  const item = itemsOf(ctx, 'setup-ideas')[0];
   if (
     !commenter ||
     !item ||
@@ -414,7 +421,7 @@ export function ensureMeetings(
   // names its items whether or not they still feed the roadmap (first read after a replace too).
   const replaced = ctx.roadmap.replaced_prds;
   ctx.roadmap.replaced_prds = undefined;
-  const all = items(ctx);
+  const all = itemsOf(ctx, 'alert-digest', 'setup-checklist');
   ctx.roadmap.replaced_prds = replaced;
   const item = (key: string) => all.find((i) => i.key === key);
   const alerts = prds(ctx)[1];
