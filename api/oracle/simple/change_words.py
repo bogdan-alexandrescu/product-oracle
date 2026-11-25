@@ -152,6 +152,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_code":
             code = target.get("code")
             return f"gave {x} the code {code}" if code else f"took the code off {x}"
+        case "take_feature_code":
+            from oracle.simple import code_take
+
+            return code_take.phrase(target, x)
         case "set_feature":
             return f"linked {x} to a feature" if after.get("feature_id") else f"unlinked {x}"
         # feature-parts: target names the parent (the new one, else the one left).

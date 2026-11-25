@@ -808,6 +808,8 @@ ChangeOp = Literal[
     "set_parent",
     # every-field-editable: the item's feature code (F-31), carried in its stored title.
     "set_code",
+    # panel-stages (#1815): the feature's code given to this item (oracle.simple.code_take).
+    "take_feature_code",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
     # goal-buckets-tasks: the goals an item serves (into the working draft).

@@ -115,7 +115,7 @@ from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import dates, drafts, service, stages
+from oracle.simple import code_take, dates, drafts, service, stages
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -197,7 +197,7 @@ FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
 CUT_ALL = "cut_with_dependents"
 # The ops that key ``before``/``after`` by item id.
-KEYED = (*FIXES, "merge_item", CUT_ALL)
+KEYED = (*FIXES, "merge_item", CUT_ALL, code_take.OP)
 FLAG_KINDS = (
     "dependency_order",
     "blocker_date",
@@ -860,6 +860,8 @@ async def _plan(
         return entry, target, before, after
     if op == "merge_item":
         return await _merge_plan(db, entry, target, by_id)
+    if op == code_take.OP:
+        return (entry, target, *await code_take.plan(db, entry, body, target, read_))
     if op == CUT_ALL:
         # As a cut: ``before`` is the item's own {"cut"} as seen; the change is keyed by
         # item id, the item and its dependents (target.titles names them, the item first).
@@ -1214,21 +1216,7 @@ async def _not_taken(
         raise ChangeError(422, f"{code} is already the code of a Ground Truth feature")
 
 
-async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> None:
-    """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
-    any code the read takes from a title: service.coded_title) gives the item that code: it is
-    checked as set_code checks it, in its words. ``entry`` None: an item being added."""
-    lead = service.coded_title(title, None)[0]
-    if not lead:
-        return
-    if entry is not None:
-        # panel-stages (#1815): every item, its code from its feature or PRD too; only the
-        # code it reads already is no new code.
-        await service.item_codes(db, [entry])
-        if lead in (service.coded_title(entry.row.title, None)[0], _code_of(entry)):
-            return
-    new = SimpleNamespace(row=SimpleNamespace(id=None))
-    await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
+_title_code = code_take.title_code
 
 
 def _with_code(code: str, name: str) -> str:
