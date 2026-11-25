@@ -495,7 +495,7 @@ async def load(
         tracks[t.id] = t
         if role is not None:
             owner_roles[t.id] = role
-            owner_names[t.id] = display_name(email, name)
+            owner_names[t.id] = display_name(email or "", name)
     # chat-actions: an item's own owner (set_owner) is named over its track's.
     people = (
         {
