@@ -103500,15 +103500,8 @@
             "title": "Goal"
           },
           "goal_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "uuid",
             "title": "Goal Id"
           }
         },
