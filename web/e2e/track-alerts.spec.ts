@@ -1,7 +1,7 @@
-import { expect, test, type Page } from './test';
-
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * F2 Track health in Plan and Inbox, driven through the UI on the mock layer
@@ -13,7 +13,7 @@ import { login } from './helpers';
  */
 
 const ITEM = 'Weekly alert digest';
-const LABEL = 'Usage alerts PRD · At risk · 1 need you';
+const LABEL = 'Usage alerts PRD · Needs a look · 1 need you';
 
 async function withSlip(page: Page, role?: 'viewer' | 'approver') {
   await page.addInitScript((key) => localStorage.setItem(key, 'track-alerts'), MOCK_SCENARIO_KEY);
@@ -91,7 +91,11 @@ test("an owner's Inbox shows the Track row with the slip and Accept new date; th
   await expect(
     slipRow(page).getByRole('button', { name: `Accept new date for ${ITEM}` }),
   ).toBeVisible();
-  await expect(slipRow(page).getByRole('link', { name: `Open ${ITEM}` })).toBeVisible();
+  // inbox-ux (#1784): one primary action; Keep watching and Open in Plan in the row's menu.
+  await slipRow(page)
+    .getByRole('button', { name: `More actions for ${ITEM}` })
+    .click();
+  await expect(slipRow(page).getByRole('menuitem')).toHaveText(['Keep watching', 'Open in Plan']);
 });
 
 // protects = Accept new date in the Inbox takes the tracker's date in one click: the child row
@@ -127,8 +131,9 @@ test('Keep watching with a note moves the alert to Done, showing the note', asyn
   await login(page);
   await openInbox(page);
   await slipRow(page)
-    .getByRole('button', { name: `Keep watching ${ITEM}` })
+    .getByRole('button', { name: `More actions for ${ITEM}` })
     .click();
+  await slipRow(page).getByRole('menuitem', { name: 'Keep watching' }).click();
   const field = page.getByTestId('track-keep-field').filter({ visible: true });
   await field.getByLabel('Note (optional)').fill('Engineering says Dec 9 holds');
   await field.getByRole('button', { name: 'Keep watching' }).click();

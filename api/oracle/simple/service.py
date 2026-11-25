@@ -70,11 +70,9 @@ from oracle.simple.schemas import (
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
-    SimpleItemTask,
     SimpleMilestone,
     SimpleOpenDecision,
     SimpleOwnerRef,
-    SimplePersonRef,
     SimplePhase,
     SimplePrdRef,
     SimpleRoadmapItem,
@@ -84,6 +82,7 @@ from oracle.simple.schemas import (
     SimpleWindow,
     SimpleWindows,
 )
+from oracle.simple.task_reads import item_tasks
 from oracle.tenant_settings_api import company_horizons
 from oracle.v2.models import FeasibilityExperiment
 
@@ -1563,48 +1562,6 @@ def item_out(
     )
 
 
-async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[SimpleItemTask]]:
-    """walkc-roadmap-tasks: each item's tasks (not dropped, in order), found by the item's
-    roadmap and key so a later version's item keeps them, with their owners' names."""
-    from oracle.simple import drafts
-    from oracle.simple.models import RoadmapItemTask
-
-    if not shown:
-        return {}
-    keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
-    rows = list(
-        await db.scalars(
-            select(RoadmapItemTask)
-            .where(
-                RoadmapItemTask.roadmap_document_id.in_({d for d, _ in keyed}),
-                _any_of(RoadmapItemTask.item_key, {k for _, k in keyed}),
-                RoadmapItemTask.status != "dropped",
-            )
-            .order_by(RoadmapItemTask.position, RoadmapItemTask.created_at, RoadmapItemTask.id)
-        )
-    )
-    people = {t.owner_id for t in rows if t.owner_id is not None}
-    names = {
-        u.id: display_name(u.email, u.name) for u in await drafts.all_users(db) if u.id in people
-    }
-    out: dict[uuid.UUID, list[SimpleItemTask]] = defaultdict(list)
-    for t in rows:
-        item = keyed.get((t.roadmap_document_id, t.item_key))
-        if item is not None:
-            out[item].append(task_out(t, names))
-    return out
-
-
-def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
-    owner = (
-        SimplePersonRef(id=t.owner_id, name=names[t.owner_id])
-        if t.owner_id is not None and t.owner_id in names
-        else None
-    )
-    return SimpleItemTask(id=t.id, title=t.title, status=t.status, owner=owner,
-                          due_date=t.due_date)  # fmt: skip
-
-
 async def _decided(
     db: AsyncSession, shown: list[Entry], left: list | None = None
 ) -> dict[uuid.UUID, list]:
@@ -2029,7 +1986,7 @@ async def _build(
 
     left_out: list = []
     decided = await _decided(db, shown, left_out)
-    tasks = await _tasks(db, shown)
+    tasks = await item_tasks(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows

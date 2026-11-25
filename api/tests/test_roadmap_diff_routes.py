@@ -10,6 +10,7 @@ from oracle.mcp.scopes import required_scope
 from oracle.swarm import Outcome
 from tests.test_mcp import mcp_client, run_token, text_of, user_with_role
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
     ITEMS,
     PRD,
     ROADMAP,
@@ -50,7 +51,7 @@ ITEMS_V2 = (
 # Version 3: the address book leaves again.
 ITEMS_V3 = ITEMS_V2.split("  - id: address-book")[0]
 # The ENG-412 estimate approved_prd records: the plan tables' Beta date rests on it.
-BASES = ({"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-11-30"},)
+BASES = ({"kind": "estimate", "reference": "ENG-412", "supports_date": ENG_412_DAY},)
 
 
 async def new_version(client, auth, runtime, items: str, n: int, approve: bool = False) -> None:  # noqa: F811

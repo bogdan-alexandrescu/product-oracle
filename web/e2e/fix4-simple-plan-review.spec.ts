@@ -55,17 +55,13 @@ test.describe('fix4-simple-plan review: Priorities', () => {
       const rows = page.getByTestId('prio-row').filter({ has: page.getByTestId('prio-score') });
       await expect(rows.first()).toBeVisible();
       for (const r of await rows.all()) {
-        const conf = Number(
-          /^confidence ([\d.]+)$/.exec(
-            (await r.getByTestId('prio-confidence').textContent()) ?? '',
-          )?.[1],
-        );
-        // build-plan QP2: value · confidence · weeks · score, no bar.
-        const m = /^·value ([\d.]+)·confidence [\d.]+·([\d.]+) weeks?·score ([\d.]+)$/.exec(
-          (await r.getByTestId('prio-numbers').textContent()) ?? '',
-        );
+        // prio-ux (#1774): the row reads words and a rounded score; the model's numbers are its hover detail.
+        const m =
+          /^Goal value ([\d.]+) · confidence ([\d.]+) · ([\d.]+) weeks? · score ([\d.]+)$/.exec(
+            (await r.getByTestId('prio-value').getAttribute('title')) ?? '',
+          );
         expect(m, (await r.textContent()) ?? '').not.toBeNull();
-        const [, value, effort, score] = m!.map(Number);
+        const [, value, conf, effort, score] = m!.map(Number);
         expect(conf).toBeGreaterThan(0);
         expect(conf).toBeLessThanOrEqual(1);
         expect(Math.abs((value * conf) / effort - score)).toBeLessThan(0.011);

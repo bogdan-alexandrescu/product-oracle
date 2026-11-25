@@ -2,6 +2,55 @@ import type { Schemas } from '../client';
 import { companyDayIso } from './connections';
 
 type RunOut = Schemas['RunOut'];
+type NoteCode = Schemas['SimpleNoteCode'];
+
+// #1866, as the API's oracle.simple.note_codes: a code as people write it (F-104, F-15b, G-2, G2, G-B, M7).
+const CODE = /(?<![\w-])([A-Z]{1,3}-\d{1,5}[a-j]?|[A-Z]\d{1,4}|[A-Z]-[A-Z]\d{0,3})(?![\w-])/g;
+const GOAL = /^G-?(?:\d+|[A-Z]\d*)$/;
+const MILESTONE = /^M-?(\d+)$/;
+const flat = (code: string) => code.replace(/-/g, '').toLowerCase();
+
+/** The codes a note writes, each once, in its order (note_codes.written). */
+const written = (note: string | null | undefined) => [
+  ...new Set([...(note ?? '').matchAll(CODE)].map((m) => m[1])),
+];
+
+/**
+ * #1866, as note_codes.names: each code the notes write that names one of the company's features (by its code), confirmed
+ * goals (by key, any case, with or without the dash) or milestones (by code, when every milestone of that code has one name).
+ */
+export function noteCodeNames(
+  notes: (string | null | undefined)[],
+  company: {
+    features: { code: string; title: string }[];
+    goals: { key: string; title: string }[];
+    milestones: { code?: string | null; name: string }[];
+  },
+): Record<string, NoteCode> {
+  const out: Record<string, NoteCode> = {};
+  for (const code of new Set(notes.flatMap(written))) {
+    const m = MILESTONE.exec(code);
+    if (GOAL.test(code)) {
+      const g = company.goals.find((x) => flat(x.key) === flat(code) && x.title.trim());
+      if (g) out[code] = { code, name: g.title.trim(), kind: 'goal' };
+    } else if (m) {
+      const names = new Set(
+        company.milestones
+          .filter((x) => x.code === `M${m[1]}` && x.name.trim())
+          .map((x) => x.name.trim()),
+      );
+      if (names.size === 1) out[code] = { code, name: [...names][0], kind: 'milestone' };
+    } else {
+      const f = company.features.find((x) => x.code === code);
+      const name = f?.title.replace(new RegExp(`^${code}\\s+`), '').trim();
+      if (name && name !== code) out[code] = { code, name, kind: 'feature' };
+    }
+  }
+  return out;
+}
+
+const codesOf = (note: string | null | undefined, named: Record<string, NoteCode>) =>
+  written(note).flatMap((c) => (named[c] ? [named[c]] : []));
 
 // As the API's _STOP_WORDS (oracle.simple.meetings): a run's stops as people name them in Simple.
 const STOP_WORDS: Record<string, string> = {
@@ -47,6 +96,7 @@ export function runGroupsOut(
   docs: { id: string; slug: string; title: string }[],
   members: { id: string; name: string }[],
   prd?: string | null,
+  named: Record<string, NoteCode> = {},
 ): Schemas['SimpleRunGroup'][] {
   const names = new Map(members.map((m) => [m.id, m.name]));
   const shown = docs.filter((d) => !prd || d.slug === prd || d.id === prd);
@@ -88,6 +138,7 @@ export function runGroupsOut(
           role: role ? role.replace(/_/g, ' ') : null,
           day: last.decided_at ? companyDayIso(last.decided_at) : null,
           note: last.note ?? null,
+          codes: codesOf(last.note, named),
           trail:
             steps.length > 1
               ? steps.map((c) => ({
@@ -95,6 +146,7 @@ export function runGroupsOut(
                   who: who(c),
                   day: c.decided_at ? companyDayIso(c.decided_at) : null,
                   note: c.note ?? null,
+                  codes: codesOf(c.note, named),
                 }))
               : [],
         };

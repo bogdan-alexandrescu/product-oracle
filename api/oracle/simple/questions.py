@@ -575,7 +575,7 @@ async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTa
     session's RLS hides the rest), due first, with each task's item."""
     from oracle.roadmap.models import RoadmapItem
     from oracle.simple.models import RoadmapItemTask
-    from oracle.simple.service import task_out
+    from oracle.simple.task_reads import task_out, task_records
 
     if me is None:
         return []
@@ -602,9 +602,10 @@ async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTa
     }
     names = {u.id: display_name(u.email, u.name) for u in [await db.get(User, me)] if u}
     today = await company_time.company_today(db)
+    records = await task_records(db, rows)
     return [
         SimpleTaskWaiting(
-            **task_out(t, names).model_dump(),
+            **task_out(t, names, records).model_dump(),
             item_id=t.item_id,
             item_title=titles.get(t.item_id, t.item_key) if t.item_id else t.item_key,
             roadmap_id=t.roadmap_document_id,

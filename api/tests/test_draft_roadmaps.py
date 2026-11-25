@@ -20,7 +20,7 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
 from tests.test_mcp import user_with_role
-from tests.test_roadmap import ITEMS, built_roadmap, verified_estimate
+from tests.test_roadmap import ENG_412_DAY, ITEMS, built_roadmap, verified_estimate
 
 PRD = "checkout-redesign"
 ITEMS_PATH = "/v1/documents/{doc}/versions/{n}/roadmap-items"
@@ -167,7 +167,7 @@ async def test_the_tick_starts_one_run_and_stores_its_items(client, owner, runti
     body = await read(client, headers, 1)
     assert body["status"] == "ready" and body["run_id"] == str(run.id)
     assert [i["item_key"] for i in body["items"]] == ["payment-step", "shipping-step"]
-    assert body["items"][0]["milestone"]["date"] == "2026-11-30"
+    assert body["items"][0]["milestone"]["date"] == ENG_412_DAY
     assert body["check"]["by_horizon"]["now"] == 1
 
 
@@ -189,7 +189,7 @@ async def test_items_with_problems_are_stored_and_the_run_succeeds(client, owner
     }
     pay = next(i for i in body["items"] if i["item_key"] == "payment-step")
     assert pay["milestone"].get("date") is None
-    assert pay["milestone"]["refused_date"] == "2026-11-30"
+    assert pay["milestone"]["refused_date"] == ENG_412_DAY
     assert pay["milestone"]["refused"] == schedule.UNVERIFIED
     (run,) = await draft_runs(tenant_id)
     assert run.status == "succeeded"

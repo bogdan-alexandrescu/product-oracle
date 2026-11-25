@@ -950,6 +950,11 @@ class SimpleItemTask(BaseModel):
     status: Literal["todo", "doing", "done", "dropped"]
     owner: SimplePersonRef | None = None
     due_date: dt.date | None = None
+    # task-push (#1816): its record in the connected tracker (the issue key and link), and why
+    # its last push failed (shown with Retry), None once a push lands.
+    tracker_ref: str | None = None
+    tracker_url: str | None = None
+    tracker_error: str | None = None
 
 
 class SimpleTaskWaiting(SimpleItemTask):

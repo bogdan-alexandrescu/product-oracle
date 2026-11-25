@@ -72,7 +72,7 @@ test('the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
 
   // Under Open, shown and not counted, as the run page shows it.
   await tabs.getByRole('tab', { name: /^Seen/ }).click();
-  await expect(tabs.getByRole('tab', { name: /^Seen/ })).toHaveText('Seen');
+  await expect(tabs.getByRole('tab', { name: /^Seen/ })).toHaveText('Seen0');
   const revising = page.getByTestId('inbox-revising');
   await expect(revising.locator('tr[data-row]')).toHaveCount(1);
   const item = revising.getByTestId('inbox-revising-state');

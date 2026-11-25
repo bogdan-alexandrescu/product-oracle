@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
-import { ADMIN, login } from './helpers';
+import { ADMIN, lineOptionsSettled, login } from './helpers';
 import { expect, test, type Locator, type Page } from './test';
 
 /*
@@ -59,6 +59,7 @@ for (const v of SIZES) {
     }) => {
       await setUp(page, { phone: v.phone });
       await openPriorities(page, '?tab=ranked');
+      await lineOptionsSettled(page);
       const options = await page.locator('#prio-line option').allTextContents();
       for (const start of ['Key date: Customer conference', 'Milestone: Beta']) {
         // qa-nov17 G8: a milestone's option reads its code with its name ("Milestone: M6 Beta").
@@ -133,9 +134,11 @@ for (const v of SIZES) {
       await expect(rows.first()).toBeVisible();
       for (const r of await rows.all()) {
         const numbers = r.getByTestId('prio-numbers');
-        const m = /^·value ([\d.]+)·confidence ([\d.]+)·([\d.]+) weeks?·score ([\d.]+)$/.exec(
-          (await numbers.textContent()) ?? '',
-        );
+        // prio-ux (#1774): the model's numbers are the value's hover detail.
+        const m =
+          /^Goal value ([\d.]+) · confidence ([\d.]+) · ([\d.]+) weeks? · score ([\d.]+)$/.exec(
+            (await r.getByTestId('prio-value').getAttribute('title')) ?? '',
+          );
         expect(m, (await r.textContent()) ?? '').not.toBeNull();
         const [, value, conf, effort, score] = m!.map(Number);
         expect(Math.abs((value * conf) / effort - score)).toBeLessThan(0.011);

@@ -8,10 +8,14 @@ with the FakeRuntime."""
 
 from datetime import date
 
+from oracle import company_time
 from oracle.roadmap import doc_dates
 from oracle.swarm import Outcome
 from tests.fixtures import import_draft
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_WORDS,
+    OTHER_DAY,
     PLAN_TABLES,
     PRD,
     ROADMAP,
@@ -28,7 +32,9 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 from tests.test_tracks import track_of
 
 VERSIONS = f"/v1/documents/{ROADMAP}/versions"
-BETA = "Beta by 2026-11-30."
+BETA = f"Beta by {ENG_412_DAY}."
+# An unverified GA day in a run's text, and how a message spells it.
+OTHER_WORDS = company_time.calendar_day_with_year(OTHER_DAY)
 # A person's own roadmap: no plan tables (roadmap-plan-tables checks a run's draft).
 WITHOUT_PLAN = ROADMAP_MD.replace(PLAN_TABLES, "")
 
@@ -84,7 +90,7 @@ def test_dates_are_found_in_the_text_not_in_sources_links_or_horizons():
     from oracle.docs.parser import parse_draft
 
     found = doc_dates.find(parse_draft(md).sections)
-    assert [(f.section_key, f.text) for f in found] == [("now-payment-step", "2026-11-30")]
+    assert [(f.section_key, f.text) for f in found] == [("now-payment-step", ENG_412_DAY)]
 
 
 # --------------------------------------------------------------------------- import
@@ -142,9 +148,7 @@ async def test_a_manual_roadmap_without_a_prd_refuses_any_date(client, owner):  
     assert resp.status_code == 422 and _codes(resp) == ["unverified_date"]
     assert "none is known" in resp.json()["errors"][0]["message"]
     # Without dates it imports.
-    resp = await push(
-        client, auth, md.replace("Beta by 2026-11-30.", "Beta first."), "loose-roadmap"
-    )
+    resp = await push(client, auth, md.replace(BETA, "Beta first."), "loose-roadmap")
     assert resp.status_code == 201, resp.text
 
 
@@ -156,7 +160,7 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
 
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
     runtime.script["roadmap_draft"] = [
-        Outcome(artifacts={"roadmap.md": with_line("GA on 2026-12-15.")})
+        Outcome(artifacts={"roadmap.md": with_line(f"GA on {OTHER_DAY}.")})
     ]
     off = {"roadmap_items": False, "roadmap_review": False}
     run = await start(
@@ -168,18 +172,18 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
     assert run["status"] == "succeeded", run
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     warnings = [w for w in version["warnings"] if w["code"] == "unverified_date"]
-    assert len(warnings) == 1 and "Dec 15, 2026" in warnings[0]["message"]
+    assert len(warnings) == 1 and OTHER_WORDS in warnings[0]["message"]
     assert warnings[0]["section_keys"] == ["now-payment-step"]
     marks = {(m["text"], m["status"], m["label"]) for m in version["date_marks"]}
     assert marks == {
-        ("2026-11-30", "verified", None),
-        ("2026-12-15", "unverified", "unverified"),
-        ("Nov 30, 2026", "verified", None),  # the plan tables
+        (ENG_412_DAY, "verified", None),
+        (OTHER_DAY, "unverified", "unverified"),
+        (ENG_412_WORDS, "verified", None),  # the plan tables
     }
     # The text is stored as written; the markdown carries a comment after the date.
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
-    assert "GA on 2026-12-15 <!-- oracle: date unverified -->." in md
-    assert "2026-11-30 <!--" not in md
+    assert f"GA on {OTHER_DAY} <!-- oracle: date unverified -->." in md
+    assert f"{ENG_412_DAY} <!--" not in md
 
 
 # --------------------------------------------------------------------------- withdrawal
@@ -194,7 +198,7 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     # The body's date and the plan tables' two.
     marks = [(m["text"], m["status"]) for m in version["date_marks"]]
-    assert marks == [("2026-11-30", "verified")] + [("Nov 30, 2026", "verified")] * 2
+    assert marks == [(ENG_412_DAY, "verified")] + [(ENG_412_WORDS, "verified")] * 2
 
     (eng,) = [
         b
@@ -210,16 +214,17 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     assert [m["status"] for m in version["date_marks"]] == ["withdrawn"] * 3
     assert version["date_marks"][:1] == [
-        {"section_key": "now-payment-step", "text": "2026-11-30", "date": "2026-11-30",
+        {"section_key": "now-payment-step", "text": ENG_412_DAY, "date": ENG_412_DAY,
          "status": "withdrawn", "label": "date withdrawn", "bases": ["ENG-412"],
-         "where": "body", "days": ["2026-11-30"], "missing": ["2026-11-30"]}
+         "where": "body", "days": [ENG_412_DAY], "missing": [ENG_412_DAY]}
     ]  # fmt: skip
     # The approved text is not rewritten: the markdown carries a comment after the date,
     # which an import drops.
     after = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
+    assert f"{ENG_412_DAY}." in before and f"{ENG_412_WORDS} |" in before
     assert after == before.replace(
-        "2026-11-30.", "2026-11-30 <!-- oracle: date withdrawn -->."
-    ).replace("Nov 30, 2026 |", "Nov 30, 2026 <!-- oracle: date withdrawn --> |")
+        f"{ENG_412_DAY}.", f"{ENG_412_DAY} <!-- oracle: date withdrawn -->."
+    ).replace(f"{ENG_412_WORDS} |", f"{ENG_412_WORDS} <!-- oracle: date withdrawn --> |")
     assert BETA in before
     # Exports: HTML (and the PDF built from it), the themed full and brief layers.
     url = f"{VERSIONS}/1/export"
@@ -228,7 +233,8 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
         html = html.replace("\u00a0", " ")  # a date's no-break spaces (E-11)
         # Export QA pass X, X-12 (train AS cdf393d16): the flag is a small plain mark.
         assert (
-            'Nov 30, 2026 <span class="date-mark" data-date-mark="withdrawn">date withdrawn</span>'
+            f"{ENG_412_WORDS} "
+            '<span class="date-mark" data-date-mark="withdrawn">date withdrawn</span>'
         ) in html, layer
         assert "[date withdrawn]" not in html, layer
     # Present and the slide export: the deck.
@@ -236,15 +242,15 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     text = " ".join(s["html"] for s in deck["slides"]) + " ".join(
         e["html"] for s in deck["slides"] for e in s["expand"]
     ).replace("\u00a0", " ")
-    assert "Nov 30, 2026 <strong>[date withdrawn]</strong>" in text
+    assert f"{ENG_412_WORDS} <strong>[date withdrawn]</strong>" in text
     # The markdown export is the stored text (a copy for editing) with the comment, its days
     # month first (export QA pass X, X-17, train AS cdf393d16).
     md = (await client.get(url, params={"format": "md"}, headers=auth)).text
     assert "[date withdrawn]" not in md
-    assert "Beta by Nov 30, 2026 <!-- oracle: date withdrawn -->." in md
+    assert f"Beta by {ENG_412_WORDS} <!-- oracle: date withdrawn -->." in md
 
     # A new verified basis for the date: the marker goes.
-    await record(client, auth, "ENG-412", "2026-11-30")
+    await record(client, auth, "ENG-412", ENG_412_DAY)
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     assert [m["status"] for m in version["date_marks"]] == ["verified"] * 3
 
@@ -331,8 +337,8 @@ async def test_an_accepted_item_estimate_backs_a_timeline_roadmap_s_dates(
         ("lane-payments", "Dec 15, 2026", "verified"),
         ("milestones", "Dec 15, 2026", "verified"),
         # The plan tables: Beta rests on ENG-412 (the items file's milestone).
-        ("plan", "Nov 30, 2026", "verified"),
-        ("plan-milestones", "Nov 30, 2026", "verified"),
+        ("plan", ENG_412_WORDS, "verified"),
+        ("plan-milestones", ENG_412_WORDS, "verified"),
     }
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
     assert md.count("<!-- oracle: date unverified -->") == 1

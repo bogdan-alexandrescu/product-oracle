@@ -3,7 +3,7 @@ alignment (E1) and track monitoring through oracle.changes. Against Postgres wit
 FakeRuntime."""
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 
@@ -15,9 +15,10 @@ from oracle.roadmap.views import _headline
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
 from tests.day_helpers import company_today
-from tests.launch_helpers import ENG_412
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     PRD,
     ROADMAP,
     approved_prd,
@@ -77,7 +78,7 @@ async def test_an_accepted_prd_starts_a_track(client, owner, runtime):  # noqa: 
     assert overview["counts"]["items"] == 2
     assert overview["health"] == "on_track", overview
     assert overview["next_milestone"]["name"] == "Beta"
-    assert overview["next_milestone"]["target_date"] == "2026-11-30"
+    assert overview["next_milestone"]["target_date"] == ENG_412_DAY
     assert overview["engineering_known"] is False
 
 
@@ -181,10 +182,9 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     """A schedule basis linked to a tracker record must agree with its target date."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    # #1604: after both today and ENG-412's fixed day, so the list's order (by date, then
+    # #1604, #1717: after both today and ENG-412's day, so the list's order (by date, then
     # reference) never turns on what day the suite runs.
-    eng_412 = date.fromisoformat(ENG_412[0]["supports_date"])
-    day = (max(TODAY, eng_412) + timedelta(days=10)).isoformat()
+    day = (max(TODAY, ENG_412_ON) + timedelta(days=10)).isoformat()
     body = {"kind": "commitment", "reference": "Q1 launch", "supports_date": day, "prd": PRD}
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.post("/v1/schedule-bases", json=body, headers=viewer)).status_code == 403
@@ -215,19 +215,23 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     assert resp.status_code == 201
 
 
-async def test_schedule_bases_list_in_the_order_they_were_recorded(client, owner):  # noqa: F811
-    """Schedule bases list in the order they were recorded, not by today's date."""
-    # sched-order: one order whatever today is (it was supports_date then reference, so a
-    # basis dated today + n swapped places with ENG-412's fixed Nov 30 as the days went by).
+async def test_schedule_bases_list_in_date_order(client, owner):  # noqa: F811
+    """#1717: schedule bases list by the date they support, then reference: never in uuid
+    order, as bases written in one transaction share their created time."""
+    # protects=#1717 Plan > Dates (which does not sort) is in date order;
+    # fails_when=the list is in recording (created_at, uuid) order; no_claim=ENG-412's fixed day.
     _, auth = owner
     await approved_prd(client, auth)
-    for reference, days in (("Zeta plan", 60), ("Alpha plan", 3)):
+    for reference, days in (("Zeta plan", 60), ("Beta plan", 3), ("Alpha plan", 3)):
         day = (TODAY + timedelta(days=days)).isoformat()
         body = {"kind": "commitment", "reference": reference, "supports_date": day, "prd": PRD}
         resp = await client.post("/v1/schedule-bases", json=body, headers=auth)
         assert resp.status_code == 201, resp.text
     listed = (await client.get("/v1/schedule-bases", params={"prd": PRD}, headers=auth)).json()
-    assert [b["reference"] for b in listed] == ["ENG-412", "Zeta plan", "Alpha plan"]
+    ours = [b["reference"] for b in listed if b["reference"] != "ENG-412"]
+    assert ours == ["Alpha plan", "Beta plan", "Zeta plan"]
+    days = [b["supports_date"] for b in listed]
+    assert days == sorted(days)
 
 
 async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F811
@@ -247,8 +251,9 @@ async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F
     assert resp.status_code == 201, resp.text
 
     records = [
-        # Payment (now, Beta 2026-11-30 from ENG-412): the tracker says later than that.
-        {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+        # Payment (now, Beta on ENG-412's day): the tracker says later than that.
+        {"external_ref": "ENG-412", "state": "in_progress",
+         "target_date": (ENG_412_ON + timedelta(days=20)).isoformat(),
          "track_id": track["id"], "item_key": "payment-step"},
         # Shipping is in next, but engineering already started: drift the other way.
         {"external_ref": "ENG-413", "state": "in_progress", "track_id": track["id"],

@@ -17,6 +17,7 @@ import yaml
 from oracle.roadmap.schemas import RoadmapItemOut
 from tests._own_tree_only import contract
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
     ROADMAP,
     approved_prd,
     built_roadmap,
@@ -134,6 +135,11 @@ async def test_the_real_items_route_serves_the_fixtures_fields(client, owner, ru
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
     fixture = _fixture()["items"]
+    # The fixture's dates rest on ENG-412, whose verified day moves with the clock (#1717).
+    for i in fixture:
+        if i["milestone"] and i["milestone"].get("date"):
+            assert i["milestone"]["date_source"] == "ENG-412", i["item_key"]
+            i["milestone"]["date"] = ENG_412_DAY
     resp = await client.put(
         f"/v1/roadmaps/{ROADMAP}/versions/1/items",
         json={"yaml": _items_yaml(fixture)},
