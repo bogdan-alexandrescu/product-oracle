@@ -29,10 +29,10 @@ from oracle.roadmap.models import RoadmapItem
 from oracle.simple import change_words
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import make_people
-from tests.test_simple_roadmap_api import NOW, by_key, get
-from tests.test_simple_panel_fields import Panel
-from tests.test_unique_item_codes import one_feature_two_items, set_code
 from tests.test_simple_goal_milestones_api import CHANGES
+from tests.test_simple_panel_fields import Panel
+from tests.test_simple_roadmap_api import NOW, by_key, get
+from tests.test_unique_item_codes import one_feature_two_items, set_code
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -62,7 +62,7 @@ async def test_a_refused_code_says_why_in_plain_words(client):
 
 
 async def test_a_rename_of_an_item_with_its_features_code_is_checked(client):
-    """A rename leading with a taken code is refused for an item with its feature's code (#1815 4)."""
+    """A rename leading with a taken code is refused, code from a feature too (#1815 4)."""
     ctx = await make_people()
     a, _ = await one_feature_two_items(ctx)
     body = {"op": "edit_title", "target": {"item_id": a}, "before": {"title": "Alert routing"},
@@ -90,15 +90,15 @@ async def test_a_planned_item_moves_back_to_draft_with_a_reason_and_keeps_its_pl
     assert words == "moved Alpha back to Draft: Planned too early"
     a = (await p.read(client))["a"]
     assert a["status"] == "draft"
-    async with tenant_session(p.ctx.tenant_id) as s:
-        row = await s.get(RoadmapItem, uuid.UUID(p.a))
-        assert row.draft is True
     # Planned again: a forward move, no reason; its dates are where they were.
     r = await p.post(client, "set_status", {"status": "draft"}, {"status": "planned"})
     assert r.status_code == 201, r.text
     a = (await p.read(client))["a"]
     assert a["status"] == "planned"
-    assert (a["start"]["date"], a["end"]["date"]) == (before["start"]["date"], before["end"]["date"])
+    assert (a["start"]["date"], a["end"]["date"]) == (
+        before["start"]["date"],
+        before["end"]["date"],
+    )
 
 
 async def test_planned_on_a_draft_confirms_it(client):

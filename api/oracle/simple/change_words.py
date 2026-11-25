@@ -163,6 +163,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_goal_measure":
             return f"changed how the goal of {x} is measured"
         case "set_status":
+            # panel-stages (#1879): a move back says why.
+            if why := target.get("reason"):
+                word = "Draft" if after.get("draft") else "Planned"
+                return f"moved {x} back to {word}: {why}"
             word = "cut" if after.get("cut") else "done" if after.get("shipped") else "planned"
             return f"marked {x} {word}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.

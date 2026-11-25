@@ -179,7 +179,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
-STATUSES = ("planned", "done", "cut")
+STATUSES = ("draft", "planned", "done", "cut")
 PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
@@ -911,18 +911,34 @@ async def _plan(
     if op == "set_status":
         status = body.after.get("status")
         if status not in STATUSES:
-            raise ChangeError(422, "after.status: planned, done or cut")
+            raise ChangeError(422, "after.status: draft, planned, done or cut")
+        # panel-stages (#1879): any stage to any other; a move back (Done to Planned or Draft,
+        # Planned to Draft) says why, kept on the change for its history.
+        now = entry.status
+        rank = {"draft": 0, "planned": 1, "in_progress": 1, "done": 2}
+        back = now in rank and status in rank and rank[status] < rank[now]
+        why = " ".join(str(body.after.get("reason") or body.reason or "").split())
+        if back and not why:
+            raise ChangeError(422, "Say why it moves back")
+        if back:
+            target["reason"] = why[:NOTE_MAX]
         # Planned clears only the panel's own mark: a shipped mark from elsewhere (the
-        # tracker, the item's talk) stays, so planned never undoes what the panel did not do.
+        # tracker, the item's talk) stays, so planned never undoes what the panel did not do;
+        # a move back from Done reopens it (the mark stays in this change's ``before``).
         shipped = None if (row.shipped or {}).get("note") == PANEL_DONE else row.shipped
+        if back and now == "done":
+            shipped = None
         if status == "done":
             shipped = row.shipped or {
                 "note": PANEL_DONE,
                 "by": str(_me(principal)),
                 "on": company_time.today().isoformat(),
             }
+        # Draft keeps the plan (dates, horizon, track, milestone, dependencies) stored.
         after = {"cut": status == "cut", "shipped": shipped}
-        return entry, target, read(row, ("cut", "shipped"), target), after
+        if status != "cut":  # a cut draft stays a draft, so Restore brings it back as one
+            after["draft"] = status == "draft"
+        return entry, target, read(row, tuple(after), target), after
     if op in SHOWN:
         current = seen_ = {}
     else:
@@ -1192,9 +1208,11 @@ async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str 
         raise ChangeError(422, "Its code comes from its Ground Truth feature or its PRD")
     if raw is None or not str(raw).strip():
         return None
-    code = str(raw).strip().upper()
+    # panel-stages (#1815): a slice's letter stays lower case (f-29A: F-29a).
+    code = str(raw).strip()
+    code = code[:-1].upper() + code[-1].lower() if code[-1:].isalpha() else code.upper()
     if not FEATURE_CODE.fullmatch(code):
-        raise ChangeError(422, "after.code: a feature code, like F-31")
+        raise ChangeError(422, "A code looks like F-31 or F-31a")
     await _not_taken(db, entry, code, read_.by_id())
     return code
 
