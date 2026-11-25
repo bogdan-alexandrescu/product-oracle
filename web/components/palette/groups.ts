@@ -65,5 +65,5 @@ export function buildGroups({
   const pg = pages.filter((p) => matches(p, words));
   if (pg.length) groups.push({ label: 'Go to', hits: pg, more: 0 });
   groups.push({ label: 'Do', hits: actions, more: 0 });
-  return { groups, none: found.length === 0 };
+  return { groups, none: found.length === 0 && pg.length === 0 };
 }

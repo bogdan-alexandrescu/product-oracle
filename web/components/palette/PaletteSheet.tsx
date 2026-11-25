@@ -25,7 +25,7 @@ import {
 } from './hits';
 import { KBD, PaletteRow } from './PaletteRow';
 
-type Rights = { proposes: boolean; decides: boolean; startsPrd: boolean };
+type Rights = { proposes: boolean; decides: boolean; edits: boolean; startsPrd: boolean };
 
 function actionsFor(
   words: string,
@@ -82,9 +82,9 @@ function featureActions(h: Hit, onPanel: (h: Hit, onRoadmap?: boolean) => void):
   ];
 }
 
-function roleLineOf({ proposes, decides }: Rights): string {
+function roleLineOf({ proposes, edits }: Rights): string {
   if (!proposes) return 'As a viewer you can find and open anything; you cannot add or change.';
-  if (!decides) return 'As a commenter you can open any panel and propose changes there.';
+  if (!edits) return 'As a commenter you can open any panel and propose changes there.';
   return '';
 }
 
@@ -112,7 +112,10 @@ export function PaletteSheet({
   const index = useQuery('simple-palette', () => unwrap(api.GET('/v1/simple/palette')));
   const rights: Rights = {
     proposes: can('create_simple_change'),
-    decides: can('accept_simple_change'),
+    // As the roadmap's own add: an owner, or one who decides an item there (its can_decide).
+    decides: can('accept_simple_change') || (roadmap.data?.items ?? []).some((i) => i.can_decide),
+    // Approver and up (one who edits a PRD's sections): no line about proposing.
+    edits: can('edit_document_section'),
     startsPrd: useCanStartPrd(),
   };
 
