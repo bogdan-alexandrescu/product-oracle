@@ -291,6 +291,7 @@ PER_ITEM: dict[str, Role | None] = {
     "post_simple_chat": "viewer",
     "post_simple_meeting_chat": None,
     "propose_discussion_change": "commenter",
+    "push_simple_task_to_tracker": None,
     "reassign_decision": "owner",
     "record_discussion_change": "approver",
     "record_metric_value": "approver",

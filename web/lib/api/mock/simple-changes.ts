@@ -114,6 +114,7 @@ import {
   TRACKS,
 } from './simple-roadmap';
 import { routeGoalSuggestions } from './simple-suggestions';
+import { pushTask } from './task-push';
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from './trash';
 import { madeOrder } from './made-order';
 import { reply } from './typed';
@@ -1800,6 +1801,8 @@ function writeTarget(
   // feature-panel: a task's owner changed in its panel (or undone) reads by the person's name, as service._tasks does.
   if (c.op === 'edit_item_task' && 'owner_id' in values)
     targets[id].owner_name = values.owner_id ? (ctx?.names[String(values.owner_id)] ?? null) : null;
+  // task-push (#1816): the saved task goes to the connected tracker (task_push.push).
+  if (KIND_TASK.has(c.op)) pushTask(targets[id]);
   // An item's own milestone (set_milestone, and its undo) is what the roadmap reads of it.
   if (c.op === 'set_milestone') {
     const key = keyOf(db, c.target.item_id);

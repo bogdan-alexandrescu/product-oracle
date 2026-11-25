@@ -14,6 +14,7 @@ from oracle.runs.roadmap import check_items
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (
+    ENG_412_DAY,
     ITEMS,
     PLAN_TABLES,
     PRD,
@@ -26,8 +27,9 @@ from tests.test_roadmap import (
     tick,
 )
 
-# The ENG-412 estimate approved_prd records (oracle.runs.plan_tables reads its JSON shape).
-ENG_412 = ({"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-11-30"},)
+# The ENG-412 estimate approved_prd records (oracle.runs.plan_tables reads its JSON shape), on
+# its day relative to the company's today (#1717).
+ENG_412 = ({"kind": "estimate", "reference": "ENG-412", "supports_date": ENG_412_DAY},)
 
 # Two items in Now (payment-step, shipping-step) and one in Next (order-tracking).
 ITEMS_3 = (

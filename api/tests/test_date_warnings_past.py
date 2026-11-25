@@ -21,6 +21,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.tenancy import tenant_session
 from tests.test_date_warnings_honest import ITEMS, VERSIONS, _date_warnings, _run_roadmap, flagged
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_WORDS,
     PLAN_TABLES,
     ROADMAP,
     ROADMAP_MD,
@@ -289,9 +290,9 @@ async def test_the_production_cell_passes_approval(client, owner, runtime):  # n
     """A roadmap with no unbacked dates, including a production cell, can be approved."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    beta = "| Beta | Nov 30, 2026 | Payment step |  |"
+    beta = f"| Beta | {ENG_412_WORDS} | Payment step |  |"
     assert beta in PLAN_TABLES
-    md = ROADMAP_MD.replace(beta, f"| Beta | Nov 30, 2026 | Payment step | {CELL} |")
+    md = ROADMAP_MD.replace(beta, f"| Beta | {ENG_412_WORDS} | Payment step | {CELL} |")
     version = await _run_pinned(client, auth, tenant_id, runtime, md)
     assert _date_warnings(version) == []
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
@@ -303,8 +304,9 @@ async def test_a_future_milestone_date_without_a_basis_blocks_approval(client, o
     """An unbacked future milestone date written in prose blocks approving it."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    beta = "| Beta | Nov 30, 2026 | Payment step |  |"
-    md = ROADMAP_MD.replace(beta, f"| Beta | Nov 30, 2026 | Payment step | {CELL} |")
+    beta = f"| Beta | {ENG_412_WORDS} | Payment step |  |"
+    assert beta in ROADMAP_MD
+    md = ROADMAP_MD.replace(beta, f"| Beta | {ENG_412_WORDS} | Payment step | {CELL} |")
     # The plan tables must give the engineering dates: the unbacked one is in prose.
     md = with_line("The holiday milestone lands on Dec 10.", "summary", md)
     version = await _run_pinned(client, auth, tenant_id, runtime, md)

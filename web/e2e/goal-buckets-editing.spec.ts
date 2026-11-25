@@ -92,8 +92,8 @@ for (const size of SIZES) {
 
     test('the intro and the chips read as the frames do', async ({ page }) => {
       await open(page, size.viewport);
-      // mk-goalbuckets: the intro, then the plan's quarter.
-      await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
+      // prio-ux (#1777): the one period every tab names, the plan's dates.
+      await expect(page.getByTestId('prio-subtitle')).toHaveText('This plan, Nov 2 – Feb 12');
       // Demo 9: the intro is behind the (i).
       await expect(page.locator('#prio-about-text')).toHaveText(
         'Where the engineer-weeks go, goal by goal.',

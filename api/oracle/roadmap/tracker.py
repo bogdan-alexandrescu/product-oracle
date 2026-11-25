@@ -17,7 +17,7 @@ previews what a connector would create, without writing.
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, NoReturn
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,11 +72,26 @@ def connector() -> TrackerConnectorOut:
     )
 
 
-def refuse_push() -> None:
+def refuse_push() -> NoReturn:
     """Every tracker write is refused: off (409) or on but unverified (501)."""
     if not get_settings().tracker_two_way_enabled:
         raise WritesOff(OFF_REASON)
     raise NotVerified(UNVERIFIED_REASON)
+
+
+def connected() -> bool:
+    """Whether a tracker is connected for writes (two-way sync on)."""
+    return get_settings().tracker_two_way_enabled
+
+
+async def push_task(
+    db: AsyncSession, principal: Principal, task: Any, record: TrackerRecord | None
+) -> TrackerRecord:
+    """task-push (#1816): create the task's issue in the connected tracker (``record`` None)
+    or move its record to the task's title and status, and return the record. The one gate
+    every tracker write goes through: while no connector is verified it is refused as
+    ``push_track_to_tracker`` is, and nothing is written."""
+    refuse_push()
 
 
 async def import_records(

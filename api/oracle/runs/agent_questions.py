@@ -18,13 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.runs import flows, service
-from oracle.runs.models import AgentAnswer, Checkpoint, Run, RunSegment
-from oracle.runs.schemas import (
+from oracle.runs.agent_question_schemas import (
     AgentAnswerOut,
     AgentOptionOut,
     AgentQuestionOut,
     AgentQuestionsOut,
 )
+from oracle.runs.models import AgentAnswer, Checkpoint, Run, RunSegment
 
 FILE = "agent_questions.yaml"
 

@@ -1,7 +1,7 @@
-import { expect, test, type Page } from './test';
-
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * The stale-marks walk (Nov 6, 2026): a person reconciled 'May be stale' roadmap items and the
@@ -51,7 +51,7 @@ test('Review in the Inbox opens Still valid… in the Plan; marking it still val
 }) => {
   await withStale(page);
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 2 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 2 need you');
   const row = alertRows(page).filter({ hasText: STALE });
   await expect(row.getByTestId('track-alert-detail')).toHaveText(REASON);
   await row.getByRole('link', { name: `Review ${STALE}` }).click();
@@ -66,7 +66,7 @@ test('Review in the Inbox opens Still valid… in the Plan; marking it still val
   await expect(staleCard(page)).toHaveCount(0);
 
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 1 need you');
   await expect(alertRows(page).filter({ hasText: STALE })).toHaveCount(0);
 });
 

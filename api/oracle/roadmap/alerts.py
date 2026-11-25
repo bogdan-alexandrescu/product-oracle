@@ -37,7 +37,7 @@ from oracle.docs.models import Document
 from oracle.members.leads import date_rights, engineering_leads
 from oracle.members.names import display_name
 from oracle.members.schemas import PersonOut
-from oracle.roadmap import schedule, staleness, tracker, tracks
+from oracle.roadmap import codes, schedule, staleness, tracker, tracks
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -379,6 +379,8 @@ class Lookups:
     level: str = "recommend"
     # {"type:key": title} of the Ground Truth items stale alerts name by ref.
     ref_names: dict[str, str] = field(default_factory=dict)
+    # inbox-ux (#1786): each alert's item code (codes.code_of), keyed as ``titles``.
+    codes: dict[tuple[uuid.UUID, str], str] = field(default_factory=dict)
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
@@ -404,18 +406,22 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
     # item carried onto the company roadmap may name another track or none; the stale-marks
     # walk showed its key).
     titles: dict[tuple[uuid.UUID, str], str] = {}
+    item_codes: dict[tuple[uuid.UUID, str], str] = {}
     roadmap_tracks: dict[uuid.UUID, list[uuid.UUID]] = {}
     for t in track_rows.values():
         if t.roadmap_document_id is not None:
             roadmap_tracks.setdefault(t.roadmap_document_id, []).append(t.id)
     keys = {a.item_key for a in alerts if a.item_key}
     if track_ids and keys:
-        for track_id, doc_id, key, title in await db.execute(
+        by_feature = await codes.feature_codes(db)
+        for row in await db.execute(
             select(
                 RoadmapItem.track_id,
                 RoadmapItem.roadmap_document_id,
                 RoadmapItem.item_key,
                 RoadmapItem.title,
+                RoadmapItem.feature_id,
+                RoadmapItem.prd_section_key,
             )
             .where(
                 RoadmapItem.item_key.in_(keys),
@@ -424,8 +430,17 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
             )
             .order_by(RoadmapItem.created_at)
         ):
+            track_id, doc_id, key, title = (
+                row.track_id,
+                row.roadmap_document_id,
+                row.item_key,
+                row.title,
+            )
+            code = codes.code_of(row, by_feature)
             for tid in {*roadmap_tracks.get(doc_id, []), *([track_id] if track_id else [])}:
                 titles[(tid, key)] = title
+                if code:
+                    item_codes[(tid, key)] = code
     kept_by = {a.kept_by for a in alerts if a.kept_by}
     names = {
         u.id: u.email
@@ -447,7 +462,7 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
     ]
     return Lookups(track_rows, prds, titles, names, leads, lead,
                    await visibility.hidden_for_reader(db), level,
-                   await views.ref_names(db, stored))  # fmt: skip
+                   await views.ref_names(db, stored), item_codes)  # fmt: skip
 
 
 def shown(alerts: list[TrackAlert], lk: Lookups) -> list[TrackAlert]:
@@ -470,6 +485,7 @@ def out(
         prd=TrackAlertPrd(slug=prd.slug if prd else "", title=prd.title if prd else track.title),
         item_key=a.item_key or None,
         item_title=lk.titles.get((a.track_id, a.item_key)) if a.item_key else None,
+        item_code=lk.codes.get((a.track_id, a.item_key)) if a.item_key else None,
         kind=a.kind,  # type: ignore[arg-type]
         detail=staleness.detail_for_reader(a.detail, lk.hidden, lk.ref_names)
         if a.kind == "stale"

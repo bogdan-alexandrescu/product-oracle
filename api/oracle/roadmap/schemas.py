@@ -886,6 +886,8 @@ class TrackAlertOut(BaseModel):
     prd: TrackAlertPrd
     item_key: str | None
     item_title: str | None
+    # inbox-ux (#1786): the item's feature code ("F-17"), shown with its name; None: it has none.
+    item_code: str | None = None
     kind: AlertKind
     detail: str
     data: dict[str, Any]

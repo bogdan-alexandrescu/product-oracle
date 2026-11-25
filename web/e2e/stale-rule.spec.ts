@@ -59,14 +59,14 @@ test('confirming a feature marks no item; renaming it marks the item on it', asy
   ] as const);
   await login(page);
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 1 need you');
 
   const d = await openFeature(page);
   await d.getByRole('button', { name: 'Confirm' }).click();
   await expect(d.getByRole('status').filter({ hasText: 'Confirmed' })).toBeVisible();
 
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 1 need you');
   await expect(alertRow(page, ITEM)).toHaveCount(0);
   await openPlan(page);
   await expect(atRisk(page)).toContainText('1 of 7 items needs attention');
@@ -83,7 +83,7 @@ test('confirming a feature marks no item; renaming it marks the item on it', asy
 
   const reason = 'The feature "Usage export by team" changed';
   await openInbox(page);
-  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 2 need you');
+  await expect(trackLabel(page)).toHaveText('Usage alerts PRD · Needs a look · 2 need you');
   await expect(alertRow(page, ITEM).getByTestId('track-alert-detail')).toHaveText(reason);
   await openPlan(page);
   await expect(atRisk(page)).toContainText('2 of 7 items need attention');

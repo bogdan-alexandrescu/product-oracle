@@ -1018,7 +1018,7 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup['stops'][number] }) {
         </span>
         <span className="simple-meta">
           {/* #1780: a long note shows its start, with Show more. */}
-          {s.note && <RunNote note={s.note} />}
+          {s.note && <RunNote note={s.note} codes={s.codes} />}
           {[s.note ? '' : null, who, s.day ? stopDay(s.day) : null]
             .filter((x) => x !== null)
             .join(' · ')}
@@ -1044,7 +1044,7 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup['stops'][number] }) {
                 {t.day ? ` · ${stopDay(t.day)}` : ''}
                 {t.note && (
                   <span className="block text-text2">
-                    “<RunNote note={t.note} />”
+                    “<RunNote note={t.note} codes={t.codes} />”
                   </span>
                 )}
               </li>

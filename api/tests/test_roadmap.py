@@ -2,12 +2,14 @@
 the roadmap draft's import with provenance and PRD links, exports, the feedback loop
 on a roadmap, roles, and MCP. Against Postgres with the FakeRuntime."""
 
+import os
 import uuid
-from datetime import date
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.auth.service import create_user, make_session_cookie
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
@@ -19,6 +21,17 @@ from oracle.runs.roadmap import check_items, doc_links
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
+
+# #1717: ENG-412's day sits days ahead of the company's today, never on a fixed calendar day
+# a moved clock passes. Strings below spell it 2026-11-30 and swap it in. The sweep moves it:
+# ORACLE_TEST_ENG_412_DAYS=40 runs every test that reads it with the day in another year.
+ENG_412_ON = company_time.today() + timedelta(
+    days=int(os.environ.get("ORACLE_TEST_ENG_412_DAYS", "6"))
+)
+ENG_412_DAY = ENG_412_ON.isoformat()
+ENG_412_WORDS = company_time.calendar_day_with_year(ENG_412_ON)
+# Another day for the tests that move Beta off ENG-412's (was 2026-12-15).
+OTHER_DAY = (ENG_412_ON + timedelta(days=15)).isoformat()
 
 PRD = "checkout-redesign"
 ROADMAP = "checkout-redesign-roadmap"
@@ -46,7 +59,7 @@ items:
     priority: {score: 3.1, rank: 2, explanation: "activation weight 3 x contribution 1"}
     confidence: medium
     prd_section: s-5-2
-"""
+""".replace("2026-11-30", ENG_412_DAY)
 
 # roadmap-plan-tables: the plan tables every roadmap draft carries (oracle.runs.plan_tables),
 # filled from ITEMS and the ENG-412 estimate approved_prd records.
@@ -65,7 +78,7 @@ PLAN_TABLES = """\
 | Beta | Nov 30, 2026 | Payment step |  |
 | Shipping estimate up front |  | Shipping step |  |
 
-"""
+""".replace("Nov 30, 2026", ENG_412_WORDS)
 
 
 def with_plan(md: str, items: str, bases: tuple = ()) -> str:
@@ -128,7 +141,7 @@ and [an old section](/documents/checkout-redesign/v/1#gone).
 {PLAN_TABLES}## Sources and data points {#sources}
 
 - Beta date: ENG-412 estimate [c:c1]
-""".replace("{PLAN_TABLES}", PLAN_TABLES)
+""".replace("{PLAN_TABLES}", PLAN_TABLES).replace("2026-11-30", ENG_412_DAY)
 
 
 @pytest.fixture
@@ -144,7 +157,7 @@ async def verified_estimate(client, auth, reference: str = "ENG-412") -> None:
     rests on ENG-412."""
     resp = await client.post(
         "/v1/schedule-bases",
-        json={"kind": "estimate", "reference": reference, "supports_date": "2026-11-30",
+        json={"kind": "estimate", "reference": reference, "supports_date": ENG_412_DAY,
               "prd": PRD},
         headers=auth,
     )  # fmt: skip
@@ -522,7 +535,7 @@ def test_items_valid():
             "date_outside_now",
         ),
         (("date_source: ENG-412 estimate", "owner: me"), "undated_source"),
-        (("date: 2026-11-30", 'date: "next month"'), "invalid_date"),
+        ((f"date: {ENG_412_DAY}", 'date: "next month"'), "invalid_date"),
         (("horizon: now", "horizon: later"), "horizon_breaks_dependency"),
         (("document: checkout-redesign", "document: other"), "wrong_prd"),
     ],
@@ -927,13 +940,13 @@ async def test_a_date_without_a_verified_basis_is_refused(client, owner, runtime
     _, auth = owner
     await approved_prd(client, auth)
     guessed = ITEMS.replace("date_source: ENG-412 estimate", "date_source: the team thinks so")
-    other_day = ITEMS.replace("date: 2026-11-30", "date: 2026-12-15")
+    other_day = ITEMS.replace(f"date: {ENG_412_DAY}", f"date: {OTHER_DAY}")
     runtime.script["roadmap_items"] = [
         Outcome(artifacts={"roadmap_items.yaml": guessed}),
         Outcome(artifacts={"roadmap_items.yaml": other_day}),
     ]
     run = await start(client, auth, await create(client, auth, source=PRD))
-    assert "- ENG-412 (estimate) supports 2026-11-30" in runtime.submitted[0].steps[-1].prompt
+    assert f"- ENG-412 (estimate) supports {ENG_412_DAY}" in runtime.submitted[0].steps[-1].prompt
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert [p["code"] for p in pending(run)["payload"]["items_check"]["problems"]] == [
@@ -955,13 +968,13 @@ def test_items_check_dates_against_verified_bases():
     """A milestone date in roadmap items is checked against a verified base."""
     from oracle.roadmap.schedule import Basis
 
-    eng = Basis(uuid.uuid4(), "estimate", "ENG-412", date(2026, 11, 30))
+    eng = Basis(uuid.uuid4(), "estimate", "ENG-412", ENG_412_ON)
     assert check_items(ITEMS, date_bases=[eng]).ok
     assert check_items(ITEMS).ok  # without bases (pure parsing) dates are not checked
-    for bases in ([], [Basis(uuid.uuid4(), "estimate", "ENG-41", date(2026, 11, 30))]):
+    for bases in ([], [Basis(uuid.uuid4(), "estimate", "ENG-41", ENG_412_ON)]):
         codes = [p["code"] for p in check_items(ITEMS, date_bases=bases).problems]
         assert codes == ["unverified_date"], bases
-    dated = "milestone: {name: Beta, date: 2026-11-30, date_source: ENG-412 estimate}"
+    dated = f"milestone: {{name: Beta, date: {ENG_412_DAY}, date_source: ENG-412 estimate}}"
     undated = ITEMS.replace(dated, "milestone: Beta")
     assert check_items(undated, date_bases=[]).ok
 
@@ -1220,7 +1233,7 @@ async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable
     # (No PRD to verify a date against: round 3, a date in the text would be refused.)
     first = (
         ROADMAP_MD.replace("kind: roadmap\n", "")
-        .replace("Beta by 2026-11-30.", "Beta first.")
+        .replace(f"Beta by {ENG_412_DAY}.", "Beta first.")
         .replace(PLAN_TABLES, "")
     )
     assert (await import_draft(client, auth, first, doc=ROADMAP)).status_code == 201
