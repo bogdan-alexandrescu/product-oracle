@@ -37,9 +37,7 @@ test('a slice code is set as typed and the panel shows it at once', async ({ pag
   await panel(page).getByRole('button', { name: 'Change the code' }).click();
   await panel(page).getByLabel('Code').fill('f-29A');
   await panel(page).getByTestId('card-code-edit').getByRole('button', { name: 'Save' }).click();
-  await expect(panel(page).getByTestId('card-code')).toHaveText(/^F-29a(?![\w-])/, {
-    timeout: 1500,
-  });
+  await expect(panel(page).getByTestId('card-code-text')).toHaveText('F-29a', { timeout: 1500 });
 });
 
 for (const width of [390, 768, 1440]) {
@@ -84,7 +82,7 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await page.goto('/simple/roadmap');
   await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await openRoadmapItem(page, 'alert-export');
-  const dates = await panel(page).getByTestId('card-dates').innerText();
+  const dates = await panel(page).getByTestId('card-dates').textContent();
   await changeStatus(page);
   await expect(statusPick(page).locator('option')).toHaveText(['Draft', 'Planned', 'Done']);
   await statusPick(page).selectOption('draft');
@@ -97,7 +95,7 @@ test('a feature moves back to Draft with a reason, is planned again with its dat
   await changeStatus(page);
   await statusPick(page).selectOption('planned');
   await expect(panel(page).getByTestId('card-status')).toHaveText('Planned');
-  await expect(panel(page).getByTestId('card-dates')).toHaveText(dates);
+  await expect(panel(page).getByTestId('card-dates')).toHaveText(dates ?? '');
 
   await changeStatus(page);
   await statusPick(page).selectOption('done');
