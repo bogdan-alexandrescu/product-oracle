@@ -23,6 +23,12 @@ Test cards (protects / fails_when / no_claim):
 - test_a_hidden_prds_milestones_are_left_out (viewer, commenter, approver): protects=an
   approvers-only PRD's milestone, and one whose PRD is in Trash, is not listed to who may not
   read the PRD; fails_when=its name or date is listed; no_claim=the roadmap read itself.
+- test_a_track_milestone_with_no_goal_milestone_is_listed: protects=a track milestone the
+  roadmap read codes, with no goal milestone of its code, is a row by its own id; fails_when=it
+  is missing.
+- test_confirmed_features_on_no_roadmap_are_listed: protects=a confirmed live feature no item
+  holds is listed by code and name; fails_when=it is missing, or an item's, a proposed, a
+  trashed or another company's feature is listed.
 """
 
 from datetime import UTC, date, datetime
@@ -255,3 +261,65 @@ async def test_a_hidden_prds_milestones_are_left_out(client, role, sees):
         await s.commit()
     body = await read(client, ctx, role)
     assert "Prove it" not in {m["name"] for m in body["milestones"]}
+
+
+async def test_a_track_milestone_with_no_goal_milestone_is_listed(client):
+    """A track's "Beta", on the roadmap with no goal milestone of its code, is a row of its own,
+    by its roadmap code, date and id (the Roadmap opens it by that id)."""
+    ctx = await make_ctx(f"Example Co {uuid4().hex[:8]}")
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("launch")
+        track = await seed.track(pv, rm, title="Guided setup")
+        item = await seed.item(rv, pv, "item-0", track_id=track.id)
+        beta = await seed.add(
+            TrackMilestone(
+                track_id=track.id,
+                name="Beta",
+                horizon="now",
+                item_keys=["item-0"],
+                target_date=date(2026, 11, 30),
+                basis_ids=[item.id],
+            )
+        )
+        await s.commit()
+        beta_id = str(beta.id)
+    shown = (await get_roadmap(client, ctx, "viewer"))["milestones"]
+    assert [(m["name"], m["roadmap_code"]) for m in shown] == [("Beta", "M1")]
+    got = (await read(client, ctx, "viewer"))["milestones"]
+    assert [(m["id"], m["code"], m["name"], m["date"]) for m in got] == [
+        (beta_id, "M1", "Beta", "Nov 30")
+    ]
+
+
+async def test_confirmed_features_on_no_roadmap_are_listed(client):
+    """A confirmed Ground Truth feature no roadmap item holds is found by code and name; one an
+    item holds, a proposed one, one in Trash and another company's are not."""
+    await features_world("other-")
+    ctx, referral = await features_world()
+    for role in ("viewer", "owner"):
+        got = (await read(client, ctx, role))["features"]
+        assert [(f["code"], f["name"]) for f in got] == [("F-12", "Referral link")]
+        assert got[0]["id"] == referral
+
+
+async def features_world(prefix: str = "") -> tuple[Ctx, str]:
+    ctx = await make_ctx(f"{prefix}Example Co {uuid4().hex[:8]}")
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap(f"{prefix}launch")
+
+        async def feature(key: str, title: str, status: str = "confirmed") -> Entity:
+            f = await seed.entity("feature", key)
+            f.title, f.status = f"{prefix}{title}", status
+            return f
+
+        referral = await feature("F-12", "Referral link")
+        held = await feature("F-03", "Guided setup")
+        await seed.item(rv, pv, "f-03", feature_id=held.id)
+        await feature("F-20", "Team invites", status="proposed")
+        trashed = await feature("F-21", "Old export")
+        trashed.deleted_at = datetime(2026, 11, 1, tzinfo=UTC)
+        await s.commit()
+        referral_id = str(referral.id)
+    return ctx, referral_id
