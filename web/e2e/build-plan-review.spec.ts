@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
-import { ADMIN, login } from './helpers';
+import { ADMIN, lineOptionsSettled, login } from './helpers';
 import { expect, test, type Page } from './test';
 
 /*
@@ -64,6 +64,7 @@ for (const v of SIZES) {
       await goalCard(page, 'G-R').click();
       await expect(page.getByTestId('prio-goal-filter')).toBeVisible();
       await expect(page.getByText('Loading priorities…')).toHaveCount(0);
+      await lineOptionsSettled(page);
       const options = await page.locator('#prio-line option').allTextContents();
       const label = options.find((o) => /^Milestone: (M\d+ )?Beta/.test(o));
       expect(label, options.join(' | ')).toBeTruthy();
