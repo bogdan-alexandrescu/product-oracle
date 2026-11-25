@@ -14,6 +14,7 @@ export function PaletteEntry({
   const { me, loading } = useMe();
   // While /v1/me loads its place is kept, so the rail's rows never move down once it answers.
   if (!me && !loading) return null;
+  const wait = me ? '' : 'invisible';
   if (where === 'simple-rail')
     return (
       <button
@@ -21,7 +22,7 @@ export function PaletteEntry({
         onClick={openPalette}
         data-testid="palette-entry"
         aria-keyshortcuts="Meta+K Control+K"
-        className="mb-1 flex h-12 w-full items-center gap-3 rounded-xl border border-rail-sep px-3 text-left text-[length:var(--simple-rail-label)] font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text"
+        className={`mb-1 flex h-12 w-full items-center gap-3 rounded-xl border border-rail-sep px-3 text-left text-[length:var(--simple-rail-label)] font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${wait}`}
       >
         <Icon name="search" stroke={1.7} />
         <span className="flex-1">Find</span>
@@ -35,7 +36,7 @@ export function PaletteEntry({
         onClick={openPalette}
         data-testid="palette-entry"
         aria-keyshortcuts="Meta+K Control+K"
-        className="flex w-[72px] flex-none flex-col items-center gap-0.5 rounded-xl py-1.5 text-sm text-rail-text hover:bg-rail-hover hover:text-rail-active-text"
+        className={`flex w-[72px] flex-none flex-col items-center gap-0.5 rounded-xl py-1.5 text-sm text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${wait}`}
       >
         <Icon name="search" />
         Find

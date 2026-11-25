@@ -4,9 +4,8 @@ import { COMPANY_TABS } from '@/app/company/_tabs';
 import { PLAN_TABS } from '@/app/plan/_tabs';
 import { DESTINATIONS } from '@/components/ds/AppShell';
 import { SIMPLE_DESTINATIONS } from '@/components/simple/SimpleShell';
-import { SETTINGS_TABS } from '@/lib/settings-tabs';
-
 import type { Operation } from '@/lib/me';
+import { SETTINGS_TABS } from '@/lib/settings-tabs';
 
 import type { Hit } from './hits';
 

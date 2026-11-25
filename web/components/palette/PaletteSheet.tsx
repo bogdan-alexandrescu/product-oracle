@@ -5,20 +5,18 @@ import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Button } from '@/components/ds/Button';
 import { Icon } from '@/components/ds/Icon';
-import { askWith } from '@/components/hop/open-state';
 import { useCanStartPrd } from '@/components/simple/NewPrd';
-import { api, unwrap } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
 import { useRouter } from '@/lib/nav';
-import { useQuery } from '@/lib/use-query';
 
-import { actionsFor, featureActions, roleLineOf, type Rights } from './actions';
+import { actionsFor, featureActions, noMatchChoices, roleLineOf, type Rights } from './actions';
 import { askNewItem, usePaletteEscape } from './events';
 import { buildGroups, moreOf, rowsOf, type Group } from './groups';
 import { featureHits, indexHits, recentKeys, rememberOpened, type Hit, type HitKind } from './hits';
 import { palettePages } from './pages';
 import { NoMatch, ReadFailed, Reading } from './PaletteParts';
 import { KBD, PaletteMoreRow, PaletteRow } from './PaletteRow';
+import { usePaletteReads } from './reads';
 
 /** What Tab reaches inside the sheet (its options are walked with the arrow keys). */
 const TAB_STOPS = 'input, button:not([tabindex="-1"]):not([disabled])';
@@ -45,12 +43,11 @@ export function PaletteSheet({
   const list = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLInputElement>(null);
-  const roadmap = useQuery('simple-roadmap:{}', () => unwrap(api.GET('/v1/simple/roadmap', {})));
-  const index = useQuery('simple-palette', () => unwrap(api.GET('/v1/simple/palette')));
+  const { roadmap, index, ready, failed, retry } = usePaletteReads();
   const rights: Rights = {
     proposes: can('create_simple_change'),
     // As the roadmap's own add: an owner, or one who decides an item there (its can_decide).
-    decides: can('accept_simple_change') || (roadmap.data?.items ?? []).some((i) => i.can_decide),
+    decides: can('accept_simple_change') || (roadmap?.items ?? []).some((i) => i.can_decide),
     // Approver and up (one who edits a PRD's sections): no line about proposing.
     edits: can('edit_document_section'),
     startsPrd: useCanStartPrd(),
@@ -62,38 +59,16 @@ export function PaletteSheet({
     askNewItem({ title, add });
   };
   const actions = actionsFor(words, rights, { newItem, newPrd: onNewPrd });
-  // Not read is not empty: nothing is said to be missing, or added, until both have answered.
-  const ready = !!roadmap.data && !!index.data;
-  const failed = (!roadmap.data && roadmap.error) || (!index.data && index.error) || null;
-  const again = () => {
-    if (!roadmap.data) void roadmap.reload();
-    if (!index.data) void index.reload();
-    box.current?.focus();
-  };
   const { groups, none } = buildGroups({
     words,
-    all: [...featureHits(roadmap.data?.items ?? []), ...indexHits(index.data)],
+    all: [...featureHits(roadmap?.items ?? []), ...indexHits(index)],
     pages: palettePages(simple, { can, simpleMode }),
     actions,
     recent: recentKeys(),
     whole,
     ready,
   });
-  /** Nothing matches: Enter adds the words as an item (or proposes it), else asks Oracle. */
-  const choices: Hit[] = [
-    ...(rights.proposes
-      ? [
-          {
-            key: 'n-add',
-            kind: 'Action' as const,
-            name: `${rights.decides ? 'Add' : 'Propose'} “${words}” as an item`,
-            where: '',
-            run: () => newItem(words, false),
-          },
-        ]
-      : []),
-    { key: 'n-ask', kind: 'Action', name: 'Ask Oracle', where: '', run: () => askWith(words) },
-  ];
+  const choices = noMatchChoices(words, rights, newItem);
   const flat = sub ? featureActions(sub, onPanel) : none ? choices : rowsOf(groups);
   // A read that answers may shorten the list under the selection.
   const last = Math.max(0, flat.length - 1);
@@ -256,7 +231,15 @@ export function PaletteSheet({
             <NoMatch words={words} choices={choices} sel={sel} onPoint={setSel} onPick={go} />
           )}
           {!sub && !none && groups.map(group)}
-          {!sub && failed && <ReadFailed error={failed} onAgain={again} />}
+          {!sub && failed && (
+            <ReadFailed
+              error={failed}
+              onAgain={() => {
+                retry();
+                box.current?.focus();
+              }}
+            />
+          )}
           {!sub && !ready && !failed && words && <Reading />}
         </div>
         {!phone && (

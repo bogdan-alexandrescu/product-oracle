@@ -5,9 +5,8 @@
  * same rows) and their key results (the confirmed subgoals, each under its top goal), and the
  * roadmap read's goal milestones, one per roadmap code.
  */
-import { joinedNames } from '@/lib/milestone-code';
-
 import type { Schemas } from '@/lib/api/client';
+import { joinedNames } from '@/lib/milestone-code';
 
 import { goalMapIdOf } from './goal-map';
 import { reply } from './typed';

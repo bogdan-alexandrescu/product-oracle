@@ -66,6 +66,27 @@ test('Enter on a PRD opens its one-pager', async ({ page }) => {
   await expect(page).toHaveURL(/\/simple\/one-pagers\/[^/]+$/);
 });
 
+for (const phone of [false, true]) {
+  test(`Enter on a milestone found by its code opens its card on the Roadmap${phone ? ' (phone)' : ''}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    await signIn(page, ADMIN.email, '/simple');
+    await pressFind(page);
+    await paletteBox(page).fill('M3');
+    const row = rows(page).filter({ hasText: /^M3/ });
+    await expect(row).toHaveCount(1);
+    if (!phone) await expect(row).toContainText('Milestone · Roadmap');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/simple\/roadmap\?milestone=/);
+    const card = page.locator('[data-testid="ms-card"], [data-testid="ms-prd-card"]');
+    await expect(card).toContainText('M3');
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
+    await expect(page).toHaveURL(/\/simple\/roadmap$/);
+  });
+}
+
 test('On a phone the palette fills the screen and Close shuts it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, ADMIN.email, '/simple');

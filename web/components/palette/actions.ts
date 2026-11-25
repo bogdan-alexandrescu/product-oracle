@@ -40,6 +40,30 @@ export function actionsFor(
   return out;
 }
 
+/** Nothing matches: Enter adds the words as an item (or proposes it), else asks Oracle. */
+export function noMatchChoices(
+  words: string,
+  { proposes, decides }: Rights,
+  newItem: (title: string, add: boolean) => void,
+): Hit[] {
+  const ask: Hit = {
+    key: 'n-ask',
+    kind: 'Action',
+    name: 'Ask Oracle',
+    where: '',
+    run: () => askWith(words),
+  };
+  if (!proposes) return [ask];
+  const add: Hit = {
+    key: 'n-add',
+    kind: 'Action',
+    name: `${decides ? 'Add' : 'Propose'} “${words}” as an item`,
+    where: '',
+    run: () => newItem(words, false),
+  };
+  return [add, ask];
+}
+
 /** Tab on a feature: its own actions. */
 export function featureActions(h: Hit, onPanel: (h: Hit, onRoadmap?: boolean) => void): Hit[] {
   return [
