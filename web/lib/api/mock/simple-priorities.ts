@@ -817,7 +817,14 @@ export const PRIORITIES_BUCKET_ONLY_SCENARIO = 'priorities-bucket-only';
  * listed in `unranked` instead.
  */
 export function rankedItems(db: SimpleDb, all: Item[] = openItems(db)): Item[] {
-  return all.filter((i) => !i.draft && !noFeature(db, i));
+  // draw-time (#1870): one pass over the items (the first of a key, as noFeature reads it).
+  const seen = new Set<string>();
+  const none = new Set<string>();
+  for (const s of db.items) {
+    if (!seen.has(s.key) && s.feature_id === null) none.add(s.key);
+    seen.add(s.key);
+  }
+  return all.filter((i) => !i.draft && !none.has(i.key));
 }
 
 const noFeature = (db: SimpleDb, i: Item): boolean =>

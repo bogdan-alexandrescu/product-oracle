@@ -365,8 +365,10 @@ const REASON_WORDS: Record<string, string> = {
 export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
   const own = `‘${i.title}’ `;
   let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
+  // draw-time (#1870): only a reason that quotes another name is looked through for it.
+  if (!r.includes('‘')) return r;
   for (const o of items.values())
-    if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`))
+    if (o.code && o.id !== i.id && r.includes(`‘${o.title}’`))
       r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
   return r;
 }

@@ -636,6 +636,8 @@ declare global {
   }
 }
 
+const NO_ROWS: Row[] = [];
+
 export function Chart({
   data: given,
   format,
@@ -671,12 +673,17 @@ export function Chart({
     lane === 'goal' && !r.below && goalLane(r.key)
       ? (numbers.get(r.key) ?? numbers.get(r.title) ?? null)
       : null;
-  const [width, setWidth] = useState(900);
+  // draw-time (#1870): the rows are drawn once the chart's width is known (measured before the first
+  // paint), not at a guess and then all again.
+  const [measuredW, setWidth] = useState<number | null>(null);
+  const width = measuredW ?? 900;
   const flash = useAppliedFlash();
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(Math.max(240, el.clientWidth - 2)));
+    const fit = () => setWidth(Math.max(240, el.clientWidth - 2));
+    fit();
+    const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -776,6 +783,7 @@ export function Chart({
     ),
     [data, compact, lane, top, wrapRows, chartW, tails, fonts],
   );
+  const rows = measuredW === null ? NO_ROWS : l.rows;
   // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
   // bar is out of view says where it lies, with a button that scrolls to it.
   const [view, setView] = useState<[number, number] | null>(null);
@@ -1071,7 +1079,7 @@ export function Chart({
             </span>
           </div>
         )}
-        {l.rows.map((r, n) =>
+        {rows.map((r, n) =>
           r.kind === 'group' ? (
             <div
               key={`g-${r.key}-${n}`}
@@ -1392,7 +1400,7 @@ export function Chart({
                 <title>{`${h.label || 'No-work week'}: ${shortDay(h.start)} – ${shortDay(h.end)}`}</title>
               </rect>
             ))}
-            {l.rows.map((r, n) =>
+            {rows.map((r, n) =>
               r.kind === 'group' ? (
                 <rect
                   key={`gb-${n}`}
@@ -1598,8 +1606,8 @@ export function Chart({
                 </g>
               );
             })}
-            <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) =>
+            {measuredW !== null && <Arrows data={data} l={l} sc={sc} moved={moved} />}
+            {rows.map((r) =>
               r.kind === 'item' ? (
                 <Bar
                   key={r.item.id}
@@ -1672,7 +1680,7 @@ export function Chart({
             className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
           />
           {view &&
-            l.rows.map((r) => {
+            rows.map((r) => {
               if (r.kind !== 'item') return null;
               const [a, b] = drawnSpan(r.item, moved[r.item.id]);
               const x0 = sc.x(a);
@@ -1705,11 +1713,12 @@ export function Chart({
                 </button>
               );
             })}
-          {overlay?.(
-            l,
-            sc,
-            marks.filter((m) => m.kind !== 'today').map((m) => m.box),
-          )}
+          {measuredW !== null &&
+            overlay?.(
+              l,
+              sc,
+              marks.filter((m) => m.kind !== 'today').map((m) => m.box),
+            )}
         </div>
       </div>
     </div>

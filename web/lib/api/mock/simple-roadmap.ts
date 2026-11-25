@@ -2112,12 +2112,13 @@ export function dependOnOtherPrd(db: SimpleDb, key: string, dep: string): void {
   if (s) s.depends = [...(s.depends ?? []), dep];
 }
 
+const prdSlug = once((prd: string) => prd.toLowerCase().replace(/ /g, '-'));
 /** The PRD a seeded item was built from (its roadmap's). */
 function itemPrd(s: SeedItem): Schemas['SimpleDocRef'] {
   const prd = ROADMAPS[s.roadmap].prd;
   return {
     id: stableUuid(`simple-prd/${s.roadmap}`),
-    slug: prd.toLowerCase().replace(/ /g, '-'),
+    slug: prdSlug(prd),
     title: prd,
   };
 }
@@ -2138,7 +2139,7 @@ export function ownPrd(s: SeedItem): Schemas['SimpleDocRef'] {
 export function ownPrdSlug(s: SeedItem): string {
   if (s.prd_doc) return s.prd_doc.slug;
   if (s.from_prd) return s.from_prd.slug;
-  return ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, '-');
+  return prdSlug(ROADMAPS[s.roadmap].prd);
 }
 
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
@@ -3095,7 +3096,8 @@ export function roadmapOut(
     const [code, title] = codedTitle(s.title, ownLead ?? prdCode(s.section));
     const featureCode = s.feature_id ? db.feature_codes?.[s.feature_id] : undefined;
     const rm = ROADMAPS[s.roadmap];
-    const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, '-'));
+    const sliced = slicesOf(s, prdSlug(rm.prd));
+    const goalKey = linked(s);
     const open = itemSuggestion(db, db.ids[s.key]);
     const suggestion = offered(own.get(s.key)!, open);
     return {
@@ -3138,13 +3140,13 @@ export function roadmapOut(
       },
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal, else its feature's.
-      goal: linked(s)
+      goal: goalKey
         ? {
-            id: stableUuid(`simple-goal/${linked(s)}`),
-            key: linked(s)!,
-            ...roadmapGoal(reader.full, linked(s)!),
-            position: goalPositionOf(linked(s)!),
-            ...READINGS[linked(s)!],
+            id: stableUuid(`simple-goal/${goalKey}`),
+            key: goalKey,
+            ...roadmapGoal(reader.full, goalKey),
+            position: goalPositionOf(goalKey),
+            ...READINGS[goalKey],
           }
         : s.map_goal
           ? mapGoalRef(reader.full, s.map_goal)
@@ -3818,10 +3820,11 @@ function keyDatesOut(
   });
   const draftOf = (slug: string) =>
     (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
+  const rank = prdRanker();
   const keyDates = slugs
     .flatMap((slug) => {
       const pub = draftOf(slug)?.published.key_dates ?? null;
-      const fromPrds = prdKeyDates(db, slug, ref(slug));
+      const fromPrds = prdKeyDates(db, slug, ref(slug), rank);
       // ah-prd-milestones-once review (key_dates.published_copies): a copy of a PRD's milestone the
       // roadmap published before they were read-only from the PRD (its name, "From <PRD>") is skipped.
       const copies = new Set(
@@ -3868,6 +3871,7 @@ function prdKeyDates(
   db: SimpleDb,
   slug: string,
   roadmap: Schemas['SimpleDocRef'],
+  rank: ReturnType<typeof prdRanker>,
 ): Schemas['SimpleKeyDate'][] {
   const hidden = new Set(db.plan?.hidden ?? []);
   // roadmap-keydates review: every PRD the roadmap's items come from, each item's own (an item
@@ -3884,7 +3888,7 @@ function prdKeyDates(
     prds
       .filter((p) => !hidden.has(p.slug))
       // prd-order (as key_date_prds): the roadmap's PRDs in the company PRD order.
-      .sort(byPrdRank(prdRanker()))
+      .sort(byPrdRank(rank))
       .flatMap((prd) =>
         (db.prd_milestones?.[prd.slug] ?? []).map((m) => ({
           id: stableUuid(`simple-prd-key-date/${slug}/${prd.slug}/${m.code}`),
