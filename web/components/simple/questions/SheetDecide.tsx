@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { Button } from '@/components/ds/Button';
 import { api, unwrap } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
 
@@ -47,28 +48,20 @@ export function SheetDecide({
   const few = d.options.length < 2;
   return (
     <>
-      <button
-        type="button"
-        className="simple-button simple-button-primary"
+      <Button
         aria-expanded={picking}
         disabled={busy || few}
         title={few ? 'Add at least two options to decide' : undefined}
         onClick={() => setPicking((p) => !p)}
       >
         Decide
-      </button>
+      </Button>
       {picking && (
         <span role="group" aria-label="Decide" className="flex w-full flex-wrap gap-2">
           {d.options.map((o) => (
-            <button
-              key={o.key}
-              type="button"
-              className="simple-button"
-              disabled={busy}
-              onClick={() => void decide(o.key)}
-            >
+            <Button key={o.key} disabled={busy} onClick={() => void decide(o.key)}>
               {o.label}
-            </button>
+            </Button>
           ))}
         </span>
       )}
