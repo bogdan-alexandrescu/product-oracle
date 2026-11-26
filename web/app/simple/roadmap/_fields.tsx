@@ -311,6 +311,20 @@ function datesReason(item: Item): string {
 const windowOnly = (item: Item): boolean =>
   item.estimated && !item.estimate_basis && !item.suggestion && !item.picked_quarter;
 
+/** panel-2 #1906: who decides; several names are the company's owners, any one of whom decides. */
+function DeciderNames({ names }: { names: readonly string[] }) {
+  if (!names.length) return <span className="text-text2">No decider yet</span>;
+  if (names.length === 1) return <>{names[0]}</>;
+  return (
+    <>
+      Any of: {names.join(', ')}{' '}
+      <InfoTip label="who decides" align="start" testId="card-decider-why">
+        Any one of them can decide.
+      </InfoTip>
+    </>
+  );
+}
+
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
 function datesKind(item: Item): string {
   if (item.estimated) return "Oracle's estimate";
@@ -773,21 +787,7 @@ export function PanelFields({
         label="Decider"
         testId="card-decider"
         canChange={canChange}
-        value={
-          item.deciders.length > 1 ? (
-            // panel-2 #1906: several names are the company's owners, any one of whom decides.
-            <>
-              Any of: {item.deciders.join(', ')}{' '}
-              <InfoTip label="who decides" align="start" testId="card-decider-why">
-                Any one of them can decide.
-              </InfoTip>
-            </>
-          ) : item.deciders.length ? (
-            item.deciders.join(', ')
-          ) : (
-            <span className="text-text2">No decider yet</span>
-          )
-        }
+        value={<DeciderNames names={item.deciders} />}
         editor={(done) =>
           peopleRead ?? (
             <Pick
@@ -926,13 +926,7 @@ export function PanelFields({
                 canChange={canChange}
                 value={
                   value ? (
-                    f === 'due' ? (
-                      dayWords(value)
-                    ) : f === 'target' ? (
-                      targetWords(value)
-                    ) : (
-                      value
-                    )
+                    { measure: (v: string) => v, target: targetWords, due: dayWords }[f](value)
                   ) : (
                     <span className="text-text2">
                       {f === 'measure'

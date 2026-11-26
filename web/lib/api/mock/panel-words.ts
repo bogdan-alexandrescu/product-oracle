@@ -5,8 +5,9 @@
  * writes when it makes a roadmap version, and its goal's target ending in milestone shorthand.
  */
 import { stableUuid } from './ids';
-import type { Db } from './server';
 import { ROADMAPS, roadmapGoal, seedSimpleRoadmap, writeRoadmapGoal } from './simple-roadmap';
+
+import type { Db } from './server';
 
 export const PANEL_WORDS_SCENARIO = 'panel-words';
 

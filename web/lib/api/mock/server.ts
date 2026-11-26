@@ -12,12 +12,12 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
-import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
 import { prdCode } from './item-code';
 import {
   acceptNewFeatures,
