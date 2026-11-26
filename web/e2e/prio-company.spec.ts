@@ -189,9 +189,7 @@ for (const scheme of ['light', 'dark'] as const) {
       }) => {
         await setUp(page, scheme, phone, 'one-roadmap');
         const badge = rowByTitle(page, OLD_ITEM);
-        await expect(badge.getByTestId('prio-adds')).toHaveText(
-          `Not on ${COMPANY_TITLE} yet: moving it adds it there, under Later.`,
-        );
+        await expect(badge.getByTestId('prio-adds')).toHaveText(`Not on ${COMPANY_TITLE}`);
         await badge.getByRole('button', { name: /^Drag .* to reorder$/ }).focus();
         await page.keyboard.press('ArrowUp');
         const dialog = page.getByRole('dialog', { name: /^Why move / });

@@ -473,6 +473,7 @@ import {
   PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
+  PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
   PRIORITIES_PLAN_KEY_RESULTS_SCENARIO,
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
@@ -7618,12 +7619,15 @@ function load(): Db {
                                                                                                                                                                                                             return db;
                                                                                                                                                                                                           }
                                                                                                                                                                                                         : scenario ===
-                                                                                                                                                                                                            PRIORITIES_PLAN_GOAL_TWINS_SCENARIO
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_TWINS_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO
                                                                                                                                                                                                           ? () => {
                                                                                                                                                                                                               const db =
                                                                                                                                                                                                                 seedSimplePlanScenario();
                                                                                                                                                                                                               seedPlanGoalTwins(
                                                                                                                                                                                                                 db.simple_roadmap!,
+                                                                                                                                                                                                                scenario,
                                                                                                                                                                                                               );
                                                                                                                                                                                                               return db;
                                                                                                                                                                                                             }
