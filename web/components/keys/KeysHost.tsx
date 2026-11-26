@@ -11,6 +11,7 @@ import { usePathname, useRouter } from '@/lib/nav';
 
 import { goKeys, sheetGroups, type Page } from './keys';
 import { KeysSheet, type Changes } from './KeysSheet';
+import { KeyTips, PhoneSteps } from './KeyTips';
 
 /** List rows and timeline rows j and k move through (Simple's and Detailed's Priorities, the Roadmap timeline). */
 const ROWS =
@@ -124,12 +125,17 @@ export function KeysHost({ pages, detailed }: { pages: Page[]; detailed: boolean
   );
   useAppKeys(g ? waiting : map);
 
-  if (!open) return null;
   return (
-    <KeysSheet
-      groups={sheetGroups(pathname, pages, detailed)}
-      changes={changes}
-      onClose={() => setOpen(false)}
-    />
+    <>
+      <KeyTips go={go} />
+      <PhoneSteps />
+      {open && (
+        <KeysSheet
+          groups={sheetGroups(pathname, pages, detailed)}
+          changes={changes}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }

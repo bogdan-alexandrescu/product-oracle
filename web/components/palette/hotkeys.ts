@@ -52,7 +52,8 @@ function nameOf(e: KeyboardEvent): string {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.defaultPrevented || e.isComposing) return;
+  // A key a script sends (Shift J's arrow to a row's grip) is the grip's alone.
+  if (!e.isTrusted || e.defaultPrevented || e.isComposing) return;
   if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k' && palette) {
     e.preventDefault();
     palette.toggle();

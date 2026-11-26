@@ -167,6 +167,16 @@ test.describe('KS2 A: keys in the tooltips a person already gets', () => {
     const first = (await rows(page).nth(0).getByTestId('prio-title').innerText()).trim();
     await page.keyboard.press('j');
     await page.keyboard.press('Shift+J');
+    // The grip's own question, as a drag asks it; in the dialog a letter goes into its field and
+    // nothing behind it moves.
+    const dialog = page.getByRole('dialog').filter({ hasText: `Move ${first}` });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.type('jk');
+    await expect(dialog.getByRole('textbox')).toHaveValue('jk');
+    await expect(rows(page).nth(0)).toHaveAttribute('data-kfocus', '');
+    await expect(sheet(page)).toBeHidden();
+    await dialog.getByRole('textbox').fill('A customer asked for it first');
+    await dialog.getByRole('button', { name: 'Move' }).click();
     await expect(rows(page).nth(1).getByTestId('prio-title')).toHaveText(first);
   });
 });
