@@ -1,5 +1,28 @@
 # prio-2 handoff (issues #1739, #1895, #1898, #1910, #1911; Simple > Priorities only)
 
+## Review fix round 1 (verdict NOT_YET, two majors, both fixed)
+- Major 1 (#1739 Ranked vs Value / effort): the Ranked list's "Misses this quarter · N" counts every row below the
+  line again, Needs triage being a folded group at its end (numbered on from Misses when open, not from 1). So
+  Makes + Misses = All and Misses = Value / effort's "N of T miss". The side list's (i) now says the number is the
+  feature's rank, shown on hover over its number in the Ranked list (tip text only; no visible prose added).
+- Major 2 ("1 features"): new invented mock scenario `priorities-one-feature` (simple-plan trimmed to Alert rules
+  engine, Grow retention goal, empty goal map) reaches a count of one. prio-2.spec.ts checks the Show note
+  ("1 feature being built.") and the goal filter line ("1 of 1 feature", opened from Home's goal card). The archive
+  move's "will hold" is not covered (the reviewer asked for the goal line OR the archive text).
+- Specs updated for Misses counting its folded triage rows: prio-2 (test 1, plus Misses = Value / effort's N),
+  prio-ux (side list tip words), build-plan-picks and simple-walk-prio (Misses head = visible misses + triage count).
+- Planted defects (web/scripts/mutate.mjs over prio-2 + prio-ux): 5/5 red (Misses without triage, triage numbered
+  from 1, old tip words, Show note "1 features", goal line "1 features").
+- Gates: tsc 0, full `npm run lint` 0, format:check 0. Playwright (mock build, --workers=2, --retries=0): every spec
+  that reads part counts, ranks, triage or the side list (prio-2, prio-ux, build-plan-picks, build-plan-review,
+  ad-fix-simple-clamp, fix2/fix3/fix4 plan specs, prio-twins, prio-line-once, prio-unranked, priorities-keydates,
+  qa3/qa4-simple-plan, simple-plan-charts, simple-roadmap-plus, simple-priorities-codes, simple-walk-prio,
+  walkb-priorities, build-runplan-scored, prioritize-buckets) green; prose guard -g priorities 4 passed; vitest
+  jsx-prose, mock-route-coverage, simple-priorities.test 6 passed. One run showed a boundingBox timeout once (not
+  reproduced in two reruns of the same files). No API change: API suite, pyright, migrations not needed.
+
+## Round 0
+
 ## What changed (web/app/simple/priorities, its mock)
 - #1898: split at a dated line, Makes and Misses are each numbered from 1; the rank is in the number's title
   ("Rank 7"). Not split (rank order with a divider), the numbers stay the ranks (they already read in order).
