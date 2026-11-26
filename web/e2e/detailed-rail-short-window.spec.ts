@@ -1,6 +1,6 @@
+import { login } from './helpers';
 import { expect, test } from './test';
 
-import { login } from './helpers';
 
 /*
  * #1790: on a laptop-height window the Detailed rail cut Company in half and hid Settings, and it
