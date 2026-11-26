@@ -1007,13 +1007,16 @@ export function MsLayer(props: MsLayerProps) {
   // diamond has scrolled out of sight goes with it.
   useLayoutEffect(() => {
     const layer = ref.current;
-    let sc = layer?.parentElement ?? null;
+    // draw-time (#1870): no labels, nothing to fit; a box's style is read before its width, which
+    // lays the whole chart out (500 rows) at every draw.
+    if (!layer?.querySelector('[data-ms-label]')) return;
+    let sc = layer.parentElement;
     while (
       sc &&
-      !(sc.scrollWidth > sc.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowX))
+      !(/auto|scroll/.test(getComputedStyle(sc).overflowX) && sc.scrollWidth > sc.clientWidth + 2)
     )
       sc = sc.parentElement;
-    if (!layer || !sc) return;
+    if (!sc) return;
     const box = sc;
     const inset = props.view === 'timeline' ? (props.left ?? 0) : 0;
     const fit = () => {
@@ -1236,7 +1239,8 @@ export function MsLayer(props: MsLayerProps) {
   // tb-mk: the bands are tracks now; a milestone whose goal has no band of its own sits on the first one.
   const laneOf = (g: string | null | undefined) =>
     lanes.find((l) => l.key === (g ?? 'none')) ?? lanes.find((l) => l.key !== 'below') ?? lanes[0];
-  const rowOf = (id: string) => rows.find((r) => r.id === id);
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const rowOf = (id: string) => rowById.get(id);
   const out: ReactNode[] = [];
   const own = ms.list.filter((m) => !m.prd && m.date);
   const prd = ms.list.filter((m) => m.prd && m.date);

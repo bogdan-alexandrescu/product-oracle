@@ -67,10 +67,21 @@ async function bestPaint(page: Page, view: View, phone: boolean): Promise<number
     paints.push(await paint(page, view, phone));
     if (paints[n] < 2000) break;
   }
-  console.log(
-    `[dod-perf] ${phone ? 'phone' : 'desktop'} ${view}: items drawn in ${paints.join(', ')} ms`,
-  );
-  return Math.min(...paints);
+  const where = phone ? 'phone' : 'desktop';
+  console.log(`[dod-perf] ${where} ${view}: items drawn in ${paints.join(', ')} ms`);
+  const best = Math.min(...paints);
+  marginCheck(`${where} ${view}`, best);
+  return best;
+}
+
+/** #1870: the 25% margin under the 2 s budget. Reported, never failed: a `[dod-perf] margin`
+ * line and an annotation, so a thin margin is seen before a slower runner turns main red. */
+const MARGIN = 1500;
+function marginCheck(label: string, best: number) {
+  const ok = best <= MARGIN;
+  const line = `[dod-perf] margin ${label}: ${best} ms, ${ok ? 'within' : 'OVER'} the ${MARGIN} ms margin`;
+  console.log(line);
+  test.info().annotations.push({ type: 'dod-perf margin', description: line });
 }
 
 /** Starts recording requestAnimationFrame deltas in the page. */

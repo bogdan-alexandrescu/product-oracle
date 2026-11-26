@@ -179,9 +179,12 @@ test.describe('desktop', () => {
     await page.getByTestId('needs-decision').click();
     const tray = page.getByTestId('decision-tray');
     await expect(tray).toBeVisible();
-    const shown = await tray.getByTestId('tray-date').count();
     const tile = tray.getByTestId('tray-counter').filter({ hasText: 'Dates to confirm' });
-    await expect(tile).toHaveText(new RegExp(`^${shown}( of \\d+)?\\s*Dates to confirm$`));
+    // draw-time (#1870): the rows and their tile are read together, once the filter is in (a page
+    // that takes the click sooner can open the tray before it).
+    await expect(tile).toHaveText(/^\d+ of \d+\s*Dates to confirm$/);
+    const shown = await tray.getByTestId('tray-date').count();
+    await expect(tile).toHaveText(new RegExp(`^${shown} of \\d+\\s*Dates to confirm$`));
   });
 
   test('a goal card does not repeat its title as its measure (#8)', async ({ page }) => {

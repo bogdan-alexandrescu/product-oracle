@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -2610,6 +2611,60 @@ export function SimpleRoadmap() {
     [reloadAfter],
   );
 
+  // D: the items a change waiting for its decider pulls into another horizon ("pending").
+  const pulledIn = useMemo(
+    () =>
+      new Set(
+        (proposals.data ?? [])
+          .filter((c) => c.op === 'change_horizon' && c.target.item_id)
+          .map((c) => String(c.target.item_id)),
+      ),
+    [proposals.data],
+  );
+  // draw-time (#1870): what the chart (memo) is handed stays the same from render to render, its moves
+  // calling this render's, so the page's other reads coming in do not draw its 500 rows again.
+  const chartData = laned ?? data;
+  const chartNow = {
+    onOpen: (item: Item) => {
+      if (ms?.pick(item.id)) return;
+      setPop(null);
+      setCard({ id: item.id, ...anchorOf(item.id) });
+    },
+    onMove,
+    onKeyMove,
+    onKeyEnd: (item: Item) => dates.flush(item.id),
+    onKeyCancel: onKeyCancel(dates),
+    onSuggestion: (item: Item) => {
+      setCard(null);
+      setPop({ id: item.id, ...anchorOf(item.id) });
+    },
+  };
+  const chartLatest = useRef(chartNow);
+  useLayoutEffect(() => {
+    chartLatest.current = chartNow;
+  });
+  const chartOn = useMemo<typeof chartNow>(
+    () => ({
+      onOpen: (item) => chartLatest.current.onOpen(item),
+      onMove: (item, start, end) => chartLatest.current.onMove(item, start, end),
+      onKeyMove: (item, start, end) => chartLatest.current.onKeyMove(item, start, end),
+      onKeyEnd: (item) => chartLatest.current.onKeyEnd(item),
+      onKeyCancel: (item) => chartLatest.current.onKeyCancel(item),
+      onSuggestion: (item) => chartLatest.current.onSuggestion(item),
+    }),
+    [],
+  );
+  const chartRef = useCallback((el: SVGSVGElement | null) => {
+    svg.current = el;
+  }, []);
+  const chartOverlay = useCallback(
+    (l: Layout, sc: ChartScale, keepOff: [number, number][]) =>
+      chartData && (
+        <GanttMilestones l={l} sc={sc} data={chartData} phone={phone} keepOff={keepOff} />
+      ),
+    [chartData, phone],
+  );
+
   /** The filters in words, for the export's header. */
   const filterWords = (): string => {
     const named = (list: [string, string][], v: string) => list.find(([k]) => k === v)?.[1] ?? v;
@@ -2912,12 +2967,6 @@ export function SimpleRoadmap() {
       suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title },
     );
 
-  // D: the items a change waiting for its decider pulls into another horizon ("pending").
-  const pulledIn = new Set(
-    allProposals
-      .filter((c) => c.op === 'change_horizon' && c.target.item_id)
-      .map((c) => String(c.target.item_id)),
-  );
   // roadmap-milestones D: the header's actions (D1: on the header's right, wrapping under the switch).
   const actions = (
     <div
@@ -3646,34 +3695,12 @@ export function SimpleRoadmap() {
                           canDrag={canChange}
                           moved={moved}
                           open={card?.id ?? null}
-                          chartRef={(el) => {
-                            svg.current = el;
-                          }}
+                          chartRef={chartRef}
                           dropTargets={canChange}
                           onOffscreen={setOffscreen}
                           pulled={pulledIn}
-                          onOpen={(item) => {
-                            if (ms?.pick(item.id)) return;
-                            setPop(null);
-                            setCard({ id: item.id, ...anchorOf(item.id) });
-                          }}
-                          onMove={onMove}
-                          onKeyMove={onKeyMove}
-                          onKeyEnd={(item) => dates.flush(item.id)}
-                          onKeyCancel={onKeyCancel(dates)}
-                          onSuggestion={(item) => {
-                            setCard(null);
-                            setPop({ id: item.id, ...anchorOf(item.id) });
-                          }}
-                          overlay={(l, sc, keepOff) => (
-                            <GanttMilestones
-                              l={l}
-                              sc={sc}
-                              data={laned ?? data}
-                              phone={phone}
-                              keepOff={keepOff}
-                            />
-                          )}
+                          {...chartOn}
+                          overlay={chartOverlay}
                         />
                       </>
                     )}
