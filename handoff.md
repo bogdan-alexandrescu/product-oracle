@@ -1,3 +1,45 @@
+# milestone-codes handoff (#1894, #1882)
+
+## Cause (#1894)
+The roadmap read numbers every milestone once, by date (`roadmap_code`, api/oracle/simple/roadmap_codes.py); the
+Roadmap and Home show that. Priorities' Line picker showed a PRD's milestones as the PRD names them
+("From the PRD: M1 · Prove it", the PRD's own number), and `codedMilestone` returned any name that already began
+with a code unchanged, so a PRD's "M2" sat beside the roadmap's "M2 Beta". No API change: the one source already
+exists in the read Priorities loads.
+
+## What changed (web only)
+- `web/app/simple/priorities/milestone-codes.ts`: a name carrying a PRD's own number ("M1 · Prove it") reads the
+  roadmap's code in its place ("M1 Prove it" / "M3 Scale volume"): by id, else by its PRD (id or slug) and the
+  PRD's code, else by its name without the number; a PRD plan's own track milestone the roadmap gives no code
+  reads its PRD milestone's by name. No roadmap code found: the name is left as it was. `useCodedMilestone()` also
+  returns `.ready` (the roadmap read landed or failed).
+- `LinePicker` (priorities.tsx): PRD key dates go through the coder too; until `.ready`, each milestone option
+  (and each PRD key date) reads "Loading…", so a milestone is never drawn without its code (#1882).
+- Mock: new scenario "milestone-codes-prd" (web/lib/api/mock/server.ts): "roadmap-keydates" whose roadmap read
+  carries the PRD plan's milestones as goal milestones, as the API's goal_milestones does. Invented data.
+- `lineOptionsSettled` (e2e/helpers.ts) now waits until no option reads "Loading…": it suits any roadmap; the four
+  specs keep calling it (it is a wait for the read, no longer a work-around for a renamed label).
+- Specs: new `e2e/milestone-codes.spec.ts` (both tests red without the fix: "Milestone: Beta · ..." seen
+  while the read was slow; "M3 Scale volume" missing). `prio-company.spec.ts` waits for settled options;
+  `prio-line-once.spec.ts:108` expects the roadmap's code ("From the PRD: M1 Prove it · Nov 27, 2026").
+
+## Gates
+- tsc --noEmit exit 0; full `npm run lint` exit 0; `prettier --check .` exit 0.
+- Playwright --retries=0, 2 workers: every spec that drives the Line picker (16 files, 200 tests: 193 passed,
+  7 failed in prio-company/prio-line-once, both fixed, rerun 48 passed); milestone-codes 2 passed;
+  prio-milestone-one-read, prio-milestone-rename, item-milestone, goal-buckets-tasks, de-gm-buckets,
+  simple-priorities-codes, goal-buckets-editing: 136 passed; prose-guard 35 passed (with
+  PROSE_BASE=8227775, since this clone has no origin/main merge base; without it its 2 merge-base tests fail).
+- No API change, so the API suite, timing tests, pyright and frozen migrations were not run.
+- Not run: the rest of the ~100 specs that open Priorities (time).
+
+## Left (outside this lane's two places)
+- Priorities' Makes/Misses part heads and line caption still read the API's line label ("Makes M1 · Prove it ·
+  Nov 27, 2026"), the PRD's number. Roadmap's key-date chips also read "M1 · Prove it" (Roadmap not renumbered,
+  as the brief says).
+- In mock scenarios with PRD key dates but no PRD goal milestones (roadmap-keydates*), a PRD number the roadmap
+  does not give stays shown; the API always carries a PRD's milestones as goal milestones, so it does not occur there.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
