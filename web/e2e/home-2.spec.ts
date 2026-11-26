@@ -4,6 +4,8 @@ import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
 import { ADMIN, login, signOut } from './helpers';
 import { expect, test, type Page } from './test';
 
+import type { Locator } from '@playwright/test';
+
 /*
  * home-2 (issues 1892, 1896, 1897, 1899, 1900), driven through Simple's Home on the mock's
  * invented data, desktop.
@@ -38,6 +40,18 @@ async function signIn(page: Page, email: string) {
   await expect(page.getByTestId('home-sentence')).not.toHaveText('Checking what waits on you…');
 }
 
+/** A link inside a line of text reads in the line's own weight and line height. */
+async function readsAsItsLine(link: Locator) {
+  const [own, line] = await link.evaluate((el) => {
+    const pick = (e: Element) => {
+      const c = getComputedStyle(e);
+      return [c.fontWeight, c.lineHeight, c.fontSize];
+    };
+    return [pick(el), pick(el.parentElement!)];
+  });
+  expect(own).toEqual(line);
+}
+
 test('1892: a goal card reads the Goal map rule, whatever its items', async ({ page }) => {
   await scenario(page, 'home-goal-status');
   await login(page);
@@ -66,6 +80,7 @@ test('1896: every milestone whose items end after its date warns, each item open
   const late = page.getByTestId('home-plan').getByTestId('home-strip-late');
   await expect(late).toHaveCount(1);
   await expect(late).toHaveText(/^M1 · Beta: 1 ends after Nov 30:\s*F-79 Weekly alert digest$/);
+  await readsAsItsLine(late.getByTestId('home-strip-late-item'));
   await late.getByRole('button', { name: 'F-79 Weekly alert digest' }).click();
   await expect(page.getByTestId('item-panel')).toBeVisible();
   await expect(page.getByTestId('item-panel')).toContainText('Weekly alert digest');
@@ -159,6 +174,7 @@ test("1900: since your last visit lists others' changes, the item named and open
   await expect(theirs).toHaveCount(1);
   for (const text of await since.getByTestId('home-since-row').allInnerTexts())
     expect(text).not.toMatch(/^You\b/);
+  await readsAsItsLine(theirs.getByTestId('home-since-item'));
   await theirs.getByRole('button', { name: 'F-79 Weekly alert digest' }).click();
   await expect(page.getByTestId('item-panel')).toBeVisible();
   await expect(page.getByTestId('item-panel')).toContainText('Weekly alert digest');
