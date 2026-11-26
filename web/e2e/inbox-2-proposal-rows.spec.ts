@@ -133,6 +133,8 @@ test('a proposal routed to me that I may not decide opens in the Inbox and Home 
     .getByRole('listitem')
     .filter({ hasText: 'Block list' });
   await expect(row.getByRole('link', { name: 'Open' })).toBeVisible();
+  // It opens in Simple's Inbox, keeping Simple's shell.
+  await expect(row.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/simple/inbox');
   await expect(row.getByRole('button', { name: 'Accept' })).toHaveCount(0);
 
   await page.getByTestId('simple-nav').getByRole('link', { name: 'Home', exact: true }).click();

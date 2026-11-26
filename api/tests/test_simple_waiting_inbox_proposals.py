@@ -11,7 +11,8 @@ Test cards (protects / fails_when / no_claim):
   waiting list leaves it out; no_claim=accepting it.
 - test_an_owner_change_on_a_replaced_prds_item_waits_as_the_inbox_counts_it: protects=an owner
   change on an item of a replaced PRD, which the Inbox still counts for the Owner, is in Waiting
-  for you; fails_when=the waiting list drops it with the PRD (changes.visible); no_claim=its words.
+  for you, to open in the Inbox; fails_when=the waiting list drops it with the PRD
+  (changes.visible); no_claim=its words.
 - test_an_older_proposal_waits_behind_many_newer_ones: protects=a proposal for the decider stays
   in Waiting for you behind 500 newer proposals for someone else, as the Inbox counts it;
   fails_when=the waiting list reads only the newest 500 proposals; no_claim=read speed.
@@ -67,6 +68,8 @@ async def test_an_owner_change_the_inbox_counts_waits_for_the_owner(client):
     assert cid in waiting, list(waiting.values())
     assert waiting[cid]["action"] == "Open"
     assert waiting[cid]["kind"] == "inbox"
+    # It opens in Simple's Inbox, keeping Simple's shell (re-review minor).
+    assert waiting[cid]["href"] == "/simple/inbox"
     # Someone it is not routed to has it in neither.
     inbox, waiting = await _ids(client, ctx, "approver")
     assert cid not in inbox and cid not in waiting
@@ -123,3 +126,5 @@ async def test_an_owner_change_on_a_replaced_prds_item_waits_as_the_inbox_counts
     inbox, waiting = await _ids(client, ctx, "owner")
     assert cid in inbox
     assert cid in waiting, list(waiting.values())
+    # The Owner may not decide it now (its PRD replaced): it opens in the Inbox (re-review minor).
+    assert (waiting[cid]["kind"], waiting[cid]["action"]) == ("inbox", "Open")
