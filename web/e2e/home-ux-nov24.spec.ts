@@ -133,11 +133,11 @@ for (const phone of [false, true]) {
           name: /^The plan( · [A-Z][a-z]{2} \d+ – [A-Z][a-z]{2} \d+)?$/,
         }),
       ).toBeVisible();
-      // The pencil says what it does on hover.
+      // The pencil says what it does on hover (#1897: Edit on a milestone with no date).
       const pencils = page.getByTestId('home-strip-rename');
       const k = await pencils.count();
       for (let i = 0; i < k; i++)
-        await expect(pencils.nth(i)).toHaveAttribute('title', /^Rename .+/);
+        await expect(pencils.nth(i)).toHaveAttribute('title', /^(Rename|Edit) .+/);
       // The row of items in no milestone is a count and a link, never a bar over the range.
       const loose = page
         .getByTestId('home-strip-row')
