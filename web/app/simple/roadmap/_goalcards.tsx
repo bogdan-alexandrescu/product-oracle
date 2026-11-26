@@ -81,7 +81,7 @@ export function GoalTitle({ id, title }: { id: string; title: string }) {
           setEditing(now);
         }
       }}
-      className={`cursor-text rounded-sm hover:underline hover:decoration-dotted ${failed ? 'text-crit' : ''}`}
+      className={`rounded-sm hover:underline hover:decoration-dotted ${failed ? 'text-crit' : ''}`}
     >
       {now}
     </span>
