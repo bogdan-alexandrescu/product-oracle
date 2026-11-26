@@ -20,7 +20,7 @@ test('templates: view a version, live validation, save a new version, archive an
 }) => {
   await login(page);
   await page.goto('/settings/templates');
-  await page.getByRole('link', { name: 'One-pager' }).click();
+  await page.getByRole('link', { name: 'One-pager', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/templates\/one-pager$/);
   await expect(page.getByRole('heading', { level: 1, name: 'One-pager' })).toBeVisible();
   await expect(page.getByTestId('latest-version')).toHaveText('v1');
@@ -72,7 +72,7 @@ test('templates: view a version, live validation, save a new version, archive an
   await expect(page.getByTestId('template-row-one-pager')).toHaveCount(0);
   await page.getByLabel('Show archived').check();
   await expect(page.getByTestId('template-row-one-pager')).toContainText('Archived');
-  await page.getByRole('link', { name: 'One-pager' }).click();
+  await page.getByRole('link', { name: 'One-pager', exact: true }).click();
   await page.getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByRole('status')).toContainText('Restored');
   await expect(page.getByRole('button', { name: 'Archive' })).toBeVisible();
