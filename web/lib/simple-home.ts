@@ -13,8 +13,8 @@ type Entity = Schemas['EntityOut'];
 type Roadmap = Schemas['SimpleRoadmapOut'];
 type Item = Schemas['SimpleRoadmapItem'];
 
-/** #1759: one vocabulary on every card: at risk, on track (measured, nothing at risk), or not measured yet. */
-export type GoalStatus = 'At risk' | 'On track' | 'Not measured yet';
+/** #1892: the Goal map's words for a goal (goal_map.goal_status), on every page alike. */
+export type GoalStatus = 'Met' | 'On track' | 'At risk' | 'Not measured';
 
 export type GoalTile = {
   id: string;
@@ -28,8 +28,6 @@ export type GoalTile = {
   /** #1759: the card's one progress pattern, "Now 100 teams · target 200 teams" ("Now – · …" unmeasured). */
   progress: string | null;
   status: GoalStatus;
-  /** Why it is at risk, in one line (the first broken link or missed milestone). */
-  why: string | null;
   guardrail: boolean;
   /** Items serving it that wait on the signed-in person (a proposal they decide, a broken link). */
   needYou: number;
@@ -106,14 +104,16 @@ function goalFigures(
   };
 }
 
-/** A broken dependency (red, not accepted as a risk) or a milestone past its date and not done. */
-export function itemAtRisk(item: Item, today: string): string | null {
-  const broken = item.flags.find((f) => f.state === 'red' && f.kind === 'dependency_order');
-  if (broken) return broken.reason;
-  const m = item.milestone;
-  if (m?.date && m.date < today && item.status !== 'done' && item.status !== 'cut')
-    return `Missed its milestone${m.name ? ` '${m.name}'` : ''}`;
-  return null;
+/**
+ * #1892: a goal's status by the Goal map's one rule (the API's goal_map.goal_status): its
+ * latest value against its target, at risk below three quarters of it.
+ */
+export function goalStatus(current: number | null, target: number | null): GoalStatus {
+  if (current === null) return 'Not measured';
+  // No number to aim at: the Goal map lists it off the map, never as at risk.
+  if (target === null) return 'On track';
+  if (current >= target) return 'Met';
+  return current >= 0.75 * target ? 'On track' : 'At risk';
 }
 
 /** The goal band: one tile per confirmed top-level goal, in the one goal order (lib/goal-order.ts). */
@@ -122,20 +122,16 @@ export function goalTiles(
   roadmap: Roadmap | undefined,
   waiting: Set<string>,
 ): GoalTile[] {
-  const today = roadmap?.today ?? '';
   const confirmed = goals.filter((g) => g.type === 'goal' && g.status === 'confirmed');
   const byId = new Map(confirmed.map((g) => [g.id, g]));
   return goalViews(confirmed)
     .filter((v) => !v.parentId)
     .map((v) => {
       const a = (byId.get(v.id)?.attrs ?? {}) as Record<string, unknown>;
-      // roadmap-done: a done item is off the plan; it puts no goal at risk.
+      // roadmap-done: a done item is off the plan; it waits on nobody.
       const items = (roadmap?.items ?? []).filter(
         (i) => i.goal?.id === v.id && i.status !== 'cut' && i.status !== 'done',
       );
-      const why = items.map((i) => itemAtRisk(i, today)).find(Boolean) ?? null;
-      const measured = num(a.current) != null;
-      const status: GoalStatus = why ? 'At risk' : measured ? 'On track' : 'Not measured yet';
       return {
         id: v.id,
         key: byId.get(v.id)?.key ?? v.id,
@@ -144,8 +140,7 @@ export function goalTiles(
         weight: num(a.weight),
         path: targetPath(a),
         progress: progressLine(a),
-        status,
-        why,
+        status: goalStatus(num(a.current), num(a.target)),
         guardrail: a.guardrail === true || a.kind === 'guardrail',
         needYou: items.filter((i) => waiting.has(i.id)).length,
       };
@@ -213,12 +208,14 @@ const DAY = 86_400_000;
 
 /** `of` (Home only): whose a row's milestone is, for its accessible name when two rows read alike;
  * `also` (Home only): the other names of the milestones folded into its row ("M1 Measured and mapped");
- * `ms` (Home only, home-milestone-rename): the roadmap's own milestone the row renames, by id. */
+ * `ms` (Home only, home-milestone-rename): the roadmap's own milestone the row renames, by id;
+ * `late` (#1896): its items that end after its date, by id. */
 export type PlanStrip = Omit<Schemas['SimplePlanStrip'], 'rows'> & {
   rows: (Schemas['SimplePlanStrip']['rows'][number] & {
     of?: string | null;
     also?: string[];
     ms?: string;
+    late?: string[];
   })[];
 };
 export type PlanInput = {
@@ -453,6 +450,20 @@ export function planByMonth(
     today: today >= start && today <= end ? today : null,
     rows,
     past_edge: items.filter((i) => !i.estimated && i.end > end).length,
+  };
+}
+
+/** #1896 (Home): each dated row with its items that end after its date (`late`, by id). */
+export function withLate(plan: PlanStrip, inputs: PlanInput[]): PlanStrip {
+  return {
+    ...plan,
+    rows: plan.rows.map((r) => {
+      const ids = new Set(r.item_ids ?? []);
+      const late = inputs.flatMap((i) =>
+        r.date && i.id && ids.has(i.id) && i.end > r.date ? [i.id] : [],
+      );
+      return late.length ? { ...r, late: [...new Set(late)] } : r;
+    }),
   };
 }
 
@@ -729,7 +740,11 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
       date: tm.date ?? (dates.length ? minOf(dates) : null),
       of: trackTitles.get(tm.track_id) ?? null,
       also: also.get(tm),
-      ms: undefined as string | undefined,
+      // #1897: a roadmap milestone it joins is the one its pencil edits (the one whose name it shows first).
+      ms: (
+        own.find((g) => sameWords(wholeName(tm.roadmap_code ?? null, restOf(g.name)), name)) ??
+        own[0]
+      )?.id as string | undefined,
     };
   };
   const ofGoal = (gm: Gm) => {

@@ -84,6 +84,7 @@ export function PlanByMonth({
   items,
   fold = false,
   names,
+  codes,
   rename,
 }: {
   plan: PlanStrip;
@@ -101,6 +102,8 @@ export function PlanByMonth({
   fold?: boolean;
   /** Home (home-milestones-current): the roadmap's item names by id; a row's (i) lists its items (on hover, tap or focus). */
   names?: ReadonlyMap<string, string>;
+  /** Home (#1896): the roadmap's item codes by id, for the items ending after their milestone. */
+  codes?: ReadonlyMap<string, string>;
   /** Home (home-milestone-rename): a milestone row's rename (the Roadmap's milestone card, its name alone), by its
    * milestone's id; null where the reader may neither change nor propose it. */
   rename?: (ms: string) => (() => void) | null;
@@ -251,6 +254,12 @@ export function PlanByMonth({
                   <Icon name="pencil" size={16} />
                 </button>
               )}
+              {/* #1897: Home's milestone with no date says so. */}
+              {named && r.milestone && !when && (
+                <span className="simple-small" data-testid={`${testId}-no-date`}>
+                  No date
+                </span>
+              )}
               {when && (
                 <span className="simple-small tnum">
                   {when}
@@ -328,8 +337,8 @@ export function PlanByMonth({
                       {go && (
                         <button
                           type="button"
-                          aria-label={`Rename ${rowName(r, named)}`}
-                          title={`Rename ${rowName(r, named)}`}
+                          aria-label={`${r.date ? 'Rename' : 'Edit'} ${rowName(r, named)}`}
+                          title={`${r.date ? 'Rename' : 'Edit'} ${rowName(r, named)}`}
                           data-testid={`${testId}-rename`}
                           onClick={go}
                           className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text"
@@ -481,6 +490,38 @@ export function PlanByMonth({
           )}
         </p>
       )}
+      {/* #1896: on Home, every milestone whose items end after its date warns, each item opening its panel. */}
+      {named &&
+        names &&
+        plan.rows.map((r) => {
+          const late = (r.late ?? []).filter((id) => names.has(id));
+          if (!r.date || !late.length) return null;
+          return (
+            <p
+              key={`late-${r.ms ?? r.name}-${r.date}`}
+              data-testid={`${testId}-late`}
+              className="simple-small inline-flex flex-wrap items-center gap-x-1.5 self-start rounded-lg bg-warn-bg px-2 py-1 font-semibold text-warn"
+            >
+              <Icon name="alert" size={16} />
+              {`${rowName(r, named)}: ${late.length} ${late.length === 1 ? 'ends' : 'end'} after ${calendarDay(r.date, { month: 'short', day: 'numeric' })}:`}
+              {late.map((id, j) => (
+                <span key={id}>
+                  <button
+                    type="button"
+                    data-testid={`${testId}-late-item`}
+                    onClick={() =>
+                      open?.({ id, code: codes?.get(id) ?? '', name: names.get(id) ?? '' })
+                    }
+                    className="underline hover:no-underline"
+                  >
+                    {codes?.get(id) ? `${codes.get(id)} ${names.get(id)}` : names.get(id)}
+                  </button>
+                  {j < late.length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </p>
+          );
+        })}
       {(more > 0 || plan.past_edge > 0) && (
         <p className="simple-small flex flex-wrap justify-between gap-2">
           {more > 0 ? (

@@ -16,7 +16,7 @@ import { expect, test, type Page } from './test';
  * Inbox" (no "more"), is the link to the Inbox, and the card has one button, opening the Inbox;
  * fails_when = "1 more in your Inbox" with an Open button beside All.
  * Card goal-cards (1759, 1760): protects = each goal card's status is one of At risk, On track,
- * Not measured yet; its progress reads "Now … · target …"; its share reads "Weight N%"; Goal map
+ * Not measured (the Goal map's words, #1892); its progress reads "Now … · target …"; its share reads "Weight N%"; Goal map
  * is underlined as a link; fails_when = Planned / Not counted yet, "From … · target …",
  * "N% of the score", or a Goal map with no underline.
  * Card flags-lead (1761): protects = the Ground Truth flags lead the Summary, in warning colours,
@@ -72,7 +72,7 @@ for (const phone of [false, true]) {
       for (let i = 0; i < n; i++) {
         const g = goals.nth(i);
         await expect(g.getByTestId('home-goal-status')).toHaveText(
-          /^(At risk|On track|Not measured yet)$/,
+          /^(Met|At risk|On track|Not measured)$/,
         );
         if (await g.getByTestId('home-goal-path').count())
           await expect(g.getByTestId('home-goal-path')).toHaveText(/^Now .+ · target .+$/);
