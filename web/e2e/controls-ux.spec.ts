@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from './test';
  * protects = every enabled control shows the hand and a disabled one not-allowed (globals.css
  * base layer); a ds Button's hover changes its outline and fill (Button.tsx); a row's "More"
  * menu and an (i) are at least 24x24.
- * fails_when = buttons fall back to the reset's arrow; the secondary or .simple-button hover only tints the fill;
+ * fails_when = buttons fall back to the reset's arrow (Roadmap: row labels, goal titles); the secondary or .simple-button hover only tints the fill;
  * Goal map's "More for" menus are 24x16 again.
  */
 const cursor = (l: Locator) => l.evaluate((el) => getComputedStyle(el).cursor);
@@ -46,6 +46,22 @@ test('enabled controls show the hand on every page; a disabled one shows not-all
     page.getByTestId('key-dates-open'),
     page.getByRole('button', { name: 'About what is broken' }).first(),
   ]);
+  // roadmap-3 (#1743 re-audit): the Timeline's row labels and the goal cards' titles show the
+  // hand; "New item" (a drag chip) shows not-allowed until it has a title, then the grab hand.
+  const labels = page.getByTestId('timeline-row-label');
+  const titles = page.getByTestId('goal-counter-title-edit');
+  await expect(labels.first()).toBeVisible();
+  await expect(titles.first()).toBeVisible();
+  await pointers([...(await labels.all()).slice(0, 8), ...(await titles.all())]);
+  const chip = page.getByTestId('quick-add-chip');
+  await expect(chip).toHaveAttribute('aria-disabled', 'true');
+  expect(await cursor(chip)).toBe('not-allowed');
+  await page.getByRole('textbox', { name: 'Add an item' }).fill('Example item');
+  await page.getByRole('combobox', { name: 'Roadmap' }).first().selectOption({ index: 1 });
+  const track = page.getByRole('combobox', { name: "New item's track" });
+  if (await track.isVisible()) await track.selectOption({ index: 1 });
+  await expect(chip).toHaveAttribute('aria-disabled', 'false');
+  expect(await cursor(chip)).toBe('grab');
 
   await open(
     page,
