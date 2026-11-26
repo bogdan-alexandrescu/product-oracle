@@ -35,6 +35,7 @@ import {
   type Item,
   type Milestone,
 } from './_lib';
+import { noteWords, targetWords } from './_panel-words';
 
 import type { Act } from './_card';
 
@@ -313,7 +314,7 @@ const windowOnly = (item: Item): boolean =>
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
 function datesKind(item: Item): string {
   if (item.estimated) return "Oracle's estimate";
-  if (item.source === 'typed') return 'Set here';
+  if (item.source === 'typed') return 'Set by a person';
   return datesFrom(item);
 }
 
@@ -637,7 +638,7 @@ export function PanelFields({
         label="Notes"
         testId="card-notes"
         canChange={canChange}
-        value={item.note ?? <span className="text-text2">No notes yet</span>}
+        value={item.note ? noteWords(item.note) : <span className="text-text2">No notes yet</span>}
         editor={(done) => (
           <TextEdit
             label="Notes"
@@ -773,7 +774,15 @@ export function PanelFields({
         testId="card-decider"
         canChange={canChange}
         value={
-          item.deciders.length ? (
+          item.deciders.length > 1 ? (
+            // panel-2 #1906: several names are the company's owners, any one of whom decides.
+            <>
+              Any of: {item.deciders.join(', ')}{' '}
+              <InfoTip label="who decides" align="start" testId="card-decider-why">
+                Any one of them can decide.
+              </InfoTip>
+            </>
+          ) : item.deciders.length ? (
             item.deciders.join(', ')
           ) : (
             <span className="text-text2">No decider yet</span>
@@ -919,6 +928,8 @@ export function PanelFields({
                   value ? (
                     f === 'due' ? (
                       dayWords(value)
+                    ) : f === 'target' ? (
+                      targetWords(value)
                     ) : (
                       value
                     )
@@ -958,7 +969,7 @@ export function PanelFields({
               <dt className="text-text2">Reading</dt>
               <dd className="min-w-0 tnum" data-testid="card-goal-reading">
                 Today {readingWords(goal.current, goal.unit)}
-                {goal.target ? ` · target ${goal.target}` : ''}
+                {goal.target ? ` · target ${targetWords(goal.target)}` : ''}
                 {goal.due ? ` by ${dayWords(goal.due)}` : ''}
               </dd>
             </>
