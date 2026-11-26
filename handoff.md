@@ -1,3 +1,48 @@
+# inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
+
+Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
+Later commits are local only: git_push_branch refused them (code foreign_author, field "message":
+it rejects a message carrying Co-Authored-By/anthropic.com, which the brief requires). The worker
+publishes the branch.
+
+## Done (red first, each in its own commit)
+1. Blocker, pyright: `assert read_ is not None` before waiting_for in changes.inbox_rows (no new
+   line, changes.py stays at its size entry 2591); baseline updated. Verdict:
+   `pyright: 1265 errors, baseline 1265`, check exit 0. Red was CI's own run at 47e8c41.
+2. Major, Home double count: page.tsx counts kind "inbox" rows keyed `proposal:` under
+   drawnOnHome's proposals, not inboxRows. Mock case: scenario "inbox-replaced-proposal" now also
+   has a meeting's owner change on Block list routed to commenter@example.com (can_decide false).
+   Spec inbox-2-proposal-rows.spec.ts (last test): Decisions lists it with Open, Home shows no
+   "more in your Inbox" and the card count equals its rows. Red: home-inbox-more 1 != 0.
+3. Major, #1818: allNeeds/decisionNeeds take `simple`; _inbox.tsx passes path.startsWith('/simple');
+   decision rows link /simple/decisions?decision=N there, /company/decisions?d=N on /inbox.
+   Inbox step added to decisions-open-in-simple.spec.ts (red: landed on /company/decisions?d=11).
+Minors done: Open row href '/inbox' -> '/simple/inbox' (API waiting_list.py + mock), red pytest
+and spec assertion first; replaced-PRD pytest pins (kind, action) == ("inbox", "Open").
+
+## Gates
+- pytest tests/test_simple_waiting_inbox_proposals.py tests/test_simple_waiting_list.py: 15 passed.
+- ruff check/format on touched api files: clean.
+- Playwright (--retries=0, mock prebuilt): inbox-2-proposal-rows + decisions-open-in-simple 5 passed;
+  home-waiting-one-list 41 passed.
+- tsc exit 0; npm run lint exit 0; prettier --check on touched web files: clean.
+- Prose guard: not run, no visible word changed (hrefs, counts and comments only).
+- Alembic, make openapi, contracts check: not applicable (no migration, schema or YAML change).
+
+## Left (not one-line; other pages or a later pass)
+- Mock vs API on the replaced-PRD case: API gives the Owner kind "inbox"/Open (pinned now); the mock
+  still lets the admin decide it (Accept/Decline). Matching needs the mock's decides() to drop items
+  of replaced roadmaps, which touches many pages' specs: a later pass.
+- The mock titles a routed-but-unlisted proposal from the Inbox row's `asked` (present tense); the
+  API uses changes.words (past tense; for the replaced case it reads "commenter@example.com
+  proposed: changed the owner of an item"). Not a one-line change.
+- #1913's past tense on Decisions ("Changed the owner of …" while waiting): follow-up issue.
+- waiting_reads.proposals cost (no cap, routes all open proposals each read): noted, unchanged.
+- Round 1 minors carried: headers hidden so the header check is not red; For and Action still about
+  42% of the row; flake at inbox-question-one-pager.spec.ts:170.
+- The Inbox's Decide button on /simple now goes to /simple/decisions?decision=N&act=decide; the
+  sheet opens, `act` is ignored there.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)

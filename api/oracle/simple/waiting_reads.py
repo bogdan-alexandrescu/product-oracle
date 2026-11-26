@@ -12,26 +12,35 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.simple import additions, changes, service
+from oracle.simple import additions, changes, inbox_route, service
 from oracle.simple.models import SimpleChange, SimpleGoalSuggestion
 
 
 async def proposals(
     db: AsyncSession, principal: Any, read_: service.Read
-) -> list[tuple[SimpleChange, str, str]]:
+) -> list[tuple[SimpleChange, str, str, bool]]:
     """The proposed changes the reader may decide, as changes.listing(status="proposed")
-    lists them (newest first, at most 500 read): (the change, its words, its author's name)."""
+    lists them (at most the newest 500 read), and every one the Inbox counts for them
+    (changes.waiting_for, inbox-2 #1893), newest first: (the change, its words, its author's
+    name, whether the reader may decide it now)."""
     rows = list(
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.status == "proposed")
             .order_by(SimpleChange.at.desc(), SimpleChange.seq.desc())
-            .limit(500)
         )
     )
-    v, seen, names = await changes.visible(db, principal, rows, read_)
+    me = getattr(principal, "user_id", None)
+    if not rows or me is None:
+        return []
+    routed = {c.id for c in await inbox_route.waiting_for(db, me, rows, read_)}
+    rows = [c for n, c in enumerate(rows) if n < 500 or c.id in routed]
+    v, seen, _ = await changes.visible(db, principal, rows, read_)
+    listed = {c.id for c in seen}
+    out = [c for c in rows if c.id in routed or (c.id in listed and v.may_decide(c))]
+    names = await changes._names(db, {c.by for c in out})
     return [
-        (c, changes.words(c, v, names), names.get(c.by, "someone")) for c in seen if v.may_decide(c)
+        (c, changes.words(c, v, names), names.get(c.by, "someone"), v.may_decide(c)) for c in out
     ]
 
 

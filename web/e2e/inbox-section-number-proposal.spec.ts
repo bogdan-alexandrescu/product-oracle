@@ -77,7 +77,7 @@ test('a proposed section number reads as one in the Inbox, opens on its section 
   await expect(row).toBeVisible();
   await expect(row).not.toContainText('An item');
   await expect(row.getByTestId('meeting-proposal-context')).toContainText(
-    'Proposed setting the number in “Not this quarter” to 6 · asked for by Priya Raman',
+    'Priya Raman proposes setting the number in “Not this quarter” to 6 ·',
   );
   await row.getByRole('link', { name: `Open ${NAME} on its one-pager` }).click();
   await expect(page).toHaveURL(/\/simple\/one-pagers\/[^?]+\?section=later$/);

@@ -2449,37 +2449,18 @@ async def inbox_rows(
     waiting = [c for c in rows if c.status == "proposed"]
     read_: service.Read | None = None
     if waiting:
-        # inbox-counts: the light read routes as the full one does (the items, their tracks'
-        # owners and the roadmaps' deciders), without the accepted dates routing never needs
-        # (main-ci); the plain read is read once per read (drafts.one_read), shared with the
-        # drafts pass below when I see no drafts.
+        # inbox-counts: the light read routes as the full one does (items, track owners,
+        # deciders), without the accepted dates routing never needs (main-ci); the plain read
+        # is read once (drafts.one_read), shared with the drafts pass below if I see no drafts.
         read_ = (
             await service.load(db, light=True, routing=True)
             if counting
             else await drafts.once("roadmap_read", lambda: service.load(db))
         )
-        owners = await _company_owners(db)
-        by_id = read_.by_id()
-        qs = await _questions(db, waiting)
-        met = set(
-            await db.scalars(
-                select(SimpleSession.id).where(
-                    SimpleSession.id.in_({c.session_id for c in waiting if c.session_id}),
-                    SimpleSession.kind == "meeting",
-                )
-            )
-        )
-        waiting = [
-            c
-            for c in waiting
-            if me in current_route(c, by_id, read_.deciders, owners, qs, c.session_id in met)
-            # A question decided since (on Decisions, in a meeting) leaves nothing to decide.
-            and not (
-                c.op in QUESTION_OPS
-                and (d := qs.get(str(c.target.get("decision_id")))) is not None
-                and d.status != "proposed"
-            )
-        ]
+        from oracle.simple.inbox_route import waiting_for
+
+        assert read_ is not None  # inbox-2: narrowed for pyright (main-ci)
+        waiting = await waiting_for(db, me, waiting, read_)
     if counting:
         return [_counted(c, seen) for c in waiting], []
     decided = [c for c in rows if c.status != "proposed"]

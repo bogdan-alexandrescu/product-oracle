@@ -167,18 +167,39 @@ export async function waitingItems(
       op: null,
     });
   }
-  for (const c of changes ?? []) {
-    if (!c.can_decide || c.status !== 'proposed') continue;
-    const item = (c.target as { item_id?: string }).item_id;
+  // inbox-2 (#1893): and every proposal the Inbox counts for me (waiting_reads.proposals); one I
+  // may not decide now opens in the Inbox.
+  const routed = new Map((inbox?.simple_proposals ?? []).map((p) => [p.id, p]));
+  const listed = (changes ?? []).filter(
+    (c) => c.status === 'proposed' && (c.can_decide || routed.has(c.id)),
+  );
+  const known = new Set(listed.map((c) => c.id));
+  const proposals = [
+    ...listed.map((c) => ({ ...c, item: (c.target as { item_id?: string }).item_id })),
+    ...[...routed.values()]
+      .filter((p) => !known.has(p.id))
+      .map((p) => ({
+        ...p,
+        item: p.item_id ?? undefined,
+        words: p.asked ? p.asked.charAt(0).toUpperCase() + p.asked.slice(1) : '',
+      })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  for (const c of proposals) {
     const date = c.op === 'accept_date_suggestion';
+    const decides = !!c.can_decide;
+    const title = c.words || (date ? 'New dates proposed' : 'A proposed change');
     out.push({
-      kind: date ? 'date' : 'proposal',
+      kind: decides ? (date ? 'date' : 'proposal') : 'inbox',
       key: `proposal:${c.id}`,
       ref_id: c.id,
-      title: c.words || (date ? 'New dates proposed' : 'A proposed change'),
+      title,
       detail: `Proposed by ${c.by_name}`,
-      action: 'Accept',
-      href: item ? `/simple/roadmap?item=${item}` : '/simple/roadmap',
+      action: decides ? 'Accept' : 'Open',
+      href: !decides
+        ? '/simple/inbox'
+        : c.item
+          ? `/simple/roadmap?item=${c.item}`
+          : '/simple/roadmap',
       at: c.at,
       op: c.op,
     });

@@ -114,7 +114,7 @@ for (const phone of [false, true]) {
       await expect(row).toBeVisible();
       await expect(row).not.toContainText('An item');
       await expect(row.getByTestId('meeting-proposal-context')).toContainText(
-        `Proposed deciding ${QUESTION} · asked for by Theo Brandt on`,
+        `Theo Brandt proposes deciding ${QUESTION} ·`,
       );
       await tap(row.getByRole('link', { name: `Open ${QUESTION} in Decisions` }));
       await expect(page).toHaveURL(/\/simple\/decisions\?prd=[^&]+&question=/);
@@ -162,7 +162,7 @@ for (const phone of [false, true]) {
       await expect(row).not.toContainText('An item');
       // Still to decide: it reads as proposed, never as done ("Edited a one-pager line ...").
       await expect(row.getByTestId('meeting-proposal-context')).toContainText(
-        'Proposed new wording for a one-pager line: “Invite suggestions from shared contacts” · asked for by',
+        'proposes new wording for a one-pager line: “Invite suggestions from shared contacts” ·',
       );
       await tap(row.getByRole('link', { name: new RegExp(`^Open “${LINE}.*” on its one-pager$`) }));
       await expect(page).toHaveURL(/\/simple\/one-pagers\/[^?]+\?line=bets-2/);

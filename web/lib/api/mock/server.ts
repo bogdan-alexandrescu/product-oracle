@@ -12,6 +12,7 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
@@ -8578,7 +8579,9 @@ function load(): Db {
                                                                                                                                                                                                                                                                       true,
                                                                                                                                                                                                                                                                     )
                                                                                                                                                                                                                                                                 : scenario ===
-                                                                                                                                                                                                                                                                    ONE_ROADMAP_SCENARIO
+                                                                                                                                                                                                                                                                      ONE_ROADMAP_SCENARIO ||
+                                                                                                                                                                                                                                                                    scenario ===
+                                                                                                                                                                                                                                                                      INBOX_REPLACED_PROPOSAL_SCENARIO
                                                                                                                                                                                                                                                                   ? seedOneRoadmapScenario
                                                                                                                                                                                                                                                                   : scenario ===
                                                                                                                                                                                                                                                                       PRIORITIES_TWINS_SCENARIO
@@ -8967,6 +8970,9 @@ function load(): Db {
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === 'revoke-failures' ? seedRevokeFailures() : [];
   db.access_failures = scenario === 'access-failures' ? seedAccessFailures() : [];
+  // inbox-2 (#1893): an owner change on a replaced PRD's item, waiting on the owner.
+  if (scenario === INBOX_REPLACED_PROPOSAL_SCENARIO)
+    seedReplacedProposal(db.simple_roadmap!, db.members);
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === 'launches')
