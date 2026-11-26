@@ -46,6 +46,8 @@ const badge = (page: Page) => page.getByTestId('simple-nav-roadmap-count').first
 
 /** The strip's own count ("⚠ 2 broken links"; 0 for "No broken links"). */
 async function stripCount(page: Page): Promise<number> {
+  // #1901: no strip at all when there is no broken link.
+  if (!(await strip(page).count())) return 0;
   const words = (await strip(page).innerText()).split('\n')[0];
   if (/No broken links/.test(words)) return 0;
   return Number(/(\d+) broken link/.exec(words)?.[1] ?? NaN);

@@ -164,7 +164,7 @@ for (const [name, use] of [
       await first.getByRole('button', { name: 'Accept as risk' }).click();
       await first.getByRole('textbox').fill("Last week's rules are enough");
       await first.getByRole('button', { name: 'Save the risk' }).click();
-      if (n === 1) await expect(page.getByTestId('conflicts')).toHaveText('No broken links');
+      if (n === 1) await expect(page.getByTestId('conflicts')).toHaveCount(0);
       else
         await expect(
           panel.getByRole('button', {

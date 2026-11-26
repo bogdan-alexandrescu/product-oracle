@@ -41,17 +41,20 @@ export function OwnerPick({
   onPick: (ownerId: string | null) => void;
 }) {
   const name = item.owner?.name ?? '';
+  // #1908: the circle says what it is on hover: its owner, picked here.
+  const tip = `Owner: ${name || "the track's owner"}`;
   return (
     <span
       data-testid="bar-owner"
       className="pointer-events-auto absolute top-[7px] z-[12] flex h-5 min-w-5 items-center justify-center rounded-full border border-line-strong bg-surface px-1 text-xs font-semibold text-text2 focus-within:border-accent"
       style={{ left }}
-      title={name}
+      title={tip}
     >
       {name ? initials(name) : '+'}
       <select
         data-testid="bar-owner-pick"
         aria-label={`Owner of ${item.title}`}
+        title={tip}
         value={item.own_owner_id ?? ''}
         onChange={(e) => onPick(e.target.value || null)}
         onKeyDown={(e) => e.stopPropagation()}
