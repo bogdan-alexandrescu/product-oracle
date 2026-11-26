@@ -24,6 +24,11 @@ Test cards (protects / fails_when / no_claim):
   another company's goal or feature of that code; the note text is sent as written;
   fails_when=``codes`` is missing, names an unknown code, or reads another company's names;
   no_claim=how the page shows them (web/e2e/run-note-codes.spec.ts).
+- test_runs_group_names_a_member_without_a_name: protects=#1763: a run stop decided by a
+  member who set no name shows a name made from their email ("approver@example.com" reads
+  "Approver"), on the stop and on each step of its trail, never the email;
+  fails_when=the Runs group names that member by their email; no_claim=how the page shows it
+  (web/e2e/people-by-name.spec.ts).
 """
 
 import datetime as dt
@@ -91,6 +96,32 @@ async def test_runs_group_lists_each_stop(client):
         ("Sent back", "2026-10-21", "Needs a zone per workspace."),
         ("Approved", "2026-10-22", "Quiet hours follow the zone."),
     ]
+
+
+async def test_runs_group_names_a_member_without_a_name(client):
+    """#1763: a run stop decided by a member with no name set shows their name, not email."""
+    w = await world()
+    owner, lead = w.ctx.users["owner"], w.ctx.users["approver"]
+    assert not lead.name and lead.email == "approver@example.com"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        run = Run(flow="baseline_to_prd", document_id=prd.id, created_by=owner.id, status="running")
+        s.add(run)
+        await s.flush()
+        for days, status, attempt in ((0, "changes_requested", 1), (1, "approved", 2)):
+            s.add(Checkpoint(
+                run_id=run.id, kind="eng_review", status=status, approver_role="approver",
+                decided_by=lead.id, decided_at=AT + dt.timedelta(days=days),
+                payload={"segment_seq": 1, "attempt": attempt,
+                         "decided": {"role": "approver", "by": str(lead.id)}},
+            ))  # fmt: skip
+        await s.commit()
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    (stop,) = r.json()["runs"][0]["stops"]
+    assert stop["who"] == "Approver"
+    assert [t["who"] for t in stop["trail"]] == ["Approver", "Approver"]
+    assert "approver@example.com" not in r.text
 
 
 async def _runs_with_a_stop(w, n):

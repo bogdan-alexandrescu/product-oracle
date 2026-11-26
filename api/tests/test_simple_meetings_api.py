@@ -205,7 +205,7 @@ async def test_decisions_page_meeting_lists_its_comments(client):
     assert r.status_code == 200, r.text
     [g] = r.json()["meetings"]
     assert [(n["kind"], n["text"], n["by_name"]) for n in g["notes"]] == [
-        ("comment", "Keep the beta", "approver@example.com")
+        ("comment", "Keep the beta", "Approver")
     ]
 
 
@@ -241,7 +241,7 @@ async def test_every_action_is_a_meeting_decision(client):
     rows = await meeting_decisions(w)
     titles = [d.title for d in rows]
     # qa4-simple-decide-12: a move says where to; an accepted or declined proposal says whose.
-    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
+    who = "Commenter"  # #1763: the one name rule, never the bare email
     assert titles == [
         "Renamed Edit_Title A",
         "Proposed: Moved Change_Horizon A to Next",
@@ -261,7 +261,7 @@ async def test_every_action_is_a_meeting_decision(client):
     assert out["decisions"] == len(titles)
     [comment_note] = [n for n in out["notes"] if n["kind"] == "comment"]
     assert (comment_note["text"] == "Keep the beta"
-            and comment_note["by_name"] == "approver@example.com")  # fmt: skip
+            and comment_note["by_name"] == "Approver")  # fmt: skip
     assert comment_note["at"] is not None
     # The draft marks the change as made in the meeting.
     [d] = (await client.get(DRAFTS, headers=w.ctx.as_("decider"))).json()
@@ -648,7 +648,7 @@ async def test_decisions_page_reads_comment_authors_once(client, monkeypatch):
         assert r.status_code == 200, r.text
         groups = r.json()["meetings"]
         assert len(groups) == n
-        assert all([x["by_name"] for x in g["notes"]] == ["approver@example.com"] for g in groups)
+        assert all([x["by_name"] for x in g["notes"]] == ["Approver"] for g in groups)
         return len(calls)
 
     one, three = await name_reads(1), await name_reads(3)
@@ -726,10 +726,8 @@ async def test_old_comment_decisions_become_comments(client):
     out = await get(client, w, m["id"])
     assert [d["title"] for d in out["meeting_decisions"]] == ["Ship the beta"]
     comments = [n for n in out["notes"] if n["kind"] == "comment"]
-    # Who commented: the approver (the world's users go by their email).
-    assert [(n["text"], n["by_name"]) for n in comments] == [
-        ("Keep the beta", "approver@example.com")
-    ]
+    # Who commented: the approver, by the one name rule (#1763).
+    assert [(n["text"], n["by_name"]) for n in comments] == [("Keep the beta", "Approver")]
     async with tenant_session(w.ctx.tenant_id) as s:
         assert (await s.get(Decision, old)).status == "withdrawn"
         assert (await s.get(Decision, kept)).status == "decided"

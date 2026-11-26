@@ -57,6 +57,7 @@ from oracle.docs.models import Document
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
 from oracle.errors import exception_text
+from oracle.members.names import display_name
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, minutes
 from oracle.simple.meetings_agenda import (
@@ -173,9 +174,7 @@ from oracle.simple.models import (
     SimpleSession,
     SimpleSessionDraft,
 )
-from oracle.simple.models import (
-    SimpleMeetingDecision as MeetingDecisionRow,
-)
+from oracle.simple.models import SimpleMeetingDecision as MeetingDecisionRow
 from oracle.simple.schemas import (
     SimpleActionItemOut,
     SimpleDelivery,
@@ -287,7 +286,7 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
         if drafts.reading()
         else await db.scalars(select(User).where(User.id.in_(ids)))
     )
-    return {u.id: u.name or u.email for u in users if u.id in ids}
+    return {u.id: display_name(u.email, u.name) for u in users if u.id in ids}
 
 
 # --------------------------------------------------------------------------- start
@@ -317,7 +316,7 @@ async def options(
         ]
     owners = await _company_owners(db)
     members = await _members(db)
-    names = {u.id: u.name or u.email for u in members}
+    names = {u.id: display_name(u.email, u.name) for u in members}
     prds = []
     whos = await prd_whos(db, docs)
     for d in docs:
@@ -1003,7 +1002,7 @@ async def listing(db: AsyncSession, principal: Any) -> SimpleMeetingsOut:
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
     out = await briefs(db, ms)
-    names = {u.id: u.name or u.email for u in await _members(db)}
+    names = {u.id: display_name(u.email, u.name) for u in await _members(db)}
     return SimpleMeetingsOut(
         upcoming=await _upcoming(db, names, principal),
         live=[b for b in out if b.status == "live"],
@@ -1406,7 +1405,7 @@ async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
         return 0
     # Claim what is due (a second deliver leaves it alone until the lease ends; a crash
     # mid-send tries it again then), then send with the meeting unlocked.
-    names = {u.id: u.name or u.email for u in users.values()} if due else await _names(
+    names = {u.id: display_name(u.email, u.name) for u in users.values()} if due else await _names(
         db, set(m.attendee_ids))  # fmt: skip
     text = _plain(m, m.minutes or {}, names, await company_time.company_time_zone(db))
     subject = f"Minutes: {m.title}"

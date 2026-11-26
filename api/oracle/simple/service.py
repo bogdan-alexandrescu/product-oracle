@@ -495,11 +495,11 @@ async def load(
         tracks[t.id] = t
         if role is not None:
             owner_roles[t.id] = role
-            owner_names[t.id] = name or email
+            owner_names[t.id] = display_name(email or "", name)
     # chat-actions: an item's own owner (set_owner) is named over its track's.
     people = (
         {
-            u.id: (u.role, u.name or u.email)
+            u.id: (u.role, display_name(u.email, u.name))
             for u in await drafts.all_users(db)
             if u.disabled_at is None
         }

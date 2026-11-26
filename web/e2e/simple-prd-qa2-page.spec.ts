@@ -313,7 +313,7 @@ test.describe('One-pagers list and the planned PRD', () => {
       .click();
     const empty = page.getByTestId('simple-one-pagers-empty');
     await expect(empty).toContainText('A one-pager is made from a PRD');
-    await empty.getByRole('link', { name: 'Detailed › PRDs' }).click();
+    await empty.getByRole('link', { name: 'Detailed › One-pagers' }).click();
     await expect(page).toHaveURL(/\/documents$/);
   });
 });

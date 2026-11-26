@@ -305,7 +305,7 @@ async def test_a_declined_card_proposal_says_declined(client):
     cards = {c["id"]: c for x in r.json()["messages"] for c in x.get("cards") or []}
     assert cards[card["id"]]["status"] == "declined"
     assert cards[card["id"]]["decided_by_name"] == "Owner"
-    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
+    who = "Commenter"  # #1763: the one name rule, never the bare email
     titles = [d.title for d in await meeting_decisions(w)]
     assert titles == [f"Declined {who}'s proposal: move Cut A to Later"]
 

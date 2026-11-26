@@ -26,7 +26,9 @@ test('login: rejects a wrong password, then signs in', async ({ page }) => {
   await page.getByLabel('Password').fill(ADMIN.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/documents$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'PRDs', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'One-pagers', exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId('signed-in-as')).toHaveText('admin@example.com');
 });
 

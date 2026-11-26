@@ -80,7 +80,7 @@ def name(ctx: Ctx, role: str) -> str:
 def who(ctx: Ctx, role: str) -> str:
     """Who in a change's words (oracle.simple.changes._names)."""
     u = ctx.users[role]
-    return u.name or u.email
+    return display_name(u.email, u.name)
 
 
 async def seed(ctx: Ctx) -> dict:

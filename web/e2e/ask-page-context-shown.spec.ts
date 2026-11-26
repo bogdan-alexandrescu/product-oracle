@@ -31,12 +31,14 @@ async function askThisPage(panel: Locator, title: string) {
     'aria-pressed',
     'true',
   );
-  await expect(panel.getByTestId('hop-about')).toHaveText('New chat about PRDs');
+  await expect(panel.getByTestId('hop-about')).toHaveText('New chat about One-pagers');
   await panel.getByRole('textbox', { name: 'Ask Oracle' }).fill(QUESTION);
   await panel.getByRole('button', { name: 'Send' }).click();
   const thread = panel.getByTestId('discussion-thread');
   // The mock names each listed row by its first column's value and its next column, as read.
-  await expect(thread).toContainText(`On PRDs I can see ${title} (Status: `, { timeout: 15_000 });
+  await expect(thread).toContainText(`On One-pagers I can see ${title} (Status: `, {
+    timeout: 15_000,
+  });
   await expect(thread).toContainText(/\(Status: (Draft|In review|Approved)\)/);
   await expect(thread).not.toContainText('Document:');
 }

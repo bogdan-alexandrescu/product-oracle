@@ -87,6 +87,7 @@ import { formatDate } from '@/lib/format';
 import { blocksText, parseBlocks } from '@/lib/markdown';
 import { useMe } from '@/lib/me';
 import { OWNER_APPROVES } from '@/lib/owner-kinds';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { useDocumentView, type DocumentView } from '@/lib/preferences';
 import { useScreenSubject } from '@/lib/screen-subject';
 import { keyFromHash, sectionHref } from '@/lib/section-link';
@@ -1381,7 +1382,7 @@ export function VersionView({
               Open the document
             </LinkButton>
             <LinkButton href="/documents" variant="secondary" icon="back" className="h-10">
-              Back to PRDs
+              Back to {PRD_LIST}
             </LinkButton>
           </>
         }

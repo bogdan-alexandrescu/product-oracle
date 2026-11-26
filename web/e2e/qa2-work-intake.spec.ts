@@ -116,7 +116,7 @@ test('rirs-25: on a phone the PRDs back link is at least 24 px tall', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await openIntake(page);
   const back = page.getByTestId('intake-back').filter({ visible: true });
-  await expect(back).toHaveText('PRDs');
+  await expect(back).toHaveText('One-pagers');
   expect((await back.boundingBox())!.height).toBeGreaterThanOrEqual(24);
 });
 
@@ -181,7 +181,7 @@ test('rirs-30: a brief that is gone says what may have happened and leads back t
     page.getByRole('tooltip').filter({ hasText: 'drafted into a PRD, archived, or deleted' }),
   ).toBeVisible();
   await expect(page.getByText('Intake not found')).toHaveCount(0);
-  await gone.getByRole('link', { name: 'Back to PRDs' }).click();
+  await gone.getByRole('link', { name: 'Back to One-pagers' }).click();
   await expect(page).toHaveURL(/\/documents$/);
 });
 

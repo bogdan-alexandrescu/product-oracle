@@ -65,7 +65,7 @@ for (const role of ROLES) {
     await expectViewOnly(page, !approver);
 
     // PRDs: a commenter writes a brief through New PRD; a viewer has no New PRD.
-    await open(page, '/documents', 'PRDs');
+    await open(page, '/documents', 'One-pagers');
     await expect(page.getByRole('link', { name: 'New PRD' })).toHaveCount(commenter ? 1 : 0);
     await expectViewOnly(page, !commenter);
 

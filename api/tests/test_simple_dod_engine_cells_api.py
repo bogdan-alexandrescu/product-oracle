@@ -143,7 +143,7 @@ async def test_estimate_feature_accept_is_outdated_after_a_later_estimate(client
     r = await client.post(accept, json={}, headers=ctx.as_("decider"))
     assert r.status_code == 409, r.text
     detail = r.json()["detail"]
-    assert detail["message"] == "outdated: changed by owner@example.com"
+    assert detail["message"] == "outdated: changed by Owner"
     # The check reads the fields the proposal writes (effort), as the stored values now.
     assert detail["current"] == {"effort": 6.0}
     assert (await w.attrs("sync"))["effort"] == 6
