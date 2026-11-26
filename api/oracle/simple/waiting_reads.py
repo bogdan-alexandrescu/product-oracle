@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.simple import additions, changes, service
+from oracle.simple import additions, changes, inbox_route, service
 from oracle.simple.models import SimpleChange, SimpleGoalSuggestion
 
 
@@ -33,7 +33,7 @@ async def proposals(
     me = getattr(principal, "user_id", None)
     if not rows or me is None:
         return []
-    routed = {c.id for c in await changes.waiting_for(db, me, rows, read_)}
+    routed = {c.id for c in await inbox_route.waiting_for(db, me, rows, read_)}
     rows = [c for n, c in enumerate(rows) if n < 500 or c.id in routed]
     v, seen, _ = await changes.visible(db, principal, rows, read_)
     listed = {c.id for c in seen}
