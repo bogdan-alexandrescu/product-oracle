@@ -3066,10 +3066,11 @@ function lineWords(data: Out): string {
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
   const coded = useCodedMilestone();
-  const msLine = (l: { key: string; label: string }) => {
+  // #1894: a PRD's key date ("M1 · Beta") by the roadmap's one code too, never the PRD's own number.
+  const msLine = (l: Line) => {
     const at = l.label.lastIndexOf(' · ');
     if (at < 0) return l.label;
-    return `${coded(l.label.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${l.label.slice(at)}`;
+    return `${coded(l.label.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null, prd: l.kind === 'key_date' ? l.prd : null })}${l.label.slice(at)}`;
   };
   const current = data.line ?? {
     key: 'now',
@@ -3172,11 +3173,14 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
                     : undefined
                 }
               >
-                {l.kind === 'key_date'
-                  ? `${l.prd ? 'From the PRD' : 'Key date'}: ${l.label}`
-                  : l.kind === 'milestone'
-                    ? `Milestone: ${msLine(l)}`
-                    : l.label}
+                {/* #1882: a milestone is listed only once the roadmap read has given it its code. */}
+                {(l.kind === 'milestone' || (l.kind === 'key_date' && l.prd)) && !coded.ready
+                  ? 'Loading…'
+                  : l.kind === 'key_date'
+                    ? `${l.prd ? 'From the PRD' : 'Key date'}: ${l.prd ? msLine(l) : l.label}`
+                    : l.kind === 'milestone'
+                      ? `Milestone: ${msLine(l)}`
+                      : l.label}
               </option>
             ));
             // prio-company: each PRD's milestones listed under its name.
