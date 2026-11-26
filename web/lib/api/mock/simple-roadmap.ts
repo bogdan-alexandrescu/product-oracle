@@ -410,7 +410,7 @@ interface MockDraft {
   >;
 }
 
-/** `draft`: the number of the PRD draft (version) the roadmap's items were imported from. */
+/** `draft`: the number of the PRD draft (version) the roadmap's items were imported from: the PRD's own version (#1915). */
 export const ROADMAPS: Record<
   string,
   { title: string; visibility: 'company' | 'approvers'; prd: string; draft: number }
@@ -419,13 +419,13 @@ export const ROADMAPS: Record<
     title: 'Alerts roadmap',
     visibility: 'company',
     prd: 'Usage alerts',
-    draft: 5,
+    draft: 1,
   },
   'onboarding-roadmap': {
     title: 'Onboarding roadmap',
     visibility: 'company',
     prd: 'Guided setup',
-    draft: 2,
+    draft: 3,
   },
   'pricing-roadmap': {
     title: 'Pricing roadmap',

@@ -7,9 +7,9 @@ import { expect, test, type Locator, type Page } from './test';
  * day is MOCK_NOW, Oct 22, 2026), on desktop (1366x820) and phone (390x844), light and dark.
  *
  * Card walk3-why-provenance: protects = an item card's "Why" line names where the item came
- * from as "From <PRD>: <feature name>." ("From Usage alerts (draft 5): Weekly digest of fired alerts."),
- * with no draft number or code, and an item imported from a section with no code reads its
- * own name ("From Usage alerts (draft 5): Alert rules engine."), never a lowercase section anchor;
+ * from as "From <PRD> (draft n): <feature name>." ("From Usage alerts (draft 1): Weekly digest of fired alerts."),
+ * with no feature code, and an item imported from a section with no code reads its
+ * own name ("From Usage alerts (draft 1): Alert rules engine."), never a lowercase section anchor;
  * fails_when = the line reads "section bets" / "section f-06"; no_claim = the other reasons (rationale, goal) and the API's rule
  * (api/tests/test_simple_walk_fixes3_rw_api.py).
  *
@@ -41,7 +41,7 @@ for (const phone of [false, true]) {
       });
 
       for (const email of ['admin@example.com', 'viewer@example.com']) {
-        test(`${email.split('@')[0]}: the card's Why line names the PRD and the feature, no draft number or code (${where})`, async ({
+        test(`${email.split('@')[0]}: the card's Why line names the PRD, its draft and the feature, no code (${where})`, async ({
           page,
         }) => {
           await login(page, email);
@@ -49,7 +49,7 @@ for (const phone of [false, true]) {
           await openRoadmapItem(page, 'alert-digest');
           let reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
           await expect(reasons).toContainText(
-            'From Usage alerts (draft 5): Weekly digest of fired alerts.',
+            'From Usage alerts (draft 1): Weekly digest of fired alerts.',
           );
           await expect(reasons).not.toContainText('section ');
           await page.getByTestId('floating-card').getByRole('button', { name: 'Close' }).click();
@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
 
           await openRoadmapItem(page, 'alert-rules');
           reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
-          await expect(reasons).toContainText('From Usage alerts (draft 5): Alert rules engine.');
+          await expect(reasons).toContainText('From Usage alerts (draft 1): Alert rules engine.');
           await expect(reasons).not.toContainText('section bets');
           await expect(reasons).not.toContainText('section ');
         });

@@ -28,7 +28,7 @@ import { expect, test, type Locator, type Page } from './test';
  * keying per role (api/tests/test_simple_walk_fixes_api.py).
  *
  * Card walk-prd-code: protects = an item imported from the PRD's section f-79 reads its
- * feature's name in its card's reasons ("From Usage alerts (draft 5): Weekly digest of fired alerts."),
+ * feature's name in its card's reasons ("From Usage alerts (draft 1): Weekly digest of fired alerts."),
  * never "section f-79"; fails_when = the section key shows raw; no_claim = priorities' rows and marks
  * (simple-priorities-codes.spec.ts).
  *
@@ -165,7 +165,7 @@ for (const phone of [false, true]) {
         await openRoadmapItem(page, 'alert-digest');
         const reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
         await expect(reasons).toContainText(
-          'From Usage alerts (draft 5): Weekly digest of fired alerts.',
+          'From Usage alerts (draft 1): Weekly digest of fired alerts.',
         );
         await expect(reasons).not.toContainText('F-79');
         await expect(reasons).not.toContainText('section f-79');
