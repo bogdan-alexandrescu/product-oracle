@@ -25,6 +25,9 @@
   - at 6ce1737: roadmap-2-timeline-header, milestone-rename, roadmap-milestone-panel-close, roadmap-r2-timeline-drag: 29 passed;
     the 24 specs that read the band (ms-label, ms-band, ms-same-day): 180 passed, 7 skipped, 3 failed in roadmap-decide
     (:339, :373, :822), all 3 passed on a rerun alone (flaky under load, as noted before).
+  - at 6ce1737 again, the same 117 specs: 1026 passed, 7 skipped, 2 failed: panel-menu-tree:486 (pre-existing) and
+    de-r1-delete:33 (a 30 s timeout typing in the add row; its spec passed 2/2 run alone, and it passed in the first run).
+  - simple-roadmap-500-timing with E2E_TIMING=1 --grep @timing, 1 worker: 15 passed (the budget holds with dates beside bars at All 3 years).
 - No API change: the API suite, pyright and the migration checks were not run.
 
 # roadmap-2 handoff (#1901 #1902 #1903 #1904 #1908)
