@@ -25,6 +25,12 @@ const NOTION_ICONS = [
   'https://prod-files-secure.s3.us-west-2.amazonaws.com',
 ].join(' ');
 
+/**
+ * The Saga apps hub shows Oracle in a frame, so its two hosts may embed the app; no other
+ * site may.
+ */
+const HUB_ORIGINS = ['https://hub.saga.xyz', 'https://hub.galatia.saga.xyz'].join(' ');
+
 export function appCsp(dev: boolean): string {
   return [
     "default-src 'self'",
@@ -37,6 +43,6 @@ export function appCsp(dev: boolean): string {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'self'",
+    `frame-ancestors 'self' ${HUB_ORIGINS}`,
   ].join('; ');
 }
