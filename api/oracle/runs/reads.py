@@ -288,7 +288,11 @@ async def _repos(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
             )
         )
         for map_id, data in rows.all():
-            if map_id in wanted and isinstance((data or {}).get("repo"), str):
+            if (
+                map_id is not None
+                and map_id in wanted
+                and isinstance((data or {}).get("repo"), str)
+            ):
                 repos[wanted[map_id]] = data["repo"]
     return repos
 
