@@ -144,6 +144,7 @@ import {
   ownersSeen,
   GOAL_COUNT,
 } from './_lib';
+import { useLinkedMilestone } from './_linked-milestone';
 import {
   MsCard,
   MsKey,
@@ -2264,6 +2265,13 @@ export function SimpleRoadmap() {
     reload,
     openItem: (id) => setCard({ id, ...anchorOf(id) }),
   });
+  // build-palette: ?milestone=<id> opens its card, whatever this person's picks narrow the roadmap to.
+  useLinkedMilestone(
+    ms,
+    restored && !!roadmap.data && !roadmap.loading,
+    () => setF({ ...NO_FILTERS, group: f.group }),
+    data?.milestones,
+  );
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {

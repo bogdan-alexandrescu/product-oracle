@@ -1246,6 +1246,7 @@ function DayChart(props: TimelineProps) {
               <button
                 type="button"
                 data-testid="timeline-milestone"
+                data-track-milestone={m.id}
                 data-day={m.date}
                 aria-label={msWords(m)}
                 aria-expanded={msCard === m.id}

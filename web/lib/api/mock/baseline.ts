@@ -14,6 +14,7 @@ import { ANY_CODE, codeOnJoin, formerKeys, findByKey } from './feature-codes';
 import { describe, proposer } from './describe';
 import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from './goals';
 import { MOCK_SCENARIO_KEY, PRODUCT_CHAT_ID, seededItemId } from './ids';
+import { seedPaletteGoals } from './palette';
 import { routeEvidenceLinks } from './public-links';
 import { reply } from './typed';
 
@@ -408,6 +409,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario =
     typeof localStorage !== 'undefined' ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  seedPaletteGoals(scenario, entity);
   // #1742: Growth under 75% of its target (the Goal map's at risk), and
   // Activation a count of 0 against at most 0 that was never read (no day for its current value).
   if (scenario === PLAN_GOAL_RISK_SCENARIO) {

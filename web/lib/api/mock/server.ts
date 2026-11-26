@@ -13,6 +13,7 @@ import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
+import { routePalette } from './palette';
 import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
@@ -16447,6 +16448,13 @@ export async function mockFetch(req: Request): Promise<Response> {
       status: 500,
       headers: { 'content-type': 'application/json' },
     });
+  }
+  // build-palette: composed from the mock's own reads, outside the queue (./palette.ts); its
+  // reads are calls of their own, so this one only leaves the burst.
+  const palette = await routePalette(req, mockFetch);
+  if (palette) {
+    leave();
+    return palette;
   }
   // A read whose save may wait for the burst's last call: not one that marks something seen, nor
   // a meeting chat's poll, which saves nothing of its own (S9).

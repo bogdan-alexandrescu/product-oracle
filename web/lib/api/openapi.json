@@ -45501,6 +45501,36 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/palette": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Palette",
+        "operationId": "get_palette",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaletteOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/fit-date": {
       "get": {
         "tags": [
@@ -103604,6 +103634,197 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PagePatch"
+      },
+      "PaletteFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "PaletteFeature"
+      },
+      "PaletteGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "measure"
+        ],
+        "title": "PaletteGoal"
+      },
+      "PaletteKeyResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "goal",
+          "goal_id"
+        ],
+        "title": "PaletteKeyResult"
+      },
+      "PaletteMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "date"
+        ],
+        "title": "PaletteMilestone"
+      },
+      "PaletteOut": {
+        "properties": {
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/PalettePrd"
+            },
+            "type": "array",
+            "title": "Prds"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteGoal"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "key_results": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteKeyResult"
+            },
+            "type": "array",
+            "title": "Key Results"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteMilestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prds",
+          "goals",
+          "key_results",
+          "milestones",
+          "features"
+        ],
+        "title": "PaletteOut"
+      },
+      "PalettePrd": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "status"
+        ],
+        "title": "PalettePrd"
       },
       "PasscodeIn": {
         "properties": {
