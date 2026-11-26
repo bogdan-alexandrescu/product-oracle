@@ -145,7 +145,7 @@ async def _proposals(db: AsyncSession, principal: Any, read_: Any) -> list[Simpl
             title=words or ("New dates proposed" if date else "A proposed change"),
             detail=f"Proposed by {by_name}", action="Accept" if decides else "Open",
             href=(f"/simple/roadmap?item={item}" if item else "/simple/roadmap") if decides
-            else "/inbox",
+            else "/simple/inbox",
             at=c.at, op=c.op,
         ))  # fmt: skip
     return out

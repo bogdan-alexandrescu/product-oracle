@@ -190,7 +190,7 @@ export async function waitingItems(
       title,
       detail: `Proposed by ${c.by_name}`,
       action: decides ? 'Accept' : 'Open',
-      href: !decides ? '/inbox' : c.item ? `/simple/roadmap?item=${c.item}` : '/simple/roadmap',
+      href: !decides ? '/simple/inbox' : c.item ? `/simple/roadmap?item=${c.item}` : '/simple/roadmap',
       at: c.at,
       op: c.op,
     });
