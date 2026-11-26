@@ -3,8 +3,8 @@
 Base 926a307 (train night-m). Commits: 5af3e77 red pytest (proposals), e829e20 API item_code on
 InboxSimpleChange, 898c063 web proposal row + mock + spec, d00b425 request words, ad3d648 red
 pytest (action items), 20b935c action item rows, a791259 handoff. Review round (verdict NOT_YET,
-one major): 18cbbc6 red pytest (checkpoint child), then the API code on InboxChild, then the web
-row, mock and spec (see "Review round" below). Worker publishes the branch.
+one major): 18cbbc6 red pytest (checkpoint child), 374d4c3 API `code` on InboxChild, f994fa2 web
+row + mock + spec, 0d23096 lint order (see "Review round" below). Worker publishes the branch.
 
 ## What the auditor saw, and the cause
 A proposal row named its feature without its code. The row's code came only from the Simple
@@ -45,6 +45,31 @@ on it.
   limit; the remaining ~660 files touch neither the changed reads nor their schemas) and the
   timing tests (`-m timing`), for the same reason. The prose guard was not run either: the only
   visible change is a code (e.g. "F-45") placed before a feature name.
+
+## Review round (verdict NOT_YET, its one major: checkpoint children had no code)
+- API: InboxChild.code, filled in runs/actions.summarize by codes.code_of (title's own code, else
+  prd_code of the item's PRD section). Red pytest first: tests/test_inbox_child_codes.py (3)
+  failed with AttributeError 'code' at 18cbbc6, pass after. `make openapi`: only the new field.
+- Web: _needs.tsx childNeeds names the child with Named (code chip, then the name, a title's own
+  leading code stripped; hover title "F-06 Slack alerts"). Mock checkpoint summary (runs.ts) fills
+  `code` with item-code.ts shownCode. No base mock data changed: the spec seeds a copy of the
+  roadmap review run whose Slack alerts comes from section f-06.
+- Spec e2e/inbox-proposal-codes.spec.ts, two new cases (/simple/inbox, /inbox): "F-06 Slack
+  alerts", and Budget caps (section no code) stays as its name. Red with _needs.tsx and runs.ts
+  put back (mock rebuilt): Expected "F-06 Slack alerts", Received "Slack alerts"; green with.
+- Gates (this round): pytest of every inbox/runs/roadmap_reasons/roadmap_items/checkpoint/
+  simple_waiting/openapi file + test_frozen_migrations.py, -n 3, not timing: 415 passed. Timing:
+  the three Inbox timing tests, 3 passed. ruff check/format: clean. pyright as ci.yml runs it:
+  `pyright: 1263 errors, baseline 1263`. tsc exit 0; full `npm run lint` exit 0 (import placed so
+  runs.ts stays at its import-x/order suppression of 14); format:check "All matched files use
+  Prettier code style!". Playwright, mock prebuilt, 2 workers, --retries=0: every e2e/inbox-*.spec
+  + inbox, qa*-inbox, vqa-b-runs-inbox, simple-walk-fixes3-cp, checkpoint-gate: 172 passed;
+  roadmap-items-review, roadmap-items-roles, prose-guard, questions-inbox, track-alerts,
+  home-fixes: 79 passed, 3 failed: prose-guard's two merge-base tests (shallow clone, no
+  origin/main; passed with PROSE_BASE=HEAD~3, i.e. a791259) and home-fixes.spec.ts:228 (Home's (i)
+  tip, not touched here; passed when rerun alone: 36 passed with the prose guard).
+- NOT RUN: the whole API suite and the full `-m timing` run (over an hour at -n 3 here, past this
+  step's limit; the reviewer also owes it before merge).
 
 ## Left
 - Launch rows name a launch by its own title, not a feature field. A checkpoint child whose key is
