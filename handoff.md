@@ -31,6 +31,7 @@ exists in the read Priorities loads.
   simple-priorities-codes, goal-buckets-editing: 136 passed; prose-guard 35 passed (with
   PROSE_BASE=8227775, since this clone has no origin/main merge base; without it its 2 merge-base tests fail).
 - No API change, so the API suite, timing tests, pyright and frozen migrations were not run.
+- simple-priorities, prio-ux, priorities-key-results, walkb-priorities: 31 passed.
 - Not run: the rest of the ~100 specs that open Priorities (time).
 
 ## Left (outside this lane's two places)
