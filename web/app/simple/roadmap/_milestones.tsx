@@ -1808,7 +1808,8 @@ export function MsLayer(props: MsLayerProps) {
         ) + 30,
         phone ? 150 : 230,
       );
-      let l = mx + 6;
+      // #1903: a label whose day is scrolled under the names column starts at the track's edge, never cut by it.
+      let l = Math.max(mx + 6, props.span ? props.span[0] + 4 : -Infinity);
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
       // tb-mk: an empty row first, else the row whose last label began farthest left: it keeps the
       // most of its words (at 6 months close labels cut each other to "M…" when all took row one).

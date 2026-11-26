@@ -203,13 +203,17 @@ export function Key({ data }: { data: Roadmap }) {
       'Key date',
     ]);
   const dated = (ms?.list ?? []).filter((m) => m.date);
-  if (dated.length)
+  // The roadmap's own milestones draw a grey dashed line (timeline-milestone-line): its swatch too.
+  const own = (data.milestones ?? []).some((m) => m.date && m.status !== 'dropped');
+  if (dated.length || own)
     e.push([
       'ms',
       <span key="m" aria-hidden className="flex h-3.5 flex-none gap-1">
-        {['M1', 'M2', 'M3'].map((c) => (
-          <i key={c} className="w-0.5" style={{ background: msEdge(c) }} />
-        ))}
+        {own && <i data-testid="key-ms-own" className="border-l-2 border-dashed border-text2" />}
+        {dated.length > 0 &&
+          ['M1', 'M2', 'M3'].map((c) => (
+            <i key={c} className="w-0.5" style={{ background: msEdge(c) }} />
+          ))}
       </span>,
       'Milestone',
     ]);
@@ -1599,7 +1603,6 @@ function DayChart(props: TimelineProps) {
                   labelW={labelW}
                   trackW={trackW}
                   sl={sl}
-                  fit={fit}
                   today={data.today}
                   canChange={canChange}
                   still={fixed(i)}
@@ -1806,7 +1809,6 @@ const TimelineRow = memo(function TimelineRow({
   labelW,
   trackW,
   sl,
-  fit,
   today,
   canChange,
   still,
@@ -1829,7 +1831,6 @@ const TimelineRow = memo(function TimelineRow({
   labelW: number;
   trackW: number;
   sl: number;
-  fit: boolean;
   today: string;
   canChange: boolean;
   still: boolean;
@@ -1873,7 +1874,7 @@ const TimelineRow = memo(function TimelineRow({
   const words = guess ? estimateWords(ds, de, today) : spanWords(ds, de, today);
   const room = bx + bw - Math.max(bx, sl);
   // #1904: dates sit on the bar only where they fit whole; a shorter bar has them beside it.
-  const onBar = !fit && room > words.length * 6.5 + 16;
+  const onBar = room > words.length * 6.5 + 16;
   const besideW = words.length * 6.5 + 8;
   // Beside the bar, after its pending mark and the open bar's owner pick.
   const gap = 4 + (waiting ? 10 : 0) + (sel && renamable && !still && people ? 28 : 0);
@@ -2041,7 +2042,7 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {/* roadmap-decide: an item with no dates of its own (Oracle's estimate on both ends) whose
            * bar has no room for its dates says so beside it, never a bare unlabeled pill. */}
-          {(guess || !fit) && !onBar && (
+          {!onBar && (
             <span
               data-testid={guess ? 'bar-no-dates' : 'bar-dates-beside'}
               className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
