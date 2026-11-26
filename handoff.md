@@ -1,3 +1,39 @@
+# roadmap-2 handoff (#1901 #1902 #1903 #1904 #1908)
+
+## Commits (on top of e2ded48)
+- 8651494 red spec web/e2e/roadmap-2-timeline-header.spec.ts (all 6 tests failed on base at their own assertion)
+- d2e0898 the fix (web/app/simple/roadmap/_zoom.tsx, _roadmap.tsx, _owner.tsx, _milestones.tsx) and the existing specs it changes
+- 29e2397 qa4r-timeline.spec.ts:222 now focuses the row's name by its test id (bars have a title now)
+- ba1e26c lint import order in the new spec
+
+## What changed
+- #1901: on a desktop the key (Key, exported from _zoom.tsx) renders inside the filter row; at 1512 px it wraps onto a 2nd line.
+  ConflictPanel returns null when there are no broken links (still says "No broken links here, N in all" when filters hide some).
+  MsKey ("Hollow, dashed…") no longer shows on the Timeline; the key's 'prd' entry replaces it. Gantt and Board keep it (outside this lane).
+  The Goals ▾ toggle (data-testid goals-toggle) hides the goal cards; remembered in localStorage po-roadmap-goals-shut; open by default (owner question in questions.json).
+- #1902: key entries 'ms' ("Milestone", 3 coloured lines) and 'tie' ("Due by a milestone", dotted line).
+- #1903: the Today pill takes the nearest spot within 120 px of its line with no diamond under it, else sits under the diamonds (z-[24]).
+  Same-day counts with no clear place sit after the previous count (the layout effect in _milestones.tsx).
+- #1904: dates sit on a bar only when they fit whole, else beside it (bar-dates-beside), not at All 3 years; every bar has title=its dates.
+- #1908: OwnerPick's circle and its select have the title "Owner: <name>".
+
+## Tests run (Playwright, --retries=0, 2 workers, against the mock build)
+- The new spec: 6 passed.
+- 123 specs that drive the Simple Roadmap (every spec that opens /simple/roadmap and touches the timeline, conflicts, filters,
+  goal cards, the key, the Today pill or the owner mark) plus prose-guard and the 500-item timing spec: all pass except:
+  - panel-menu-tree.spec.ts:486 (390 px, Priorities) and roadmap-r2-timeline-drag.spec.ts:60 (desktop 1440, the panel reopens after a reload):
+    both fail the same way on base e2ded48 (checked on a base build). Pre-existing.
+  - qa-nov17-roadmap-layout.spec.ts:193 and roadmap-decide.spec.ts:339 each failed once and then passed on rerun (3/3 for qa-nov17): flaky.
+  - prose-guard's two merge-base checks need origin/main. With a local ref to e2ded48 they pass; no ceiling was edited.
+- tsc --noEmit: exit 0. Full npm run lint: exit 0. format:check: clean. npm run test:unit: 318 passed. vite build --mode mock: ok.
+- No API change, so the API suite, pyright and the migration checks were not run.
+
+## Left / not reproduced
+- #1903: the live site's band chip cut at the left edge and its "+3"/"+4" bubbles overlapping did not reproduce on the mock, so those
+  parts are unchanged. The fallback for the counts is not proven by a test that is red on base (the red run stopped at the pill check first).
+- #1901: at about 1512 px the filters and the key don't fit on one line, so the key wraps under them (no box or border row any more).
+- #1904: with focus, a bar's dates are read from its accessible name; at All 3 years there is no visible label beside the bar.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
