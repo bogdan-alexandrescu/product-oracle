@@ -110,7 +110,10 @@ export function sheetGroups(path: string, pages: Page[], detailed: boolean): Gro
 export function matches(k: Key, q: string): boolean {
   const w = q.trim().toLowerCase();
   if (!w) return true;
-  return k.label.toLowerCase().includes(w) || [...k.keys, ...(k.alt ?? [])].join(' ').includes(w);
+  return (
+    k.label.toLowerCase().includes(w) ||
+    [...k.keys, ...(k.alt ?? [])].join(' ').toLowerCase().includes(w)
+  );
 }
 
 /** Moves and adds: struck out for one who may change nothing. */
