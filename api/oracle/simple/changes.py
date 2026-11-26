@@ -2472,10 +2472,13 @@ async def inbox_rows(
             item_ids.add(uuid.UUID(str(c.target.get("item_id"))))
         except ValueError:
             pass
-    titles = {
-        r.id: r.title
-        for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
-    }
+    items = list(await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids))))
+    titles = {r.id: r.title for r in items}
+    # inbox-codes (#1786): each item's code read here, so a row never names a feature without it.
+    from oracle.roadmap import codes
+
+    by_feature = await codes.feature_codes(db) if any(r.feature_id for r in items) else {}
+    item_codes = {r.id: codes.code_of(r, by_feature) for r in items}
     # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
     on_questions = await _questions(db, waiting + decided)
     # PR 1320 re-review: a one-pager number fix is named by its PRD.
@@ -2547,6 +2550,7 @@ async def inbox_rows(
             **on,
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
+            item_code=item_codes.get(iid) if iid else None,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
             decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
             state=state or ("new" if seen is None or (at and at > seen) else "open"),  # type: ignore[arg-type]

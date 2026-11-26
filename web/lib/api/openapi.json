@@ -89937,6 +89937,17 @@
             ],
             "title": "State"
           },
+          "item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
+          },
           "from_meeting": {
             "anyOf": [
               {

@@ -29161,6 +29161,8 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open" | "done";
+            /** Item Code */
+            item_code?: string | null;
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
             /** Asked */
             asked?: string | null;
