@@ -1,3 +1,32 @@
+# roadmap-2 fix round 1 (review NOT_YET, three majors; minors left as they were)
+
+## Commits
+- 0de7a8d red: web/e2e/roadmap-2-timeline-header.spec.ts gains three checks, and the mock gains the
+  "roadmap-band-crowd" scenario (BAND_CROWD_SCENARIO, web/lib/api/mock/simple-milestones.ts: eleven invented
+  milestones from Oct 12 to Nov 12, two pairs on one day). Run on the pre-fix app: #1902, #1904 and the new #1903 test failed
+  (3 failed, 4 passed).
+- 17a2bf3 + 6ce1737 the fix:
+  - #1902: the key's Milestone entry shows when the roadmap's own milestones are drawn too, with their grey dashed swatch
+    (data-testid key-ms-own) before the coloured ones.
+  - #1904: TimelineRow no longer takes `fit`: dates sit on a bar where they fit, else beside it, at every zoom (All 3 years too),
+    so a bar reached with Tab shows its dates. No new element per bar beyond the one label every other zoom already drew.
+  - #1903: a band label across the names column's edge is trimmed to start at the track's edge (span[0] + 4), its end kept,
+    when 40 px or more stays (reproduced at 3 months: "M1 Pilot starts" lay across the edge). 17a2bf3 first moved the label's
+    start before the row layout; that changed how the rows fold and broke milestone-rename:104, roadmap-milestone-panel-close:42
+    and roadmap-r2-timeline-drag:60 (1024); 6ce1737 trims after the layout instead and all three pass.
+- Not reproduced, even with the crowded scenario at all four zooms: "+N" badges on top of each other and a stacked "2 4" count.
+  The spec asserts no label, "+N" or count box meets another at 3m/6m/1y/all.
+
+## Gates (this round, at 6ce1737 unless said)
+- tsc --noEmit exit 0; full npm run lint exit 0; prettier --check . clean.
+- Playwright, mock build, --retries=0, 2 workers:
+  - at 17a2bf3, the 117 specs that drive the timeline, its bars, key or band: 1024 passed, 7 skipped, 4 failed: panel-menu-tree:486
+    (pre-existing, see above) and the three the 6ce1737 trim fixed.
+  - at 6ce1737: roadmap-2-timeline-header, milestone-rename, roadmap-milestone-panel-close, roadmap-r2-timeline-drag: 29 passed;
+    the 24 specs that read the band (ms-label, ms-band, ms-same-day): 180 passed, 7 skipped, 3 failed in roadmap-decide
+    (:339, :373, :822), all 3 passed on a rerun alone (flaky under load, as noted before).
+- No API change: the API suite, pyright and the migration checks were not run.
+
 # roadmap-2 handoff (#1901 #1902 #1903 #1904 #1908)
 
 ## Commits (on top of e2ded48)
