@@ -6,6 +6,11 @@ import { expect, test, type Page } from './test';
  * Waiting for you and the Inbox on the mock's invented data: #4 a broken link's or a date's
  * feature shows its code before its name (Home, Decisions, the Inbox, Walk me through it),
  * #6 on a phone a Dates row's why sits behind its (i), #18 Simple's Inbox says its count once.
+ *
+ * Card: protects=a feature in Home, Decisions' Waiting for you, the Inbox and Walk me through it
+ * shows its code before its name, a phone Dates row hides its why behind an (i), and the Inbox
+ * says its count once; fails_when=a coded feature has no code first, the why shows on a phone,
+ * or the count repeats; no_claim=a feature with no code, which has none to show.
  */
 
 const CODE = /^[A-Z][A-Z0-9]*-\d+[a-j]?$/;

@@ -8,6 +8,12 @@ import { countRowTexts } from './vxe-counts';
  * makes the line first, so a row's visual neighbour is not its neighbour by rank; a move with the
  * keys or a drag stays in rank order. Also: Value / effort's marks name the plan's goal, a
  * proposal always says so, the goal drawer keeps the focus. Mock company, desktop 1440x900.
+ *
+ * Card: protects=On a dated plan, moving a Ranked row with keys or a drag keeps rank order, a
+ * mark with a goal never reads no goal, a proposal says so even if the list read fails once, and
+ * the goal drawer keeps focus inside; fails_when=an arrow key asks for a wrong rank or a refused
+ * one, a drag past the line moves the row, a mark or sheet row says no goal, no Proposed note
+ * shows, or Tab leaves the drawer; no_claim=the Oracle's ranking maths or phone layout.
  */
 
 async function setUp(page: Page, opts: { scenario?: string; email?: string } = {}) {

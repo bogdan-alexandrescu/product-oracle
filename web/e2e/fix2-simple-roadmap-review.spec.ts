@@ -6,6 +6,13 @@ import { expect, test, type Page } from './test';
  * fix2-simple-roadmap review: the minors left after the lane's fixes, on /simple/roadmap
  * against the mock's default scenario (web/lib/api/mock/simple-roadmap.ts), on a desktop
  * (1440x900) and a phone (390x844), each driven as a person would.
+ *
+ * Card: protects=On the Simple roadmap, quick add says where Enter puts the item, Gantt slices of
+ * one item never overlap, Waterfall phases match their keys, a suggestion from the lowest bar
+ * stays inside the chart, and each goal tile counts what its lane draws; fails_when=the Enter
+ * hint is missing or misworded, neighbouring slices overlap on the day or week scale, a phase
+ * key's ink differs from its bars or Discover is grey, the popover covers the legend or chart
+ * foot, or a tile count differs from its lane; no_claim=phone layout.
  */
 
 const URL = '/simple/roadmap';

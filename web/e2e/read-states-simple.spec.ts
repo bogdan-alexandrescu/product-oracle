@@ -8,6 +8,11 @@ import { expect, test, type Page } from './test';
  * status, no day, or a Roadmap count without the part it could not read. Each case is checked both
  * ways: answered, then failed. Against the mock's invented PRDs (Guided setup, Team invites PRD,
  * Usage alerts).
+ *
+ * Card: protects=a Simple one-pager and its rail say when a read failed (Could not load, the
+ * reason behind an (i)) and not that there is none, while an answered read shows its plan,
+ * marks, code, status and day; fails_when=a failed read shows no plan, no marks, Not in the
+ * Ground Truth, no status or a short count as if it were fine; no_claim=how the real API fails.
  */
 
 const DESKTOP = { width: 1440, height: 900 };

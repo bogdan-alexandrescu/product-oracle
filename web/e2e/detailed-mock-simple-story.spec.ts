@@ -7,6 +7,12 @@ import { login } from './helpers';
  * detailed-mock (QA Nov 14 follow-ups): Detailed Priorities tells Simple's story, the same
  * features by the same codes as Simple's plan (Setup checklist F-01, Referral link F-12, ...).
  * Invented data.
+ *
+ * Card: protects=Detailed Priorities, Ground Truth, PRD list, PRD bodies and Inbox tell Simple's
+ * story: its features by its codes and names, its goals, its PRD titles and body words;
+ * fails_when=a Simple feature code or name is missing or the count of Priorities rows changes, a
+ * goal is not Activation or Growth, a PRD body reads like the older cart, shipping or workspace
+ * story, or any older name shows; no_claim=the layout of these pages or any page not named here.
  */
 const SIMPLE_FEATURES: [string, string][] = [
   ['F-01', 'Setup checklist'],

@@ -9,6 +9,14 @@ import { ADMIN, signOut } from './helpers';
  * no space left where a citation marker was, New chat keeping General, the switch naming a
  * reopened chat's page, focus back to the opener on close, closed for the next person and on
  * a new visit, one wording naming the document, and a viewer's plain hint.
+ *
+ * Card: protects=Simple's Ask panel reads right: sits beside Home on a wide window, is titled by
+ * the first question, says You on one's own line, leaves no space before punctuation after a
+ * citation, keeps General on New chat, names Home on the switch, returns focus, starts closed,
+ * and gives a viewer a plain hint; fails_when=the panel covers Home on a wide window, the title
+ * or You label is wrong, a space or [c: shows by a citation, focus is lost on close, the panel is
+ * open on a new visit or for the next person, a word like One-pager or commenter or above shows;
+ * no_claim=the real model's answers or how a chat is stored.
  */
 
 const VIEWER = 'viewer@example.com';

@@ -15,6 +15,12 @@ import { expect, test, type Locator, type Page } from './test';
  * visible Mark away / Mark here. -24: "Decisions in this meeting". -27: the back link and the
  * title share a baseline. -31: Accept and Decline one height. -32: Connect Slack looks like a
  * link. -39: a decision's link is named by its code and words.
+ *
+ * Card: protects=the live and ended meeting screen says what each action does: Approve asks first,
+ * End lists waiting proposals, codes and times read plainly, Move buttons line up, and long
+ * decision links tap well; fails_when=Approve publishes with no ask, a decided question loses
+ * its code, a time shows ISO or the wrong zone, the toast covers the steps, or a tap is under 44
+ * px; no_claim=the real meeting service.
  */
 
 async function tap(l: Locator) {

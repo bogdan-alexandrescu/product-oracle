@@ -7,6 +7,12 @@ import { expect, test, type Locator, type Page } from './test';
  * QA pass 3, simple-plan (/simple/priorities): the Ranked list, Value / effort, Goal buckets and
  * the suggestions drawer, driven through the UI as a person would, on the mock's default company
  * and its "simple-plan" scenario (a dated plan). Desktop 1440x900 and phone 390x844.
+ *
+ * Card: protects=the Priorities page reads right: the line takes only whole dates, the Ranked list
+ * explains its score and moves, Value / effort marks do not overlap, and tabs and the
+ * suggestions drawer work by key; fails_when=a part date applies, one line's marks show on
+ * another, a mark overlaps, a move dialog keeps no focus, or a tab ignores the arrow keys;
+ * no_claim=real ranking maths or the API.
  */
 
 const PHONE = { width: 390, height: 844 };

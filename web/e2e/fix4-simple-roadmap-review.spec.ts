@@ -9,6 +9,14 @@ import { expect, test, type Page } from './test';
  * only close the card); a draft with no flow says why and where to confirm it; the phone
  * Timeline's bars name the items they carry; a phone's broken links keep their words whole in
  * the panel above the chart (Waterfall and Gantt).
+ *
+ * Card: protects=On the Simple roadmap, with an item's card open the side rail still goes to its
+ * page, the Gantt card sits in the side panel with no backdrop and Close only closes it, a draft
+ * with no flow says why and links to Priorities, the phone Timeline's bars name their items, and
+ * a phone's broken links keep their words whole; fails_when=a click on the rail only closes the
+ * card, a backdrop dims the page, the No flow yet words or Confirm it in Priorities link is
+ * missing, a phone bar has no name, or a broken link's words are cut or leave the screen;
+ * no_claim=desktop broken-link layout.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
