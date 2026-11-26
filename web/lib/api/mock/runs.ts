@@ -14,11 +14,11 @@ import { companyDayInWords, companyDayIso, companyStamp } from './connections';
 import { FORMULAS, ranking } from './lane-f';
 import type { RowTally } from './from-run';
 import { fileItems } from './checkpoint-review';
-import { shownCode } from './item-code';
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from './agent-questions';
 import { readableRefusal } from './refusal';
 import { mockNowMs } from './clock';
 import { MOCK_SCENARIO_KEY } from './ids';
+import { shownCode } from './item-code';
 import {
   answerCode,
   applySuggestion,
