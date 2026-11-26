@@ -520,7 +520,7 @@ Conflicts and how each was resolved:
 Train duties:
 - Migrations: one head, `0139_task_tracker_push_error (head)`; no lane added a migration.
 - `python3 docs/contracts/check.py`: exit 0. `make openapi`: no change.
-- Pinned read digests: no lane touched one; the speed tests pass in the suite.
+- Pinned read digests: none changed; lane 1 edited `tests/test_simple_waiting_speed.py` (its own read, no digest), and the speed tests pass in the suite unchanged by the train.
 - Names (#1763): no added `name or email` / bare email in the merged diff.
 - Follow-up: the two raw `<button>`s from the Home fixes (`web/app/simple/page.tsx` others'
   changes item, `web/components/simple/PlanByMonth.tsx` late item) are now the design system's
