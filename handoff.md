@@ -32,9 +32,8 @@
   211, 211 passed); qa4-simple-plan's line-picker test timed out once at selectOption (the line picker, another
   lane's area) and passed on rerun; the last batch timed out at 272 of 386 tests with no failure, and its files
   simple-walk-prio, timeline-order, trash-feature-rows, trash-features-goals, value-effort-counts/-followups/-wording,
-  walkb-priorities ran in a final batch (see the PR body for its verdict).
-- prose-guard: NOT RUN (time). The change removes one 12-word sentence per row not on the roadmap and adds a 3-word
-  tag per such row, one tag above the list and "Needs triage · N feature(s)"; run it before merge.
+  walkb-priorities ran in a final batch: 88 passed.
+- prose-guard (-g priorities, 4 tests): passed.
 - No API change: the API suite, timing tests, pyright and frozen migrations were not needed.
 
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
