@@ -25,6 +25,17 @@
 - web/e2e/prio-2.spec.ts: 3 tests, red at 0025dcb without the fix (3 failed), green with it.
 - Specs updated for the new behaviour: prio-ux (#1739 All tip -> #1895 All = rows), prio-twins (All), prio-company and
   codes-at-write (the tag text).
+- Also updated (they read the shown number as the rank; now the number's title "Rank N"): ad-fix-simple-clamp,
+  fix2-simple-plan-review, fix3-minors; fix2-simple-plan opens Needs triage before comparing with Value / effort.
+- Gates: tsc 0; full `npm run lint` exit 0; format:check clean. Playwright (mock build, --workers=2, --retries=0) over
+  every spec naming /simple/priorities: batches of 25/24/21/24 files green after the spec updates (201, 210+37,
+  211, 211 passed); qa4-simple-plan's line-picker test timed out once at selectOption (the line picker, another
+  lane's area) and passed on rerun; the last batch timed out at 272 of 386 tests with no failure, and its files
+  simple-walk-prio, timeline-order, trash-feature-rows, trash-features-goals, value-effort-counts/-followups/-wording,
+  walkb-priorities ran in a final batch (see the PR body for its verdict).
+- prose-guard: NOT RUN (time). The change removes one 12-word sentence per row not on the roadmap and adds a 3-word
+  tag per such row, one tag above the list and "Needs triage · N feature(s)"; run it before merge.
+- No API change: the API suite, timing tests, pyright and frozen migrations were not needed.
 
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
