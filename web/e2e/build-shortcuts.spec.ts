@@ -95,6 +95,47 @@ test.describe('KS1 B: the ? sheet and g then a letter', () => {
   });
 });
 
+test.describe('KS1 B: timeline rows, c adds, / finds', () => {
+  test('on the Roadmap timeline j focuses a row, Enter opens it, c goes to the add box', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto('/simple/roadmap');
+    const tl = page.getByTestId('timeline-row');
+    await expect(tl.first()).toBeVisible();
+    await page.locator('body').click({ position: { x: 600, y: 5 } });
+    await page.keyboard.press('j');
+    await expect(tl.first()).toHaveAttribute('data-kfocus', '');
+    await page.keyboard.press('Enter');
+    const panel = page.getByTestId('item-panel');
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await page.locator('body').click({ position: { x: 600, y: 5 } });
+    await page.keyboard.press('c');
+    await expect(page.locator('#quick-add-title')).toBeFocused();
+  });
+
+  test("a timeline row's name says Open Enter", async ({ page }) => {
+    await login(page);
+    await page.goto('/simple/roadmap');
+    await page.getByTestId('timeline-row-label').first().hover();
+    const tip = page.getByTestId('key-tip');
+    await expect(tip).toContainText('Open');
+    await expect(tip).toContainText('Enter');
+  });
+
+  test('/ puts the cursor in the search box', async ({ page }) => {
+    await login(page);
+    await page.goto('/requests');
+    const box = page.getByRole('searchbox', { name: 'Search requests' });
+    await expect(box).toBeVisible();
+    await page.locator('body').click({ position: { x: 600, y: 5 } });
+    await page.keyboard.press('/');
+    await expect(box).toBeFocused();
+  });
+});
+
 test.describe('KS2 A: one focused row, a blue bar and a light blue fill', () => {
   test('j and k move the focus; Enter opens the feature panel; Esc closes it', async ({ page }) => {
     await priorities(page);
