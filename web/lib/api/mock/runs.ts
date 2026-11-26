@@ -3047,6 +3047,7 @@ function inbox(ctx: RunsContext): Schemas['InboxOut'] {
     webhooks: 0,
     // Simple S8: minutes sent to me as an attendee (./simple-meetings.ts adds them).
     simple_minutes: [],
+    simple_action_items: [],
     // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).
     requests: [],
     // INT2: intakes Oracle couldn't read twice in a row; none in the mock yet (lane 2 adds them).

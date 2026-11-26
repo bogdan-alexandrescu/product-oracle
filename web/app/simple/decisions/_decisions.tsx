@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -24,6 +25,7 @@ import { usePhone } from '@/components/simple/PrdTimeline';
 import {
   DecisionSheetHost,
   editedWords,
+  SheetHandle,
   useDecisionSheet,
 } from '@/components/simple/questions/DecisionSheet';
 import { FeaturePanel, itemFor, useItemChanged } from '../roadmap/_panel';
@@ -140,6 +142,20 @@ export function SimpleDecisions() {
       .querySelector(`[data-question-id="${CSS.escape(linked)}"]`)
       ?.scrollIntoView({ block: 'center' });
   }, [loaded, linked]);
+  // #1818: ?decision=<n or id> (Simple's links to a decision) opens it in the decision sheet here.
+  const sheetRef = useRef<ReturnType<typeof useDecisionSheet>>(null);
+  const opened = params.get('decision') ?? '';
+  const shown = useRef('');
+  useEffect(() => {
+    if (!q.data || !opened || shown.current === opened) return;
+    shown.current = opened;
+    const row = [...q.data.meetings.flatMap((m) => m.decisions), ...q.data.other].find(
+      (r) => String(r.number) === opened,
+    );
+    if (row) sheetRef.current?.open({ kind: 'decision', row });
+    else if (/^[0-9a-f-]{36}$/i.test(opened))
+      sheetRef.current?.open({ kind: 'decision-id', id: opened, title: '' });
+  }, [q.data, opened]);
   const set = (key: string, value: string) => {
     // The address as it is now, written at once (Next keeps useSearchParams in step): a
     // second filter changed right after the first keeps the first's change.
@@ -198,6 +214,7 @@ export function SimpleDecisions() {
       <OpenFeatureContext.Provider value={setFeature}>
         <FeatureFoundContext.Provider value={found}>
           <DecisionSheetHost onChanged={() => q.reload()}>
+            <SheetHandle sheetRef={sheetRef} />
             {feature && (
               <FeaturePanel
                 key={`${feature.code}|${feature.name}`}

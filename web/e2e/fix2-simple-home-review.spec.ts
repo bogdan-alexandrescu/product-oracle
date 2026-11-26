@@ -81,11 +81,9 @@ test("at 1440 px with Ask open, a goal card's code and its share of the score st
   }
 });
 
-test("the walk opens each decision where it can be decided, as Home's card does", async ({
-  page,
-}) => {
-  // fails_when: a judgement call (not a PRD's question) opens Simple's Decisions page, which only lists it (no Decide),
-  // or a PRD's question leaves Simple
+test("the walk opens each decision in Simple, as Home's card does", async ({ page }) => {
+  // fails_when (#1818): a decision leaves Simple for Company › Decisions, or a judgement call
+  // (not a PRD's question) does not open in Simple's decision sheet.
   // The approver: "Ship usage caps before anomaly detection" (a judgement call, not a PRD's question) waits on them.
   await signIn(page, APPROVER, null);
   await page.getByRole('button', { name: 'Walk me through it' }).click();
@@ -100,12 +98,13 @@ test("the walk opens each decision where it can be decided, as Home's card does"
     await page.getByRole('button', { name: 'Skip' }).click();
   }
   expect(hrefs.length).toBeGreaterThan(0);
-  for (const h of hrefs) expect(h).toMatch(/^\/simple\/decisions$|^\/company\/decisions\?d=\d+$/);
-  const judgement = hrefs.find((h) => /^\/company\/decisions\?d=\d+$/.test(h));
+  for (const h of hrefs) expect(h).toMatch(/^\/simple\/decisions(\?decision=\d+)?$/);
+  const judgement = hrefs.find((h) => /^\/simple\/decisions\?decision=\d+$/.test(h));
   expect(judgement).toBeTruthy();
-  // The same place Home's card for it opens, where an approver can decide it.
   await page.goto(judgement!);
-  await expect(page.getByRole('button', { name: /Decide/ }).first()).toBeVisible();
+  await expect(page.getByTestId('decision-sheet')).toContainText(
+    'Ship usage caps before anomaly detection',
+  );
 });
 
 test('the walk still loads when the waiting decisions cannot be read', async ({ page }) => {

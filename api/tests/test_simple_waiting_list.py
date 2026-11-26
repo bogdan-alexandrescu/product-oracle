@@ -248,6 +248,8 @@ async def test_decision_log_call_waiting_and_decide(client):
     item = find(body["items"], "decision", ref)
     assert item is not None, body["items"]
     assert item["action"] == "Decide" and item["title"] == "Ship the example export first"
+    # #1818: it opens in Simple's decision sheet, never in Detailed's Company > Decisions.
+    assert item["href"] == f"/simple/decisions?decision={ref}"
     # The list holds every call the decisions count does (Home's tile, Decisions, the rail).
     assert len([i for i in body["items"] if i["kind"] == "decision"]) == body["others"] == 1
     assert find(await waiting(client, ctx, "owner"), "decision", ref) is None

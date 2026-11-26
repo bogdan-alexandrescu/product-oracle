@@ -33,6 +33,8 @@ import { NotInGt } from '@/components/simple/FeatureName';
 import { OpenFeatureContext } from '@/components/simple/OpenFeature';
 import { FeaturePanel, type PanelFeature } from '../../roadmap/_panel';
 
+import { SentActionItems } from './_action-items';
+
 // Chat actions (notes, open questions): optional until schema.d.ts carries them.
 type Meeting = Schemas['SimpleMeetingOut'] & { notes?: MeetingNote[] };
 type Mode = Meeting['change_mode'];
@@ -1147,6 +1149,8 @@ type ActionRow = {
   owner_id: string;
   due_date: string;
   action_item_id?: string | null;
+  // #1817: the agenda's feature it is about.
+  item_id?: string;
 };
 
 function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
@@ -1162,6 +1166,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
       owner_id: a.owner_id ?? '',
       due_date: a.due_date ?? '',
       action_item_id: a.action_item_id ?? null,
+      item_id: a.item_id ?? '',
     })),
   );
   const [dirty, setDirty] = useState(false);
@@ -1178,6 +1183,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         owner_id: a.owner_id ?? '',
         due_date: a.due_date ?? '',
         action_item_id: a.action_item_id ?? null,
+        item_id: a.item_id ?? '',
       })),
     );
   }
@@ -1204,6 +1210,10 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   const path = { params: { path: { meeting_id: m.id } } };
   const slackReady = m.slack.connected && !!m.slack.channel;
   const owner = (id: string | null | undefined) => m.attendees.find((a) => a.id === id)?.name;
+  // #1817: the agenda's features an action item may be linked to.
+  const features = m.agenda.items.flatMap((x) =>
+    x.feature_id ? [{ id: x.feature_id, title: x.title }] : [],
+  );
   const minutesIn = (): Schemas['SimpleMinutesIn'] => ({
     summary,
     open_questions: questions
@@ -1217,6 +1227,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         owner_id: a.owner_id || null,
         due_date: a.due_date || null,
         action_item_id: a.action_item_id ?? null,
+        item_id: a.item_id || null,
       })),
   });
   // qa-simple-decide-46: an action item with no words is not dropped silently.
@@ -1371,6 +1382,22 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                       }
                       className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]"
                     />
+                    <SimpleSelect
+                      aria-label={`Linked item of action item ${i + 1}`}
+                      value={a.item_id ?? ''}
+                      onChange={(e) =>
+                        edit(setActions)(
+                          actions.map((x, j) => (j === i ? { ...x, item_id: e.target.value } : x)),
+                        )
+                      }
+                    >
+                      <option value="">No item</option>
+                      {features.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.title}
+                        </option>
+                      ))}
+                    </SimpleSelect>
                     <button
                       type="button"
                       className="simple-button max-[600px]:!min-h-11 max-[600px]:!min-w-11"
@@ -1435,7 +1462,13 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <p className="simple-small">None.</p>
               )}
               <h3 className="font-semibold">Action items</h3>
-              {minutes?.action_items.length ? (
+              {m.action_items?.length ? (
+                <SentActionItems
+                  items={m.action_items}
+                  dayWords={(d) => dayWords(d, zone)}
+                  reload={reload}
+                />
+              ) : minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
                   {minutes.action_items.map((a, i) => (
                     <li key={i}>

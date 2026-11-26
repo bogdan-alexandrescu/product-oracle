@@ -1544,7 +1544,7 @@ export function FloatingCard({
                 {item.open_decisions.map((d) => (
                   <li key={d.id}>
                     <Link
-                      href={`/company/decisions?d=${d.id}`}
+                      href={`/simple/decisions?decision=${d.id}`}
                       className="text-accent-ink hover:underline"
                     >
                       {/* fix4 qa-simple-roadmap-3: the decision by its title, no "D-7". */}
