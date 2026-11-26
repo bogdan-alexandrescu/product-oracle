@@ -19,7 +19,9 @@ test('a member without a name shows by name on Home, Meetings and Decisions', as
   await page.goto('/simple/meetings');
   const rows = page.getByTestId('meetings-upcoming-row');
   await expect(rows.first()).toBeVisible();
-  await expect(rows.filter({ hasText: /\bApprover\b/ }).first()).toBeVisible();
+  // A row's text runs its attendees into the action ("ApproverStart review") now that no
+  // "Pre-read not ready yet" note follows them (#1914), so no \b after the name.
+  await expect(rows.filter({ hasText: /\bApprover(?![a-z])/ }).first()).toBeVisible();
   await expect(page.locator('main')).not.toContainText(EMAIL);
   await expect(rows.filter({ hasText: /\bsomeone\b/ })).toHaveCount(0);
 
