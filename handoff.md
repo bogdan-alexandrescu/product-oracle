@@ -1,5 +1,23 @@
 # meet-onepager handoff (#1914, #1915)
 
+## Fix round 1 (review NOT_YET, one major, fixed)
+- The mock's cited draft is now the PRD's own version (`web/lib/api/mock/simple-roadmap.ts` ROADMAPS):
+  Usage alerts' roadmap cites draft 1 (One-pagers shows "Approved draft 1"; was 5), Guided setup's draft 3
+  (its one-pager seed is version 3, as Decisions' "Guided setup PRD (draft 3)"; was 2). Plan changes (3),
+  the Help desk roadmap (3) and the many-PRDs scenario have no PRD document in the mock, so nothing on
+  One-pagers can contradict them; left as is.
+- `web/e2e/meet-onepager.spec.ts` reads the chip's draft number and checks the card cites the same one
+  (or, only when the chip says a newer draft is in progress, any draft). Red on the old mock build
+  (commit 9cd9721: "Expected From Usage alerts (draft 1)", received "(draft 5)"), green after f7f19e3.
+- `simple-walk-fixes` and `simple-walk-fixes3-rw` expect "(draft 1)"; the latter's comment and title
+  no longer say "no draft number" (minor).
+- Gates: Playwright --retries=0 --trace=off on the 8 specs that read the card's reasons or the cited draft
+  (fix4-simple-roadmap-card, meet-onepager, roadmap, simple-additions, simple-decisions-questions,
+  simple-roadmap, simple-walk-fixes, simple-walk-fixes3-rw): 146 passed. tsc exit 0, full
+  `npm run lint` exit 0, format:check exit 0. No API change: API suite, timing, pyright, frozen migrations not run.
+- Minor left: Home's "Next review meeting" "Pre-read not ready yet" (outside this lane's scope).
+
+## Round 0
 ## What changed
 - #1914 (`web/app/simple/meetings/page.tsx`): an Upcoming row whose occurrence is not made yet no longer says
   "Pre-read not ready yet". Rituals make an occurrence (and its pre-read) only `prep_hours` before the meeting
