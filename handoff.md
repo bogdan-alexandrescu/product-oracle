@@ -546,3 +546,21 @@ Gates (all run after the last commit with code changes, d0b30e6e6):
 
 Not done: pushing. This environment publishes the branch after the step, so no push ran
 after each merge.
+
+## Train night-m: review round 1 fix (verdict NOT_YET, one major)
+
+- Major fixed: the Home link buttons swapped to the design system's `Button` (ca00d08) forced
+  `!font-normal` and kept `text-sm`'s line height, so the Since-your-last-visit item
+  (`web/app/simple/page.tsx`, `home-since-item`) and the plan strip's late items
+  (`web/components/simple/PlanByMonth.tsx`, `home-strip-late-item`) read at 400 instead of their
+  semibold line. Now `![font-weight:inherit] ![line-height:inherit]`; suppression counts stay 21
+  and 4.
+- Red first (58973c6): `web/e2e/home-2.spec.ts` 1896 and 1900 assert the link's computed
+  font-weight, line-height and font-size equal its parent's; they failed on the old tree
+  (400/20px vs 600/28px). Fix 65d5969.
+- Gates on 65d5969: home-2 + home-fixes specs 18 passed; prose-guard 33 passed + its 2
+  merge-base tests passed with PROSE_BASE=e2ded48 (after `git fetch --deepen`); `npx tsc
+  --noEmit` exit 0; full `npm run lint` exit 0; `npm run format:check` clean. API suites not
+  re-run: no API file changed in this round.
+- Minors from the verdict left as they were (brief: blocker and major only). Note: the earlier
+  "d0b30e6e6" sha above is wrong; the gates there ran on ca00d08's tree.
