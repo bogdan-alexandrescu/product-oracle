@@ -2,16 +2,18 @@ import { login } from './helpers';
 import { expect, test } from './test';
 
 /**
- * #1789: a code map run's row names the repo it maps, not one more "Code map", and the list
- * reads newest Updated first.
+ * #1789: every code map run's row names the repo it maps, an older run of a repo too, not one
+ * more "Code map", and the list reads newest Updated first.
  */
 test('Runs: each code map row names its repo; rows are newest updated first', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'runs-code-maps'));
   await login(page);
   await page.goto('/runs');
   const table = page.getByRole('grid');
-  for (const repo of ['example-org/web', 'example-org/api', 'example-org/docs'])
+  for (const repo of ['example-org/api', 'example-org/docs'])
     await expect(table.getByRole('link', { name: repo, exact: true })).toBeVisible();
+  // Both runs of one repo are named, the older one too.
+  await expect(table.getByRole('link', { name: 'example-org/web', exact: true })).toHaveCount(2);
 
   const stamps = await table
     .getByTestId('run-updated')

@@ -12,6 +12,15 @@ import { expect, test, type Locator, type Page } from './test';
  * counts what it lists (qa-45). A chat preview ghosts where it lands on the Gantt (qa-10). Gantt and Waterfall (_timeline.tsx): the Gantt spans every
  * slice, a row whose bar is out of view says where it is and jumps there (qa-5); a phone's
  * Gantt reads by month and wraps names (qa-6); Today's words are 11 px, clear of the header (qa-54).
+ *
+ * Card: protects=The Simple roadmap chart reads right: broken links sit whole in a panel above
+ * the Timeline even with Ask open, rows read code then name with a Draft tag, months read three
+ * letters with the first year, a Preview ghost lands inside the Gantt, an off-view row says where
+ * its bar is, Today's words are big enough, lanes keep room for name and count, and the phone
+ * list and Gantt read by quarter and month; fails_when=the panel covers a bar or cuts a reason, a
+ * bare id or no Draft tag shows, a month has no year, the ghost leaves the chart, the Jump cue is
+ * missing, Today's words are under 11 px, a lane is too short, or a phone name is cut;
+ * no_claim=the Waterfall's bars beyond Today's words.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };

@@ -7,6 +7,12 @@ import { expect, test, type Page } from './test';
  * approvals note is one short line to Simple's Inbox with the why behind an (i), #15 where the
  * questions were read is not beside the Waiting for you count, #16 on a phone the title's (i)
  * shares the filters' row.
+ *
+ * Card: protects=Simple's Decisions page is tidy: the New decision fields sit inside the sheet,
+ * the approvals note is one short line to the Inbox with the why behind an (i), the read note
+ * sits after the rows, and the phone (i) shares the filters' row; fails_when=a field or focus
+ * ring leaves the sheet, the note grows long, it sits beside the count, or the (i) drops a row;
+ * no_claim=the real approvals.
  */
 
 async function decisions(page: Page) {

@@ -12,6 +12,12 @@ import { expect, test, type Locator, type Page } from './test';
  * meeting, the attendee chips and an action item's × are 44 px tall. Plain words: "Presenter
  * plus one or two people"; a person who may not start a review is told whom to ask, with no
  * role names.
+ *
+ * Card: protects=the meeting screen and its Start a review sheet stay safe and plain: End
+ * meeting's Back has focus, an empty action item is not dropped silently, phone taps are 44 px
+ * tall, and the words name no role; fails_when=Enter ends the meeting, an empty action item
+ * vanishes with no warning, a phone button is under 44 px, or a role name shows; no_claim=the
+ * real review flow or other roles' screens.
  */
 
 const sheet = (page: Page) => page.getByRole('dialog', { name: 'Start a review' });

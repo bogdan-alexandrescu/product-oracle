@@ -7,6 +7,12 @@ import { expect, test, type Page } from './test';
  * Visual QA of Simple's Roadmap, Nov 12, 2026: the feature panel (#2, #5, #9, #10) and the Goal
  * map's panel (GM2). Mock data, clock pinned to Oct 22, 2026: Weekly alert digest (F-79) sits under
  * the roadmap's milestone M1 Beta; Alert rules engine has no code.
+ *
+ * Card: protects=the roadmap feature panel and the Goal map's panel read plainly: no code says
+ * None and Not in the Ground Truth, the milestone shows with its code, the Dates why is a
+ * circled tip, phone labels sit on their value's line, and Serves stays inside the card;
+ * fails_when=a plain (i) shows, the milestone lacks its code, a label drops a line, or Serves
+ * spills; no_claim=editing the panel.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };

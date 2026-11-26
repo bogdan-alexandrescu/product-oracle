@@ -19,6 +19,15 @@ import { expect, test, type Locator, type Page } from './test';
  *   its own key.
  * - qa-simple-roadmap-36: a key date's row on one line; Cancel and Save the same height; the
  *   edit fields labelled.
+ *
+ * Card: protects=The Simple roadmap's board, quick add, key dates and legends read plainly: the
+ * board's legend names what its cards draw and a draft with no owner is dashed not broken, Later
+ * counts the cut card, quick add says what is missing, Scale and the Gantt header and legend use
+ * short words, a key date row sits on one line with labelled fields and the draft time shows no
+ * zone name, and days are month first; fails_when=a draft shows as a broken link, the Later count
+ * is wrong, no Type a title or Pick the roadmap message shows, hatched or red line: returns in a
+ * legend, the key date wraps, Cancel and Save differ in height, or a day reads 22 Oct or with an
+ * arrow; no_claim=how a dragged card is placed.
  */
 
 const ROADMAP = '/simple/roadmap';

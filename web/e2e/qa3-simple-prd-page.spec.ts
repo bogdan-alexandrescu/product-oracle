@@ -7,6 +7,12 @@ import { expect, test, type Page } from './test';
  * mock: the one-pager without a plan (the default scenario's Guided setup) and with a plan
  * ("simple-plan", "simple-plan-partly-dated", "simple-plan-undated": M1 Prove it 2 Nov - 27 Nov,
  * M2 Scale volume, M3 Open to all; the mock's today is 22 Oct).
+ *
+ * Card: protects=the Simple PRD page, with and without a plan, shows dated bars, whole decisions,
+ * plain counts and the editor, comment and present actions a person expects; fails_when=a bar is
+ * unnamed, a late decision looks different, a zero count or the editor focus is wrong, Escape
+ * does not stop presenting, or a phone tap area is under 44 px; no_claim=the real model or
+ * saving to the API.
  */
 
 const DESKTOP = { width: 1440, height: 900 };

@@ -79,7 +79,7 @@ export interface DraftRow {
 
 export interface RunsDb {
   runs: RunOut[];
-  /** #1789: a code map run's repo, by run id (the API reads it from the run's code map). */
+  /** #1789: a code map run's repo, by run id (the API reads the run's own repo knob). */
   repos?: Record<string, string>;
   /** `${runId}|${seq}|${name}` -> content; a send-back's previous attempt: `${runId}|${seq}|${name}|${attempt}` */
   artifacts: Record<string, string>;
@@ -4192,7 +4192,7 @@ export function seedRuns(ctx: Omit<RunsContext, 'db'>): RunsDb {
 }
 
 /**
- * #1789: three ended code map runs, one per repo, finished in another order than started; api's
+ * #1789: four ended code map runs, two of one repo, finished in another order than started; api's
  * stamp carries a fraction and ends half a second after docs', so text order is not time order.
  */
 export const RUNS_CODE_MAPS_SCENARIO = 'runs-code-maps';
@@ -4205,6 +4205,8 @@ function seedCodeMapRuns(ctx: Omit<RunsContext, 'db'>, db: RunsDb) {
   db.repos = {};
   for (const [repo, started, finished] of [
     ['example-org/web', '2026-11-16T09:00:00Z', '2026-11-22T10:00:00Z'],
+    // An older map of the same repo: its row was replaced, and the run is still named.
+    ['example-org/web', '2026-11-14T09:00:00Z', '2026-11-14T10:00:00Z'],
     ['example-org/api', '2026-11-17T09:00:00Z', '2026-11-18T10:00:00.500Z'],
     ['example-org/docs', '2026-11-18T09:00:00Z', '2026-11-18T10:00:00Z'],
   ]) {

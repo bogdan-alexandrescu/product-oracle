@@ -18,6 +18,15 @@ import { expect, test, type Locator, type Page } from './test';
  * - qa-simple-roadmap-33 (key dates): a key date's day stays on one line.
  * - qa-simple-roadmap-46 (AppShell): the account panel's email line keeps the full address
  *   (and the name, when there is one) as a tooltip.
+ *
+ * Card: protects=Parts of the Simple roadmap read plainly: the flow's full screen keeps its Steps
+ * beside Comments with no PRD jargon and a truly disabled Revise, the start sheet's attendees
+ * have a plain heading, a move card shows month-first dates with Undo my edits and a 2-column
+ * phone grid, goal suggestions look like buttons, a key date stays on one line, and the account
+ * panel shows the whole email; fails_when=Steps run under Comments, PRD § or a day-first date
+ * shows, Keep Oracle's reading returns, the phone buttons stack three and one, a button has no
+ * border, the key date wraps, or the email is cut; no_claim=what Oracle does with a move once
+ * applied.
  */
 
 const DESKTOP = { viewport: { width: 1366, height: 820 } };

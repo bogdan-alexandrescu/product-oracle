@@ -8,6 +8,13 @@ import { expect, test, type Locator, type Page } from './test';
  * UI as a person would on the mock: the score's confidence on every row (qa-simple-plan-3), a
  * goal value down to 0 (-6), a proposer withdrawing a proposal (-30), a look-alike's link to its
  * own row and a plain "Same as this" (-34), and a tab picked early surviving a reload (-42).
+ *
+ * Card: protects=On Simple Priorities, each row's score can be worked out from its goal value,
+ * confidence and weeks, a goal value goes down to 0 by keys, a proposer can withdraw a proposal,
+ * a look-alike opens its own row, and a tab picked early survives a reload; fails_when=a row's
+ * hover text lacks the numbers or the score is off, the page scrolls sideways, the value stops
+ * above 0, Accept shows to the proposer or Withdraw leaves the proposal, the look-alike link
+ * shows no row, or the tab resets; no_claim=how Oracle estimates confidence.
  */
 
 const PHONE = { width: 390, height: 844 };
