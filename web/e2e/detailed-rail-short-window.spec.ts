@@ -1,7 +1,6 @@
 import { login } from './helpers';
 import { expect, test } from './test';
 
-
 /*
  * #1790: on a laptop-height window the Detailed rail cut Company in half and hid Settings, and it
  * scrolled with no scrollbar to show it.
