@@ -198,6 +198,18 @@ test.describe('the Timeline on a laptop window', () => {
     }
   });
 
+  test('#1903: at All 3 years the whole word Today stays clear of every diamond', async ({
+    page,
+  }) => {
+    await open(page);
+    await page.getByTestId('zoom-all').click();
+    await expect(page.getByTestId('zoom-all')).toHaveAttribute('aria-pressed', 'true');
+    const at = (await page.getByTestId('today-pill').boundingBox())!;
+    const diamonds = await boxes(page.getByTestId('ms-diamond'));
+    expect(diamonds.length).toBeGreaterThan(0);
+    for (const d of diamonds) expect(meets(at, d), 'Today meets a diamond at all').toBe(false);
+  });
+
   test('#1903: crowded milestones: no chip, "+N" or count meets another; none is cut at the left edge', async ({
     page,
   }) => {
