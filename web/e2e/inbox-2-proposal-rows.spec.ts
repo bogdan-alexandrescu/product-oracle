@@ -112,3 +112,34 @@ test('an owner change the Inbox counts for the Owner waits on Decisions too', as
   ).toBeVisible();
   await expect(mine).not.toContainText('Nothing waits on you');
 });
+
+test('a proposal routed to me that I may not decide opens in the Inbox and Home counts it once', async ({
+  page,
+  context,
+}) => {
+  await context.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    INBOX_REPLACED_PROPOSAL_SCENARIO,
+  ] as const);
+  // A meeting's owner change on Block list, routed to the commenter, who may not decide it.
+  await login(page, 'commenter@example.com');
+  await page.goto('/simple');
+  await page
+    .getByTestId('simple-nav')
+    .getByRole('link', { name: /^Decisions/ })
+    .click();
+  const row = page
+    .getByTestId('questions-mine')
+    .getByRole('listitem')
+    .filter({ hasText: 'Block list' });
+  await expect(row.getByRole('link', { name: 'Open' })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+
+  await page.getByTestId('simple-nav').getByRole('link', { name: 'Home', exact: true }).click();
+  const also = page.getByTestId('home-also-waiting');
+  await expect(also.getByRole('listitem').filter({ hasText: 'Block list' })).toBeVisible();
+  // Its row only: never also "1 more in your Inbox", and the card's count is its rows.
+  await expect(also.getByTestId('home-inbox-more')).toHaveCount(0);
+  const rows = await also.getByTestId('home-also-waiting-list').getByRole('listitem').count();
+  await expect(page.getByTestId('home-also-waiting-count')).toHaveText(String(rows));
+});
