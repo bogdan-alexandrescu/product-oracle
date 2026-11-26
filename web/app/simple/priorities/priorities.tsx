@@ -906,11 +906,7 @@ function YourList({
   const apart = split >= 0 && splitAtLine(data);
   const triageAt = apart && !goal ? rows.findIndex(triaged) : -1;
   const placeOf = (r: Row, i: number): number =>
-    !apart
-      ? r.rank
-      : i < split
-        ? i + 1
-        : i - split + 1;
+    !apart ? r.rank : i < split ? i + 1 : i - split + 1;
   const addsTo = (r: Row) =>
     mayChange && r.can_reorder && !r.on_roadmap ? data.company_roadmap : null;
   const adds = rows.map(addsTo).find(Boolean);
@@ -1023,14 +1019,7 @@ function YourList({
             ? [
                 ...(i === 0 ? [<PartHead key="makes" data={data} makes n={split} />] : []),
                 ...(i === split
-                  ? [
-                      <PartHead
-                        key="misses"
-                        data={data}
-                        makes={false}
-                        n={rows.length - split}
-                      />,
-                    ]
+                  ? [<PartHead key="misses" data={data} makes={false} n={rows.length - split} />]
                   : []),
                 ...(i === triageAt
                   ? [
