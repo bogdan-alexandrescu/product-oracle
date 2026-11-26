@@ -27,18 +27,24 @@ export function FeatureName({
   name,
   itemId,
   documentId,
+  code: given,
 }: {
   name: string;
   itemId?: string | null;
   documentId?: string | null;
+  /** inbox-codes (#1786): the item's code as its row's API read gives it; else the roadmap read's. */
+  code?: string | null;
 }) {
   // simple-home-qa-nov12 #4: the item's code before its name, as its panel reads it.
   const read = useItemRef(itemId);
   const ref = itemRefOf(read);
-  const named = <Named item={{ code: ref?.code, title: name }} />;
+  const code = given ?? ref?.code;
+  // A title that leads with its own code ("F-07 Alpha") is named once: its code, then "Alpha".
+  const title = code && name.startsWith(`${code} `) ? name.slice(code.length + 1) : name;
+  const named = <Named item={{ code, title }} />;
   // simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden; #1586: one
   // whose roadmap could not be read says so, never no code.
-  const flag = ref ? <NotInGt item={ref} /> : <ItemRefFailed read={read} />;
+  const flag = code ? null : ref ? <NotInGt item={ref} /> : <ItemRefFailed read={read} />;
   if (!itemId || !documentId)
     return (
       <>
@@ -153,7 +159,12 @@ export function proposalRows(
       // The item cell keeps its room (it wraps): what was asked, by whom or what and when, under the name.
       item: (
         <>
-          <FeatureName name={name} itemId={p.item_id} documentId={p.document_id} />
+          <FeatureName
+            name={name}
+            itemId={p.item_id}
+            documentId={p.document_id}
+            code={p.item_code}
+          />
           <span
             className="block basis-full text-sm break-words whitespace-normal text-text2"
             data-testid="meeting-proposal-context"

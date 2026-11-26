@@ -3663,6 +3663,8 @@ export function simpleInboxRows(
       status: c.status,
       item_id: (c.target.item_id as string) ?? null,
       item_title: title ?? (typeof c.after.title === 'string' ? c.after.title : null),
+      // inbox-codes (#1786): as changes.inbox_rows, the item's code (codes.code_of).
+      item_code: key ? shownCode(seed(db!, key), (id) => db!.feature_codes?.[id]) : null,
       document_id: c.document_id,
       by: c.by,
       by_name: c.by_name,

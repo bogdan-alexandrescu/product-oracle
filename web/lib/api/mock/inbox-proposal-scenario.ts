@@ -9,12 +9,16 @@ import type { SimpleDb } from './simple-roadmap';
  * Trust plan, and it still waits on the company's owner. The Inbox counts it, so Decisions'
  * Waiting for you lists it too (waiting_reads.proposals). And a meeting's owner change on Block
  * list, routed to the commenter, who may not decide it: their Waiting for you opens it in the Inbox.
+ * inbox-codes (#1786): the badge came from its PRD's section F-45, so its row names it "F-45 Trusted
+ * seller badge", though no roadmap Simple reads holds it.
  */
 export const INBOX_REPLACED_PROPOSAL_SCENARIO = 'inbox-replaced-proposal';
 
 export function seedReplacedProposal(db: SimpleDb, members: Schemas['MemberOut'][]): void {
   const owner = members.find((m) => m.email === 'admin@example.com')!;
   const commenter = members.find((m) => m.email === 'commenter@example.com')!;
+  const badge = db.items.find((s) => s.key === 'trusted-badge');
+  if (badge) badge.section = 'f-45';
   (db.changes ??= []).push({
     id: stableUuid('simple-proposal/inbox-replaced-owner'),
     session_id: null,
