@@ -594,6 +594,11 @@ function SimpleHome() {
   const listed = waiting.data?.items ?? [];
   const ofKind = (kind: Schemas['SimpleWaitingItem']['kind']) =>
     listed.filter((i) => i.kind === kind).length;
+  // inbox-2: a proposal routed to me that I may not decide now (kind "inbox") is counted with the
+  // Inbox's proposals, so Home draws it once.
+  const routedOpen = listed.filter(
+    (i) => i.kind === 'inbox' && i.key.startsWith('proposal:'),
+  ).length;
   const moreInInbox =
     inbox.data && asked.data
       ? Math.max(
@@ -604,10 +609,10 @@ function SimpleHome() {
               questions: waiting.data?.questions.length ?? 0,
               decisions: ofKind('decision'),
               drafts: ofKind('draft'),
-              proposals: toDecide.length,
+              proposals: toDecide.length + routedOpen,
               dates: listed.filter((i) => i.kind === 'date' && !i.op).length,
               goalSuggestions: ofKind('goal_suggestion'),
-              inboxRows: ofKind('inbox'),
+              inboxRows: ofKind('inbox') - routedOpen,
             }),
         )
       : 0;
