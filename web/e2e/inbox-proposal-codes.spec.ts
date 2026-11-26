@@ -10,7 +10,7 @@ import { expect, test } from './test';
  * the Owner for Trusted seller badge, an item of a replaced roadmap (no roadmap Simple reads holds
  * it) that came from its PRD's section F-45. Its row in Simple > Inbox and in Detailed > Inbox
  * names it "F-45 Trusted seller badge", the code before the name, as every page does, in its item
- * cell and in the request's words under it.
+ * cell and in the request's words under it; so does the Owner's action item on the badge.
  *
  * protects=#1786; fails_when=the proposal row names its feature without its code.
  */
@@ -43,5 +43,12 @@ for (const path of ['/simple/inbox', '/inbox']) {
     await expect(row.getByTestId('meeting-proposal-context')).toContainText(
       'F-45 Trusted seller badge',
     );
+    // An action item on the badge names it the same way.
+    await expect(
+      page
+        .locator('[role=tabpanel] tr[data-row]')
+        .filter({ hasText: 'Check the badge rules' })
+        .getByTestId('action-item-context'),
+    ).toContainText('F-45 Trusted seller badge');
   });
 }

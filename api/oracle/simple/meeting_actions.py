@@ -48,9 +48,13 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
     if not rows:
         return []
     items = {i for i in (r.item_id for r in rows) if i}
-    titles = dict((await db.execute(
-        select(RoadmapItem.id, RoadmapItem.title).where(RoadmapItem.id.in_(items))
-    )).all()) if items else {}  # fmt: skip
+    linked = list(await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(items))))
+    titles = {i.id: i.title for i in linked}
+    # inbox-codes (#1786): each linked item's code, so its row names it with its code.
+    from oracle.roadmap import codes
+
+    by_feature = await codes.feature_codes(db) if any(i.feature_id for i in linked) else {}
+    item_codes = {i.id: codes.code_of(i, by_feature) for i in linked}
     meets = {i for i in (r.meeting_id for r in rows) if i}
     meetings = dict((await db.execute(
         select(SimpleMeeting.id, SimpleMeeting.title).where(SimpleMeeting.id.in_(meets))
@@ -64,6 +68,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             late=r.due_date is not None and r.due_date < today,
             item_id=r.item_id,
             item_title=titles.get(r.item_id, r.item_key) if r.item_id else None,
+            item_code=item_codes.get(r.item_id) if r.item_id else None,
             roadmap_id=r.roadmap_document_id,
             meeting_id=r.meeting_id,
             meeting_title=meetings.get(r.meeting_id) if r.meeting_id else None,

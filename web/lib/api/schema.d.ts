@@ -29058,6 +29058,8 @@ export interface components {
             item_id?: string | null;
             /** Item Title */
             item_title?: string | null;
+            /** Item Code */
+            item_code?: string | null;
             /** Roadmap Id */
             roadmap_id?: string | null;
             /** Meeting Id */
