@@ -97,6 +97,9 @@ test.describe('the Timeline on a laptop window', () => {
     const key = page.getByTestId('timeline-key');
     await expect(key.locator('[data-key="ms"]')).toHaveText('Milestone');
     await expect(key.locator('[data-key="tie"]')).toHaveText('Due by a milestone');
+    // The roadmap's own milestone draws a grey dashed line: the key's Milestone entry shows it too.
+    await expect(page.getByTestId('timeline-milestone-line').first()).toBeAttached();
+    await expect(key.locator('[data-key="ms"]').getByTestId('key-ms-own')).toBeAttached();
   });
 
   test('#1904: a short bar has its dates beside it; every bar names them on hover', async ({
@@ -128,6 +131,17 @@ test.describe('the Timeline on a laptop window', () => {
         ),
       );
     expect(cut).toHaveLength(0);
+    // At All 3 years a bar reached with Tab shows its dates, on it or beside it.
+    await page.getByTestId('zoom-all').click();
+    await expect(page.getByTestId('zoom-all')).toHaveAttribute('aria-pressed', 'true');
+    const first = page.getByTestId('timeline-row').filter({ has: bars }).first();
+    await first.getByTestId('timeline-row-label').focus();
+    const focused = page.locator('[data-testid="timeline-bar"]:focus');
+    for (let n = 0; n < 6 && !(await focused.count()); n++) await page.keyboard.press('Tab');
+    await expect(focused).toHaveCount(1);
+    const title = (await focused.getAttribute('title'))!;
+    const host = page.locator('[data-testid="timeline-row"]').filter({ has: focused });
+    await expect(host.getByText(title, { exact: true })).toBeVisible();
   });
 
   test('#1908: the circle beside the open bar says it is its owner', async ({ page }) => {
@@ -181,6 +195,33 @@ test.describe('the Timeline on a laptop window', () => {
       for (const [n, a] of counts.entries())
         for (const b of counts.slice(n + 1))
           expect(meets(a, b), `two counts meet at ${z}`).toBe(false);
+    }
+  });
+
+  test('#1903: crowded milestones: no chip, "+N" or count meets another; none is cut at the left edge', async ({
+    page,
+  }) => {
+    await open(page, 'roadmap-band-crowd');
+    await expect(page.getByTestId('ms-label').first()).toBeVisible();
+    const head = page.getByTestId('timeline-names-head');
+    for (const z of ['3m', '6m', '1y', 'all']) {
+      await page.getByTestId(`zoom-${z}`).click();
+      await expect(page.getByTestId(`zoom-${z}`)).toHaveAttribute('aria-pressed', 'true');
+      const edge = (await head.boundingBox())!;
+      const right = edge.x + edge.width;
+      const chips = [
+        ...(await boxes(page.getByTestId('ms-label'))),
+        ...(await boxes(page.getByTestId('ms-band-more'))),
+        ...(await boxes(page.getByTestId('ms-same-day'))),
+      ];
+      expect(chips.length).toBeGreaterThan(2);
+      for (const [n, a] of chips.entries()) {
+        expect(a.x < right - 0.5 && a.x + a.width > right + 0.5, `a chip is cut at ${z}`).toBe(
+          false,
+        );
+        for (const b of chips.slice(n + 1))
+          expect(meets(a, b), `two chips meet at ${z}`).toBe(false);
+      }
     }
   });
 });
