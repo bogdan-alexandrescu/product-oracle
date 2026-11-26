@@ -742,7 +742,7 @@ function DayChart(props: TimelineProps) {
     .filter((l) => Math.abs(l + 29 - xt) <= 120)
     .sort((a, b) => Math.abs(a - xt + 22) - Math.abs(b - xt + 22))
     .map(pillAt)
-    .find((l) => !gems.some((g) => g + 10 > l && g - 10 < l + 60));
+    .find((l) => !gems.some((g) => g + 10 > l && g - 10 < l + 58));
   const pillL = pillFree ?? pillAt(xt - 22);
   const pill: [number, number] | null = todayIn ? [pillL, pillL + 60] : null;
   const clear = (left: number, need = 56) => {
