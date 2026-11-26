@@ -150,6 +150,7 @@ export const ICONS = [
   'sources',
   'company',
   'target',
+  'keyboard',
 ] as const satisfies readonly IconName[];
 
 // Fails to compile when the kit gains an icon this page does not show.

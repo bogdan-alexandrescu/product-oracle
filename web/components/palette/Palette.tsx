@@ -1,7 +1,7 @@
 // build-palette (#1794): ⌘K (Ctrl+K) or Find opens the palette on every Simple and Detailed page;
 // Esc closes it and the focus goes back where it was. A feature opens the one feature panel over
 // the page; New PRD opens its sheet on Home.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { FeaturePanel, type PanelFeature } from '@/app/simple/roadmap/_panel';
 import { usePhone } from '@/components/ds/page-info';
@@ -10,6 +10,7 @@ import { useMe } from '@/lib/me';
 import { usePathname, useRouter } from '@/lib/nav';
 
 import { useOpenPalette } from './events';
+import { usePaletteKeys } from './hotkeys';
 import { PaletteSheet } from './PaletteSheet';
 
 import type { Hit } from './hits';
@@ -66,17 +67,8 @@ function PaletteHost() {
     focusOn(openedBack.current);
   }, []);
   useOpenPalette(show);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (open) close();
-        else show();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, show, close]);
+  // Ctrl or ⌘ K goes through the one key layer (hotkeys.ts), which hands it to the palette first.
+  usePaletteKeys(open, open ? close : show);
 
   const onPanel = (h: Hit, onRoadmap = false) => {
     if (!h.feature) return;

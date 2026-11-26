@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -20,6 +21,7 @@ import {
   useAskDraft,
   usePanelOpen,
 } from '@/components/hop/open-state';
+import { KeysHost } from '@/components/keys/KeysHost';
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
 import { ZoneNotice } from '@/components/ZoneNotice';
 import { api, MOCK_MODE } from '@/lib/api/client';
@@ -47,6 +49,7 @@ import { Button } from './Button';
 import { ConfirmHost, confirmInPage } from './ConfirmDialog';
 import { initialsOf } from './Figures';
 import { Icon, type IconName } from './Icon';
+import { KeysLine } from './KeysLine';
 import { Notice } from './Layout';
 import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
 import { usePageInfo } from './page-info';
@@ -786,6 +789,7 @@ function Navs() {
         </div>
         <RailLink d={DESTINATIONS[DESTINATIONS.length - 1]} pathname={pathname} home={home} />
         <span className="flex-1" />
+        <KeysLine where="detailed-rail" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
         {settings && <RailLink d={settings} pathname={pathname} home={home} />}
         <UserMenu placement="rail" />
@@ -1296,6 +1300,19 @@ export function CapsError() {
   );
 }
 
+/** #1795: the app's keys and the ? sheet, for a signed-in person; g then a letter reaches the rail's pages. */
+function AppKeys() {
+  const pathname = usePathname();
+  const { me } = useMe();
+  const simple = modeOf(pathname) === 'simple';
+  const pages = useMemo(
+    () => (simple ? SIMPLE_DESTINATIONS : [...DESTINATIONS, SETTINGS]),
+    [simple],
+  );
+  if (!me) return null;
+  return <KeysHost pages={pages} detailed={!simple} />;
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ScreenSubjectProvider>
@@ -1333,6 +1350,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <ConfirmHost />
         <ToastHost />
+        <Suspense fallback={null}>
+          <AppKeys />
+        </Suspense>
       </div>
     </ScreenSubjectProvider>
   );

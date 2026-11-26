@@ -110,6 +110,12 @@ const PATHS = {
       <path d="M9.5 4v16M5.8 8h1.6M5.8 11.5h1.6" />
     </>
   ),
+  keyboard: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="6" />

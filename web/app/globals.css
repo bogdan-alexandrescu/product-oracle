@@ -1854,3 +1854,12 @@ code .date-mark {
     scrollbar-color: color-mix(in srgb, var(--rail-text) 45%, transparent) transparent;
   }
 }
+/* build-shortcuts (#1795), KS2 A: the row j and k focus, one at a time: a blue bar on its left and a
+   light blue fill (Priorities in Simple and Detailed, the Roadmap timeline's rows). */
+[data-kfocus] {
+  box-shadow: inset 4px 0 0 var(--accent);
+  background: var(--accent-soft) !important;
+}
+tr[data-kfocus] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
