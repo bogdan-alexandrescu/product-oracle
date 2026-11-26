@@ -51,9 +51,10 @@ test('1892: a goal card reads the Goal map rule, whatever its items', async ({ p
   await expect(
     goals.filter({ hasText: 'Faster activation' }).getByTestId('home-goal-status'),
   ).toHaveText('At risk');
+  // The guardrail at 15, past its 10 at most: broken, so never Met (the Goal map's held rule).
   await expect(
     goals.filter({ hasText: 'Keep alerts quiet' }).getByTestId('home-goal-status'),
-  ).toHaveText('Not measured');
+  ).toHaveText('At risk');
 });
 
 test('1896: every milestone whose items end after its date warns, each item opening its panel', async ({

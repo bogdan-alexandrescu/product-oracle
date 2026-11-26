@@ -3631,11 +3631,15 @@ function seedSimpleHomeScenario(): Db {
   });
   // #1892 "home-goal-status": Grow retention at 160 of 200 (on track by the Goal map's rule, though
   // its digest has a broken link), Faster activation at $20,000 of $50,000 (at risk, no item at risk).
+  // The guardrail at 15 teams muting, past its 10 at most: broken, never Met.
+  const reads: Record<string, number> = {
+    'grow-retention': 160,
+    'faster-activation': 20000,
+    'quiet-alerts': 15,
+  };
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
-    for (const e of db.baseline.entities) {
-      if (e.key === 'grow-retention') e.attrs = { ...e.attrs, current: 160 };
-      if (e.key === 'faster-activation') e.attrs = { ...e.attrs, current: 20000 };
-    }
+    for (const e of db.baseline.entities)
+      if (e.key in reads) e.attrs = { ...e.attrs, current: reads[e.key] };
   const owners = db.members
     .filter((m) => m.role === 'owner' && m.status !== 'disabled')
     .map((m) => m.id);
