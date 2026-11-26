@@ -17,7 +17,7 @@ function frameIn(parent: Pick<Window, 'postMessage'>) {
  */
 test('a framed Oracle tells each hub origin it is ready, once per load', () => {
   const postMessage = vi.fn();
-  const win = frameIn({ postMessage } as unknown as Window);
+  const win = frameIn({ postMessage });
   tellHubReady(win);
   tellHubReady(win);
   expect(postMessage.mock.calls).toEqual([

@@ -315,9 +315,10 @@ test("CSP: every page allows exactly Google's picker hosts (and Notion's icon ho
     expect(csp, path).toBeTruthy();
     const directive = (name: string) => csp.split('; ').find((d) => d.startsWith(`${name} `));
     // Outside this origin: Google's picker hosts for scripts, frames, requests and styles.
+    // frame-ancestors names who may embed Oracle, not what it loads; it is pinned below.
     const notImages = csp
       .split('; ')
-      .filter((d) => !d.startsWith('img-src '))
+      .filter((d) => !d.startsWith('img-src ') && !d.startsWith('frame-ancestors '))
       .join('; ');
     const hosts = new Set([...notImages.matchAll(/https:\/\/([^/\s;]+)/g)].map((m) => m[1]));
     expect([...hosts].sort()).toEqual([
@@ -345,6 +346,9 @@ test("CSP: every page allows exactly Google's picker hosts (and Notion's icon ho
       "frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/",
     );
     expect(directive('connect-src')).toBe("connect-src 'self' https://accounts.google.com/gsi/");
+    expect(directive('frame-ancestors')).toBe(
+      "frame-ancestors 'self' https://hub.saga.xyz https://hub.galatia.saga.xyz",
+    );
   }
 });
 
