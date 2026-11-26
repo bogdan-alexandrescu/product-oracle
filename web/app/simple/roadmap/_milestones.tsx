@@ -1808,8 +1808,7 @@ export function MsLayer(props: MsLayerProps) {
         ) + 30,
         phone ? 150 : 230,
       );
-      // #1903: a label whose day is scrolled under the names column starts at the track's edge, never cut by it.
-      let l = Math.max(mx + 6, props.span ? props.span[0] + 4 : -Infinity);
+      let l = mx + 6;
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
       // tb-mk: an empty row first, else the row whose last label began farthest left: it keeps the
       // most of its words (at 6 months close labels cut each other to "M…" when all took row one).
@@ -1863,6 +1862,11 @@ export function MsLayer(props: MsLayerProps) {
         line.splice(n, 1);
       }
     }
+    // #1903: a label across the names column's edge starts at the track's edge (its end stays put).
+    const edge0 = props.span ? props.span[0] + 4 : -Infinity;
+    for (const p of placed)
+      if (p.left < edge0 && p.left + p.w - edge0 >= LABEL_MIN)
+        [p.w, p.left] = [p.left + p.w - edge0, edge0];
     out.push(
       <div
         key="band"
