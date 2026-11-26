@@ -1,5 +1,6 @@
-import type { Schemas } from '../client';
 import { stableUuid } from './ids';
+
+import type { Schemas } from '../client';
 import type { SimpleDb } from './simple-roadmap';
 
 /**

@@ -12,6 +12,7 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
@@ -608,7 +609,6 @@ import {
   seedCompanyRoadmap,
   seedItemMilestones,
 } from './one-roadmap';
-import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import {
   APPROVED_ROADMAP_SCENARIO,
   applyApprovedRoadmap,
