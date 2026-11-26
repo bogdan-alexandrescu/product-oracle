@@ -512,7 +512,7 @@ export function PlanByMonth({
                     onClick={() =>
                       open?.({ id, code: codes?.get(id) ?? '', name: names.get(id) ?? '' })
                     }
-                    className="!inline !h-auto !rounded-none !p-0 ![font-size:inherit] !font-normal !whitespace-normal ![color:inherit] underline hover:!bg-transparent hover:no-underline"
+                    className="!inline !h-auto !rounded-none !p-0 ![font-size:inherit] ![font-weight:inherit] ![line-height:inherit] !whitespace-normal ![color:inherit] underline hover:!bg-transparent hover:no-underline"
                   >
                     {codes?.get(id) ? `${codes.get(id)} ${names.get(id)}` : names.get(id)}
                   </Button>

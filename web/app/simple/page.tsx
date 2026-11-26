@@ -156,7 +156,7 @@ function ItemIn({
     <Button
       variant="ghost"
       data-testid="home-since-item"
-      className="!inline !h-auto !rounded-none !p-0 !text-left ![font-size:inherit] !font-normal !whitespace-normal !text-accent-ink hover:!bg-transparent hover:underline"
+      className="!inline !h-auto !rounded-none !p-0 !text-left ![font-size:inherit] ![font-weight:inherit] ![line-height:inherit] !whitespace-normal !text-accent-ink hover:!bg-transparent hover:underline"
       onClick={() => open(item)}
     >
       <Named item={item} />
