@@ -1024,7 +1024,7 @@ export function ArchiveDialog({
                 </label>
                 {mode === 'move' && to && (
                   <p className="rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">
-                    {titleOf(to)} will hold {holds} features.
+                    {titleOf(to)} will hold {holds} {holds === 1 ? 'feature' : 'features'}.
                     {ask ? '' : ' Undo puts every link back.'}
                   </p>
                 )}
