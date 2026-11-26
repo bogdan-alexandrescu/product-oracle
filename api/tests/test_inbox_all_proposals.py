@@ -16,6 +16,7 @@ Test cards (protects / fails_when / no_claim):
   from Ask Oracle or a meeting, or stays once declined.
 """
 
+from oracle.members.names import display_name
 from tests.test_simple_changes_api import CHANGES
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_chat_actions import apply, item, one_card
@@ -31,7 +32,7 @@ async def _inbox(client, w, who: str) -> dict:
 
 def _name(w, who: str) -> str:
     u = w.ctx.users[who]
-    return u.name or u.email
+    return display_name(u.email, u.name)
 
 
 def _row(inbox: dict, change_id: str) -> dict | None:
