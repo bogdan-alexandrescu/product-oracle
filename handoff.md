@@ -1,5 +1,17 @@
 # panel-2 handoff (#1906, #1907: feature panel wording)
 
+## Review fix round 1 (verdict NOT_YET, one blocker; fixed in 67ce3bc)
+- Blocker: the "panel-words" scenario's "(M2)" target never reached the panel (written to goal_edits before the
+  goal store the panel reads, goal_buckets, was built from its own seed). `web/lib/api/mock/panel-words.ts` now
+  builds that store first (`goalBucketsDb`, with the members), then writes the target into it.
+- Proof: `node scripts/mutate.mjs` planting `targetWords = (target) => target` in `_panel-words.ts`: the '#1907'
+  test went red ("Expected: 70% of teams / Received: 70% of teams (M2)"), "MUTATE: OK 1/1", file restored;
+  green without the plant.
+- Minors left as is (not blocker/major): "Carried over from the last roadmap" wording; featureTitle stripping a
+  PRD name a feature title legitimately contains.
+- Gates this round: tsc 0; full `npm run lint` 0; format:check 0; Playwright --retries=0, 2 workers: panel-words,
+  goal-target-kept, one-feature-panel 24 passed. No API change: API suite, timing, pyright, frozen migrations not run.
+
 ## What changed (web only; no API change)
 - #1906 Decider (`web/app/simple/roadmap/_fields.tsx`, `DeciderNames`): several names (the API's rule in
   `api/oracle/simple/service.py` `decider_ids`/`can_decide`: several only when no roadmap decider or deciding
