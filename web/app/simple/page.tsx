@@ -153,14 +153,14 @@ function ItemIn({
     .map((w) => [bare.indexOf(w), w.length])
     .find(([k]) => k >= 0);
   const link = (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       data-testid="home-since-item"
-      className="text-left text-accent-ink hover:underline"
+      className="!inline !h-auto !rounded-none !p-0 !text-left ![font-size:inherit] !font-normal !whitespace-normal !text-accent-ink hover:!bg-transparent hover:underline"
       onClick={() => open(item)}
     >
       <Named item={item} />
-    </button>
+    </Button>
   );
   if (!at)
     return (
