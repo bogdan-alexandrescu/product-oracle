@@ -9,6 +9,9 @@ Test cards (protects / fails_when / no_claim):
   the company's Owner whose item the reader's roadmap read no longer holds is in the Inbox and in
   Waiting for you, as something to open (not to accept); fails_when=the Inbox counts it and the
   waiting list leaves it out; no_claim=accepting it.
+- test_an_owner_change_on_a_replaced_prds_item_waits_as_the_inbox_counts_it: protects=an owner
+  change on an item of a replaced PRD, which the Inbox still counts for the Owner, is in Waiting
+  for you; fails_when=the waiting list drops it with the PRD (changes.visible); no_claim=its words.
 - test_an_older_proposal_waits_behind_many_newer_ones: protects=a proposal for the decider stays
   in Waiting for you behind 500 newer proposals for someone else, as the Inbox counts it;
   fails_when=the waiting list reads only the newest 500 proposals; no_claim=read speed.
@@ -93,3 +96,30 @@ async def test_an_older_proposal_waits_behind_many_newer_ones(client):
     assert c["id"] in inbox
     assert waiting.get(c["id"], {}).get("kind") == "proposal", list(waiting.values())[:3]
     assert waiting[c["id"]]["action"] == "Accept"
+
+
+async def test_an_owner_change_on_a_replaced_prds_item_waits_as_the_inbox_counts_it(client):
+    """An owner change on an item of a replaced PRD, still in the Owner's Inbox, waits for them."""
+    from sqlalchemy import select
+
+    from oracle.roadmap.models import RoadmapItem
+    from tests.test_one_roadmap_many_prds_api import world as company_world
+
+    ctx, _ = await company_world(client)
+    owner = ctx.users["owner"]
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "read-replicas"))
+        c = SimpleChange(
+            op="set_owner", target={"item_id": str(item.id)}, before={"owner_id": None},
+            after={"owner_id": str(ctx.users["approver"].id)}, status="proposed",
+            by=ctx.users["commenter"].id, at=NOW, routed_to=[owner.id],
+        )  # fmt: skip
+        s.add(c)
+        await s.commit()
+        cid = str(c.id)
+    r = await client.post("/v1/documents/scale/replaced-by", headers=ctx.as_("owner"),
+                          json={"prds": ["user-safety"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+    inbox, waiting = await _ids(client, ctx, "owner")
+    assert cid in inbox
+    assert cid in waiting, list(waiting.values())
