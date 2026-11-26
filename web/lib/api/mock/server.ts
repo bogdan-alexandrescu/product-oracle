@@ -17,6 +17,7 @@ import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
+import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
 import { prdCode } from './item-code';
 import {
   acceptNewFeatures,
@@ -8951,6 +8952,7 @@ function load(): Db {
       roadmap.status = 'approved';
     }
   }
+  if (scenario === PANEL_WORDS_SCENARIO) seedPanelWords(db);
   // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
   if (scenario === TWO_WAY_DATES_SCENARIO) {
     const roadmap = db.documents.find((d) => d.slug === 'usage-alerts-roadmap');

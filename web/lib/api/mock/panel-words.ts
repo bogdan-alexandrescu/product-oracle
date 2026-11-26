@@ -1,0 +1,38 @@
+/**
+ * panel-2 (#1906, #1907) "panel-words" scenario: the default company with what the UX re-audit
+ * found in the feature panel, in invented data: two more owners (so the company's owners decide
+ * Weekly alert digest), its title carrying its PRD's name and a priority tag, the note Oracle
+ * writes when it makes a roadmap version, and its goal's target ending in milestone shorthand.
+ */
+import { stableUuid } from './ids';
+import type { Db } from './server';
+import { ROADMAPS, roadmapGoal, seedSimpleRoadmap, writeRoadmapGoal } from './simple-roadmap';
+
+export const PANEL_WORDS_SCENARIO = 'panel-words';
+
+export function seedPanelWords(db: Db): void {
+  for (const [i, [email, name]] of [
+    ['robin.hart@example.com', 'Robin Hart'],
+    ['sam.ortiz@example.com', 'Sam Ortiz'],
+  ].entries())
+    db.members.push({
+      email,
+      name,
+      role: 'owner' as const,
+      engineering_lead: false,
+      created_at: `2026-09-2${i}T09:00:00Z`,
+      id: stableUuid(`panel-words/${email}`),
+      disabled_at: null,
+      disabled_by: null,
+      status: 'active' as const,
+      open_tokens: 0,
+    });
+  const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+  const digest = rm.items.find((s) => s.key === 'alert-digest');
+  if (digest) {
+    digest.title = `${ROADMAPS[digest.roadmap].prd}: ${digest.title} (P0)`;
+    digest.note = 'from version 21';
+  }
+  const goal = roadmapGoal(rm, 'grow-retention');
+  writeRoadmapGoal(rm, 'grow-retention', { ...goal, target: `${goal.target} (M2)` });
+}
