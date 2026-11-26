@@ -72,7 +72,7 @@ for (const width of [1440, 390]) {
         ).toBeVisible();
         const panel = page.getByTestId('brief-not-found');
         await expect(panel.getByRole('link', { name: 'Go to Home' })).toBeVisible();
-        await panel.getByRole('link', { name: 'Back to PRDs' }).click();
+        await panel.getByRole('link', { name: 'Back to One-pagers' }).click();
         await expect(page).toHaveURL(/\/documents$/);
       });
 

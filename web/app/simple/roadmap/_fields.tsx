@@ -183,6 +183,84 @@ function Pick({
   );
 }
 
+const STAGE: Partial<Record<Item['status'], number>> = {
+  draft: 0,
+  planned: 1,
+  in_progress: 1,
+  done: 2,
+};
+
+/** panel-stages (#1879): Draft, Planned or Done, either way; a move back asks why before it applies.
+ * pm1 '⋯ menu by the close': Cut and Restore are the panel menu's, not a status picked here. */
+function StatusEdit({
+  value,
+  save,
+  done,
+}: {
+  value: Item['status'];
+  save: (v: string, reason?: string) => Promise<void>;
+  done: () => void;
+}) {
+  const [v, setV] = useState<string>(value);
+  const [why, setWhy] = useState('');
+  const back = (STAGE[v as Item['status']] ?? 9) < (STAGE[value] ?? -1);
+  const stages = ['draft', 'planned', 'done'] as const;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (back && !why.trim()) return;
+        done();
+        if (v !== value) void save(v, back ? why.trim() : undefined);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        done();
+      }}
+    >
+      <select
+        aria-label="Status"
+        className={INPUT}
+        value={v}
+        onChange={(e) => {
+          const next = e.target.value;
+          setV(next);
+          if (next === value || (STAGE[next as Item['status']] ?? 9) < (STAGE[value] ?? -1)) return;
+          done();
+          void save(next);
+        }}
+        autoFocus
+      >
+        {(stages as readonly string[]).includes(value) ? null : (
+          <option value={value}>{statusWord(value)}</option>
+        )}
+        {stages.map((s) => (
+          <option key={s} value={s}>
+            {statusWord(s)}
+          </option>
+        ))}
+      </select>
+      {back && (
+        <>
+          <input
+            aria-label="Why it moves back"
+            data-testid="status-reason"
+            placeholder="Why?"
+            maxLength={500}
+            className={`${INPUT} mt-1`}
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            autoFocus
+          />
+          <SaveCancel onCancel={done} disabled={!why.trim()} />
+        </>
+      )}
+    </form>
+  );
+}
+
 /** item-milestone: the Milestone picker's option for the milestone shown now when it was not picked there. */
 const SHOWN = 'shown';
 
@@ -310,8 +388,15 @@ function ConfirmIntoGt({ item }: { item: Item }) {
   );
 }
 
+/** panel-stages (#1815): a code never wraps inside itself (F / - / 2 / 9). */
+const CodeText = ({ code }: { code?: string | null }) => (
+  <span className="whitespace-nowrap [overflow-wrap:normal]" data-testid="card-code-text">
+    {code}
+  </span>
+);
+
 /** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
-function ownCode(item: Item): ReactNode {
+function ownCode(item: Item, canChange: boolean, take: () => void): ReactNode {
   // unique-codes (Nov 23): an item's own code; the Ground Truth feature it is part of stays named.
   const part = item.feature_name ? (
     <InfoTip label="its feature" align="start" testId="card-code-feature">
@@ -320,9 +405,20 @@ function ownCode(item: Item): ReactNode {
   ) : null;
   if (!item.code || (!item.confirm_feature_id && !part)) return item.code;
   return (
-    <span className="inline-flex items-center gap-1">
-      {item.code}
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <CodeText code={item.code} />
       {part}
+      {/* panel-stages (#1815 5): this item takes its feature's code; the one that had it, the next number. */}
+      {part && canChange && (
+        <Button
+          variant="ghost"
+          data-testid="card-code-take"
+          className="h-6! px-2! text-xs!"
+          onClick={take}
+        >
+          Use {item.feature_name?.split(' ')[0]}
+        </Button>
+      )}
       {item.confirm_feature_id && (
         <>
           <NotInGt className="h-5! px-2! text-xs!" />
@@ -465,8 +561,8 @@ export function PanelFields({
         value={
           item.code_from ? (
             // A code from its Ground Truth feature or its PRD is read here, never changed.
-            <span className="inline-flex items-center gap-1">
-              {item.code}
+            <span className="inline-flex flex-wrap items-center gap-1">
+              <CodeText code={item.code} />
               <InfoTip label="this code" align="start" testId="card-code-why">
                 {item.code_from === 'feature'
                   ? 'It comes from its Ground Truth feature: change it there.'
@@ -481,7 +577,11 @@ export function PanelFields({
               )}
             </span>
           ) : (
-            (ownCode(item) ?? (
+            (ownCode(
+              item,
+              canChange,
+              () => void change('Code changed', 'take_feature_code', { code: item.code }, {}),
+            ) ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
               <span
                 className="inline-flex flex-wrap items-center gap-x-1"
@@ -596,20 +696,16 @@ export function PanelFields({
         canChange={canChange}
         value={statusWord(item.status)}
         editor={(done) => (
-          <Pick
-            label="Status"
+          <StatusEdit
             value={item.status}
             done={done}
-            options={[
-              // pm1 '⋯ menu by the close': Cut and Restore are the panel menu's, not a status picked here.
-              ...(['planned', 'done'].includes(item.status)
-                ? []
-                : [{ value: item.status, label: statusWord(item.status) }]),
-              { value: 'planned', label: 'Planned' },
-              { value: 'done', label: 'Done' },
-            ]}
-            save={(v) =>
-              change('Status changed', 'set_status', { status: item.status }, { status: v })
+            save={(v, reason) =>
+              change(
+                'Status changed',
+                'set_status',
+                { status: item.status },
+                reason ? { status: v, reason } : { status: v },
+              )
             }
           />
         )}

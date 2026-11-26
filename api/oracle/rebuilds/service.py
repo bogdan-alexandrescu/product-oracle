@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.auth.models import User
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.names import display_name
 from oracle.rebuilds.schemas import CompanyRoadmapRebuilds, Rebuild, RebuildsOut
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run, RunSegment
@@ -118,7 +119,10 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     """Each user's name, else their email, in one read."""
     if not ids:
         return {}
-    return {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    return {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(ids)))
+    }
 
 
 async def _decider(db: AsyncSession, document: Document | None) -> str | None:
@@ -126,7 +130,7 @@ async def _decider(db: AsyncSession, document: Document | None) -> str | None:
     from oracle.simple.chat_actions import ask_decider
 
     u = await ask_decider(db, document)
-    return (u.name or u.email) if u else None
+    return display_name(u.email, u.name) if u else None
 
 
 async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> RebuildsOut:
@@ -284,7 +288,7 @@ async def _owner_name(db: AsyncSession) -> str | None:
         .where(User.role == "owner", User.disabled_at.is_(None))
         .order_by(User.created_at, User.id)
     )
-    return (u.name or u.email) if u else None
+    return display_name(u.email, u.name) if u else None
 
 
 def _when(raw: Any) -> datetime | None:

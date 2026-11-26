@@ -197,7 +197,7 @@ async def test_override_shows_oracle_rank_and_who(client):
     assert out["rows"][0]["code"] == "pay-4"
     pinned = out["rows"][0]
     assert (pinned["rank"], pinned["oracle_rank"]) == (1, 6)
-    assert pinned["override"]["by_name"] == "owner@example.com"
+    assert pinned["override"]["by_name"] == "Owner"
     assert pinned["override"]["reason"] == REASON and pinned["override"]["at"]
     assert pinned["before_override"] == {"kind": "pin", "position": 1,
                                          "above_feature_id": None, "reason": REASON}  # fmt: skip
@@ -227,7 +227,7 @@ async def test_proposals_wait_for_the_decider(client):
     assert sorted(p["op"] for p in mine) == ["estimate_feature", "override_priority"]
     est = next(p for p in mine if p["op"] == "estimate_feature")
     assert (est["code"], est["title"], est["item_id"]) == ("pay-1", "Pay 1", w.ids["pay-1"])
-    assert est["by_name"] == "commenter@example.com"
+    assert est["by_name"] == "Commenter"
     assert est["after"] == {"goal_value": 6.0}
     assert est["waiting_for"] == ["Dee Cider"]
     assert (est["can_decide"], est["flow"]) == (False, None)

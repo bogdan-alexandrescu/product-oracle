@@ -244,7 +244,7 @@ test('Cut and Restore live in the ⋯ menu; Move to Trash is one step with Undo'
   await tap(panel(page).getByRole('button', { name: 'Change the status' }));
   await expect(
     panel(page).getByTestId('card-status-edit').getByLabel('Status').locator('option'),
-  ).toHaveText(['Planned', 'Done']);
+  ).toHaveText(['Draft', 'Planned', 'Done']);
   await page.keyboard.press('Escape');
 
   await addTask(page, 'Draft the export help page');

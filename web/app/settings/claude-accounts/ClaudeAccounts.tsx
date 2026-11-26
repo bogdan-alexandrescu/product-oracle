@@ -36,6 +36,7 @@ import {
 } from '@/components/ds';
 import { ClaudeOffNotice, limitWord } from '@/components/ClaudeOffNotice';
 import { LoadError } from '@/components/ui';
+import { ZoneNotice } from '@/components/ZoneNotice';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { formatPercent, inWords } from '@/lib/format';
 import { useMe } from '@/lib/me';
@@ -411,7 +412,12 @@ function Pool({
 
   return (
     <Split inspector={inspector}>
-      <Panel title="Accounts" count={accounts.length} className="overflow-hidden">
+      <Panel
+        title="Accounts"
+        count={accounts.length}
+        tools={<ZoneNotice state={page.time_zone_state} />}
+        className="overflow-hidden"
+      >
         {accounts.length === 0 ? (
           <div role="status">
             <Empty>No accounts registered</Empty>

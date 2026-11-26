@@ -81,8 +81,13 @@ async def test_answers_as_before_inbox_reads(client, monkeypatch):
     await seed_company(ctx)
     now = {who: (await budget.read(client, ctx.as_(who)))[1] for who in READERS}
     monkeypatch.setattr(budget, "BEFORE", BEFORE)
+    current_names = simple_changes._names
     for module in CHANGED:
         for name, fn in budget.before(module).items():
+            # The old code only gives the query COUNTS to compare: it names people the way the
+            # current code does (display_name; #1763), or every by_name would differ.
+            if "_names" in fn.__globals__:
+                fn.__globals__["_names"] = current_names
             if getattr(module, name, None) is not None:
                 monkeypatch.setattr(module, name, fn)
     counts = {}

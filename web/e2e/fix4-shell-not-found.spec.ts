@@ -46,7 +46,7 @@ test('qa-shell-11: a missing PRD offers Back to PRDs and Go to Home', async ({ p
   await login(page);
   await page.goto('/documents/no-such-doc');
   await expect(page.getByRole('heading', { level: 1, name: 'Document not found' })).toHaveCount(1);
-  await expectWaysOn(page, 'Back to PRDs', '/documents');
+  await expectWaysOn(page, 'Back to One-pagers', '/documents');
   await page.getByRole('link', { name: 'Go to Home' }).filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/home$/);
 });

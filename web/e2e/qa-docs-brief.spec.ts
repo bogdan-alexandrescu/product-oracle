@@ -77,7 +77,7 @@ test('qa-docs-65: one actions menu, the shared back link, no repeated category, 
   const header = page.locator('[data-page-header]');
   await expect(header.getByRole('button', { name: /^Actions for / })).toHaveCount(1);
   await expect(header.getByRole('button', { name: /More actions|^Delete/ })).toHaveCount(0);
-  const back = header.getByRole('link', { name: 'PRDs' });
+  const back = header.getByRole('link', { name: 'One-pagers' });
   await expect(back).toBeVisible();
   await expect(back).not.toContainText('‹');
   await expect(back.locator('svg')).toHaveCount(1);

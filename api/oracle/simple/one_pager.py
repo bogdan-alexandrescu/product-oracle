@@ -56,6 +56,7 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.members.names import display_name
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
@@ -841,7 +842,7 @@ async def remind(db: AsyncSession, principal: Any, doc: str) -> OnePagerRemindOu
         raise ChangeError(409, "Every reviewer it waits on was reminded in the last day")
     me = _me(principal)
     names = {
-        u.id: u.name or u.email
+        u.id: display_name(u.email, u.name)
         for u in await db.scalars(select(User).where(User.id.in_([*due, me])))
     }
     number = await db.scalar(

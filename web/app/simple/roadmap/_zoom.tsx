@@ -286,6 +286,7 @@ function waitingAdds(proposals: Change[] = []) {
 const ADD_H = 28;
 
 const LABEL_W = 232;
+const NO_ROWS: Row[] = [];
 /** A milestone label's "+N" chip, about its width. */
 const MS_CHIP_W = 30;
 /** QA Nov 12 #8: at All 3 years a milestone label keeps up to this much of its words (px). */
@@ -365,8 +366,10 @@ const REASON_WORDS: Record<string, string> = {
 export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
   const own = `‘${i.title}’ `;
   let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
+  // draw-time (#1870): only a reason that quotes another name is looked through for it.
+  if (!r.includes('‘')) return r;
   for (const o of items.values())
-    if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`))
+    if (o.code && o.id !== i.id && r.includes(`‘${o.title}’`))
       r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
   return r;
 }
@@ -385,7 +388,18 @@ export function ConflictPanel({
 }: Common & { onShow: (key: string) => void }) {
   // roadmap-decide: every broken link of the working draft, a cut item others depend on
   // included: the same ones Needs a decision, Home and the side menu count.
-  const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
+  // draw-time (#1870): its reasons are worded once per roadmap, not again for each of the page's reads.
+  const list = useMemo(
+    () =>
+      data.items.flatMap((i) =>
+        brokenLinks(i).map((f) => ({
+          i,
+          f,
+          reason: shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId),
+        })),
+      ),
+    [data, byId],
+  );
   // Pre-demo QA S-14: an item's breaks together, in the order the first of them reads.
   const groups: (typeof list)[] = [];
   for (const x of list) {
@@ -393,7 +407,7 @@ export function ConflictPanel({
     if (g) g.push(x);
     else groups.push([x]);
   }
-  const one = ({ i, f }: (typeof list)[number]) => {
+  const one = ({ i, f, reason }: (typeof list)[number]) => {
     // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
     // the fixes take their own line under the sentence, as the tray has them.
     const stacked = phone || fixCount(f) > 3;
@@ -420,7 +434,7 @@ export function ConflictPanel({
             {REASON_WORDS[f.kind] ?? 'has a broken link'}
           </span>{' '}
           <InfoTip label="what is broken" align="start" testId="conflict-reason-tip">
-            {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+            {reason}
           </InfoTip>
         </span>
         <div className="max-w-full min-w-0">
@@ -568,8 +582,14 @@ function DayChart(props: TimelineProps) {
   };
   const fit = zoom === 'all';
   const box = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(1000);
-  const [sl, setSl] = useState(0);
+  // draw-time (#1870): the 500 rows are drawn once, when the chart's width and its first scroll are
+  // known (both before the first paint), not at a guess and then twice more.
+  const [seenW, setW] = useState<number | null>(null);
+  const w = seenW ?? 1000;
+  const measured = seenW !== null;
+  const [scrolledTo, setSl] = useState<number | null>(null);
+  const placed = scrolledTo !== null;
+  const sl = scrolledTo ?? 0;
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -594,8 +614,11 @@ function DayChart(props: TimelineProps) {
   const x = (d: string) => daysBetween(t0, d) * ppd;
   const xt = x(data.today);
   useLayoutEffect(() => {
-    if (box.current && !fit) box.current.scrollLeft = Math.max(0, xt - 60);
-  }, [xt, fit, zoom]);
+    const el = box.current;
+    if (!el || !measured) return;
+    if (!fit) el.scrollLeft = Math.max(0, xt - 60);
+    setSl(el.scrollLeft);
+  }, [xt, fit, zoom, measured]);
   const months: { day: string; label: string }[] = [];
   for (let d = t0; d <= t1;) {
     const m = Number(d.slice(5, 7));
@@ -1444,7 +1467,8 @@ function DayChart(props: TimelineProps) {
               style={{ left: labelW + x(d) }}
             />
           ))}
-          {rows.map((r, n) => {
+          {!placed && <div aria-hidden style={{ height: rows.length * ROW_H }} />}
+          {(placed ? rows : NO_ROWS).map((r, n) => {
             const add = addAfter.get(n);
             const addRow = add && props.onAddAt && (
               <AddRow

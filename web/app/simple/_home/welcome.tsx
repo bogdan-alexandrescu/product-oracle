@@ -5,6 +5,8 @@ import { useState } from 'react';
 
 import { dismissWelcome, useWelcomeCopy } from '@/app/home/_welcome';
 import { HomeCard, HomeRow } from '@/app/simple/_home/cards';
+import { Icon } from '@/components/ds/Icon';
+import type { Schemas } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
 import { errorMessage } from '@/lib/use-query';
 
@@ -18,15 +20,27 @@ import { errorMessage } from '@/lib/use-query';
  * Props:
  * - `show`: whether GET /v1/setup says to welcome the caller (`setup.welcome === true`).
  * - `onDismissed`: called once Dismiss was saved, to read /v1/setup again (or clear `welcome`).
+ * - `setup`: the caller's Set up steps (/v1/setup): #1899, a step already done is ticked, and
+ *   with every step done the card is gone.
  */
-export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismissed: () => void }) {
+export function SimpleWelcome({
+  show,
+  onDismissed,
+  setup,
+}: {
+  show: boolean;
+  onDismissed: () => void;
+  setup?: Schemas['SetupOut'];
+}) {
   const { capsReady } = useMe();
   const copy = useWelcomeCopy('simple');
+  const done = new Set((setup?.steps ?? []).filter((s) => s.done).map((s) => String(s.key)));
+  const isDone = (s: { step?: string }) => !!s.step && done.has(s.step);
   // Gone once Dismiss is saved (a reload before that would bring it back); kept with the reason when it could not be.
   const [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!show || gone || !capsReady) return null;
+  if (!show || gone || !capsReady || copy.steps.every(isDone)) return null;
 
   async function dismiss() {
     setBusy(true);
@@ -71,12 +85,23 @@ export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismisse
             key={s.href}
             testId="welcome-step"
             lead={
-              <span
-                aria-hidden
-                className="tnum grid size-9 place-items-center rounded-full bg-accent-soft font-bold text-accent-ink"
-              >
-                {i + 1}
-              </span>
+              isDone(s) ? (
+                <span
+                  role="img"
+                  aria-label="Done"
+                  data-testid="welcome-step-done"
+                  className="grid size-9 place-items-center rounded-full bg-pass-bg text-pass"
+                >
+                  <Icon name="check" size={20} />
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className="tnum grid size-9 place-items-center rounded-full bg-accent-soft font-bold text-accent-ink"
+                >
+                  {i + 1}
+                </span>
+              )
             }
             title={
               <Link href={s.href} className="text-accent-ink hover:underline">

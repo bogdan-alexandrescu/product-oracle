@@ -65,7 +65,7 @@ for (const size of [null, PHONE] as const) {
 test('qa4-work-10: opened any other way the back link still leads to PRDs', async ({ page }) => {
   await signIn(page);
   await openDirect(page);
-  await expect(back(page)).toHaveText('PRDs');
+  await expect(back(page)).toHaveText('One-pagers');
   await expect(back(page)).toHaveAttribute('href', '/documents');
 });
 

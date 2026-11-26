@@ -152,6 +152,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_code":
             code = target.get("code")
             return f"gave {x} the code {code}" if code else f"took the code off {x}"
+        case "take_feature_code":
+            from oracle.simple import code_take
+
+            return code_take.phrase(target, x)
         case "set_feature":
             return f"linked {x} to a feature" if after.get("feature_id") else f"unlinked {x}"
         # feature-parts: target names the parent (the new one, else the one left).
@@ -163,6 +167,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_goal_measure":
             return f"changed how the goal of {x} is measured"
         case "set_status":
+            # panel-stages (#1879): a move back says why.
+            if why := target.get("reason"):
+                word = "Draft" if after.get("draft") else "Planned"
+                return f"moved {x} back to {word}: {why}"
             word = "cut" if after.get("cut") else "done" if after.get("shipped") else "planned"
             return f"marked {x} {word}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.

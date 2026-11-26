@@ -39,6 +39,7 @@ import { unwrapProblems, ProblemsError } from '@/lib/api/problems';
 import { assess, goalViews } from '@/app/home/_goals';
 import { useMe } from '@/lib/me';
 import { holdLeaving } from '@/lib/leave-guard';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { useLive } from '@/lib/use-live';
 import { errorMessage, useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
@@ -1127,7 +1128,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
       className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
     >
       <Icon name="back" size={16} />
-      {kind === 'roadmap' ? 'Plan' : 'PRDs'}
+      {kind === 'roadmap' ? 'Plan' : PRD_LIST}
     </Link>
   );
 
@@ -1570,7 +1571,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
     >
       <Icon name="back" size={16} />
-      PRDs
+      {PRD_LIST}
     </Link>
   );
 

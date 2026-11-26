@@ -21,6 +21,7 @@ import {
   usePanelOpen,
 } from '@/components/hop/open-state';
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
+import { ZoneNotice } from '@/components/ZoneNotice';
 import { api, MOCK_MODE } from '@/lib/api/client';
 import { resetMockData } from '@/lib/api/mock/server';
 import { onReadChanged, onReadFailed } from '@/lib/api/shared-reads';
@@ -28,6 +29,7 @@ import { homeOf, modeOf } from '@/lib/experience';
 import { leave } from '@/lib/leave-guard';
 import { useMe } from '@/lib/me';
 import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { ScreenSubjectProvider } from '@/lib/screen-subject';
 import { useSettingsTabs } from '@/lib/settings-tabs';
 import { useTheme, type ThemeChoice } from '@/lib/theme';
@@ -64,7 +66,7 @@ export const DESTINATIONS: Dest[] = [
   { label: 'Home', href: '/home', icon: 'home', testId: 'nav-home' },
   { label: 'Requests', href: '/requests', icon: 'requests', testId: 'nav-requests' },
   { label: 'Ground Truth', href: '/ground-truth', icon: 'baseline', testId: 'nav-baseline' },
-  { label: 'PRDs', href: '/documents', icon: 'prds', testId: 'nav-prds' },
+  { label: PRD_LIST, href: '/documents', icon: 'prds', testId: 'nav-prds' },
   { label: 'Priorities', href: '/priorities', icon: 'priorities', testId: 'nav-priorities' },
   { label: 'Plan', href: '/plan', icon: 'roadmap', testId: 'nav-plan' },
   { label: 'Runs', href: '/runs', icon: 'runs', testId: 'nav-runs' },
@@ -80,7 +82,7 @@ const SETTINGS: Dest = {
 };
 
 /** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
-const TABS = ['Home', 'PRDs', 'Plan', 'Inbox'];
+const TABS = ['Home', PRD_LIST, 'Plan', 'Inbox'];
 
 /*
  * The destination a document belongs to (UI test finding E2): every kind's pages are
@@ -1311,6 +1313,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
           <CapsError />
+          <ZoneNotice bar />
           {children}
         </main>
         {/* qa-shell-31: the phone's tab bar (Navs). */}

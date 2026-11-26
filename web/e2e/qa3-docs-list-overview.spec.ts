@@ -96,7 +96,7 @@ test.describe('desktop', () => {
       .getByRole('navigation', { name: 'Breadcrumb' })
       .filter({ visible: true })
       .first();
-    await expect(crumb.getByRole('link', { name: 'PRDs' })).toBeVisible();
+    await expect(crumb.getByRole('link', { name: 'One-pagers' })).toBeVisible();
     await expect(crumb).not.toContainText('Draft');
     await expect(crumb).not.toContainText('Referral link PRD');
     const statuses = page.locator('[data-status]').filter({ visible: true });

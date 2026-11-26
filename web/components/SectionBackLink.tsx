@@ -4,13 +4,14 @@ import { usePathname } from '@/lib/nav';
 import { useSyncExternalStore } from 'react';
 
 import { LinkButton } from '@/components/ds';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 /** The sections a wrong URL may sit under, and their lists. */
 const SECTIONS = [
   { prefix: '/settings', href: '/settings', label: 'Settings' },
   { prefix: '/company', href: '/company', label: 'Company' },
   { prefix: '/plan', href: '/plan', label: 'Plan' },
-  { prefix: '/documents', href: '/documents', label: 'PRDs' },
+  { prefix: '/documents', href: '/documents', label: PRD_LIST },
   { prefix: '/runs', href: '/runs', label: 'Runs' },
   { prefix: '/requests', href: '/requests', label: 'Requests' },
 ] as const;

@@ -121,11 +121,11 @@ async def meeting_row(w, mid: str) -> SimpleMeeting:
 
 
 async def name_of(w, who: str, *, meeting: bool = False) -> str:
-    """The person's name as the chat card (display name) or the meeting (name, else
-    email) shows it."""
+    """The person's name as the chat card and the meeting show it: the one name rule
+    (#1763)."""
     async with tenant_session(w.ctx.tenant_id) as s:
         u = await s.get(User, w.ctx.users[who].id)
-    return (u.name or u.email) if meeting else display_name(u.email, u.name)
+    return display_name(u.email, u.name)
 
 
 async def applied_by(client, w, who: str, card: dict) -> dict:

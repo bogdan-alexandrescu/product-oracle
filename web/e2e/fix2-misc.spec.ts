@@ -177,7 +177,7 @@ test('webhooks and trash: their empty states explain themselves', async ({ page 
   const trash = page.getByTestId('trash-empty');
   await expect(trash).toContainText('Trash is empty.');
   // Train BQ: the link reads "Open PRDs" (it still goes to /documents).
-  await expect(trash.getByRole('link', { name: 'Open PRDs' })).toHaveAttribute(
+  await expect(trash.getByRole('link', { name: 'Open One-pagers' })).toHaveAttribute(
     'href',
     '/documents',
   );

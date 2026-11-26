@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
       );
       await expect(page.getByText('no-such-doc')).toHaveCount(0);
       await expect(page).toHaveTitle('Document not found · Product Oracle');
-      await card.getByRole('link', { name: 'Back to PRDs' }).click();
+      await card.getByRole('link', { name: 'Back to One-pagers' }).click();
       await expect(page).toHaveURL(/\/documents$/);
     });
 

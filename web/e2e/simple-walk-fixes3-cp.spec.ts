@@ -50,7 +50,7 @@ for (const phone of [false, true]) {
     test.describe(where, () => {
       test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme });
 
-      test(`Home's since-your-last-visit says my change as mine and drops it once undone (${where})`, async ({
+      test(`Home's since-your-last-visit lists no change of my own, nor its undo (${where})`, async ({
         page,
       }) => {
         await setUp(page, 'simple-home', scheme);
@@ -66,12 +66,8 @@ for (const phone of [false, true]) {
         await expect(page.getByText('Dependents moved in your working draft')).toBeVisible();
         const since = page.getByTestId('home-since');
         const rows = since.getByTestId('home-since-row').filter({ hasText: 'Weekly alert digest' });
-        await expect(rows).toHaveCount(1);
-        // qa-simple-home-15: my own change says "You".
-        await expect(rows).toContainText(
-          /^You moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/,
-        );
-        await expect(rows).not.toContainText('undone');
+        // #1900: my own change is no row (qa-simple-home-15 said it as "You").
+        await expect(rows).toHaveCount(0);
         await page.getByRole('button', { name: 'Undo' }).click();
         await expect(
           page

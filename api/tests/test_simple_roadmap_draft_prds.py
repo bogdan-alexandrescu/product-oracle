@@ -77,7 +77,7 @@ async def test_draft_prds_lists_each_prd_with_its_items(client):
     assert [i["title"] for i in d["items"]] == ["Draft item 0", "Draft item 1", "Draft item 2"]
     first = d["items"][0]
     assert (first["start"], first["end"]) == ("2026-11-09", "2026-12-18")
-    assert first["owner_name"] == "approver@example.com"  # no name: the email
+    assert first["owner_name"] == "Approver"  # no name: one made from the email
     [c] = await read(client, w, "commenter")
     assert c["can_change"] is False
 

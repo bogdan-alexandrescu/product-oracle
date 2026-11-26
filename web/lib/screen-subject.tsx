@@ -13,6 +13,7 @@ import {
 
 import type { Schemas } from '@/lib/api/client';
 import { pageNameOnly } from '@/lib/page-context';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 /**
  * What is on screen, for the head-of-product panel (G7, 3.3): a discussion subject and its
@@ -141,7 +142,7 @@ const PAGES: Record<string, string> = {
   requests: 'Requests',
   baseline: 'Ground Truth',
   'ground-truth': 'Ground Truth',
-  documents: 'PRDs',
+  documents: PRD_LIST,
   priorities: 'Priorities',
   plan: 'Plan',
   roadmap: 'Plan',

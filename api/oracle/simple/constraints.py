@@ -12,6 +12,8 @@ one-click fixes S3 applies.
 - ``cut_with_dependents``: the item is cut and items not cut depend on it.
   Fixes: accept_risk.
 - ``draft_without_owner``: a draft item (added in Simple) without an owner. No fixes.
+- ``depends_on_draft`` (panel-stages, #1879): an item not a draft depends on a draft (one
+  moved back to Draft keeps its plan hidden). No fixes.
 
 roadmap-done (owner, Nov 4): a done (shipped) item is off the roadmap: it is not checked, a
 dependency on it is met, and a done dependent needs nothing of a cut item.
@@ -32,6 +34,7 @@ FlagKind = Literal[
     "outside_milestone",
     "cut_with_dependents",
     "draft_without_owner",
+    "depends_on_draft",
 ]
 Fix = Literal["shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"]
 FIXES: dict[str, list[str]] = {
@@ -41,6 +44,7 @@ FIXES: dict[str, list[str]] = {
     # roadmap-decide: a cut item others depend on is brought back, or a dependent drops it.
     "cut_with_dependents": ["restore", "remove_dependency", "accept_risk"],
     "draft_without_owner": [],
+    "depends_on_draft": [],
 }
 TITLE = 40
 
@@ -192,5 +196,11 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                 flags.append(_flag(n, "cut_with_dependents", reason))
         if n.draft and not n.owner_id:
             flags.append(_flag(n, "draft_without_owner", "Draft with no owner to confirm it"))
+        for dep_id in n.depends_on if n.status not in ("cut", "draft") else []:
+            dep = by_id.get(dep_id)
+            if dep is not None and dep.id != n.id and dep.status == "draft":
+                flags.append(
+                    _flag(n, "depends_on_draft", f"Depends on a draft: ‘{_t(dep.title)}’", dep.id)
+                )
         out[n.id] = flags
     return out

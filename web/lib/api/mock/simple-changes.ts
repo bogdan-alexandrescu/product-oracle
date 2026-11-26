@@ -422,7 +422,7 @@ const FIXES = ['shift_dependents', 'move_dependency'];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
 export const CUT_ALL = 'cut_with_dependents';
 /** The ops that key before/after by item id (changes.py KEYED). */
-const KEYED = [...FIXES, CUT_ALL];
+const KEYED = [...FIXES, CUT_ALL, 'take_feature_code'];
 
 /** changes.dependents: every item waiting on `id`, transitively (breadth first), but those cut or merged already. */
 export function cutDependents(
@@ -932,16 +932,35 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
 /** changes.py PANEL_DONE: the shipped mark the panel's Status set to done leaves. */
 const PANEL_DONE = 'Marked done in its panel';
 
-/** changes.py set_status: its stored after, {cut, shipped}; planned clears only the panel's own done mark. */
+/** changes.py set_status: its stored after, {cut, shipped, draft}; planned clears only the panel's own done mark,
+ * a move back from Done reopens it (panel-stages #1879); a cut keeps the draft flag as it is. */
 function statusAfter(s: ReturnType<typeof seed>, status: string, by: string): Values {
-  const kept = s.shipped?.note === PANEL_DONE ? null : (s.shipped ?? null);
-  return {
+  const back = isBack(s, status);
+  const kept =
+    s.shipped?.note === PANEL_DONE || (back && shownStatus(s) === 'done')
+      ? null
+      : (s.shipped ?? null);
+  const out: Values = {
     cut: status === 'cut',
     shipped:
       status === 'done'
         ? (s.shipped ?? { note: PANEL_DONE, by, on: iso(mockNowMs()).slice(0, 10) })
         : kept,
   };
+  if (status !== 'cut') out.draft = status === 'draft';
+  return out;
+}
+
+/** The status an item reads (service._status): cut, then draft, then its own. */
+const shownStatus = (s: ReturnType<typeof seed>): string =>
+  s.status === 'cut' ? 'cut' : s.draft ? 'draft' : (s.status ?? 'planned');
+
+const RANK: Record<string, number> = { draft: 0, planned: 1, in_progress: 1, done: 2 };
+
+/** changes.py set_status (panel-stages #1879): a move back a stage (Done to Planned or Draft, Planned to Draft). */
+function isBack(s: ReturnType<typeof seed>, status: string): boolean {
+  const now = shownStatus(s);
+  return now in RANK && status in RANK && RANK[status] < RANK[now];
 }
 
 /** The status the tracker gives the item, read before a cut or a shipped mark is written (kept as its tracked). */
@@ -2605,6 +2624,34 @@ async function create(
       cut.map((i) => [i.id, read(seen, keyOf(db, i.id)!, ['cut'], target)]),
     );
     after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
+  } else if (body.op === 'take_feature_code') {
+    // code_take.plan (#1815 5): the item drops its own code, so it reads its feature's; the item
+    // that had it takes the next free number. Keyed by item id: one change, one Undo.
+    const s = seed(seen, key);
+    const feature = s.feature_id ? db.feature_codes?.[s.feature_id] : undefined;
+    const [own, name] = codedTitle(s.title, null);
+    if (!feature) return json(422, { detail: 'It is not part of a Ground Truth feature' });
+    if (!own || own === feature) return json(422, { detail: "It already has its feature's code" });
+    if (!('code' in body.before)) return json(422, { detail: 'before: code as you saw it' });
+    if (body.before.code !== own)
+      return conflict(db, ctx, { code: own }, [String(target.item_id)], 'Changed since you saw it');
+    const holder = seen.items.find(
+      (x) =>
+        x.key !== key &&
+        x.feature_id === s.feature_id &&
+        !closed(x) &&
+        !codedTitle(x.title, null)[0],
+    );
+    const rows = holder ? [s, holder] : [s];
+    target.code = feature;
+    target.titles = rows.map((x) => x.title);
+    before = Object.fromEntries(rows.map((x) => [db.ids[x.key], { title: x.title }]));
+    after = { [db.ids[key]]: { title: name } };
+    if (holder) {
+      const next = nextCode(seen);
+      after[db.ids[holder.key]] = { title: `${next} ${holder.title}` };
+      Object.assign(target, { other: holder.title, new_code: next });
+    }
   } else {
     const fields = FIELDS[body.op];
     // roadmap-decide review (changes.py): the page may not see every stored key; only the subject is checked.
@@ -2811,19 +2858,39 @@ async function create(
       if (loop) return json(422, { detail: loop });
       after = { depends_on: clean };
     } else if (body.op === 'set_status') {
-      if (!['planned', 'done', 'cut'].includes(String(a.status)))
-        return json(422, { detail: 'after.status: planned, done or cut' });
+      if (!['draft', 'planned', 'done', 'cut'].includes(String(a.status)))
+        return json(422, { detail: 'after.status: draft, planned, done or cut' });
+      const why = String(a.reason ?? body.reason ?? '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .join(' ');
+      const back = isBack(seed(seen, key), String(a.status));
+      if (back && !why) return json(422, { detail: 'Say why it moves back' });
+      if (back) target.reason = why.slice(0, 500);
+      // stages.status_after: done from its tracker, not a mark: no mark here undoes that (Draft does).
+      if (
+        back &&
+        a.status === 'planned' &&
+        shownStatus(seed(seen, key)) === 'done' &&
+        !seed(seen, key).shipped
+      )
+        return json(422, { detail: 'Its tracker says it is done: reopen it there' });
       after = statusAfter(seed(seen, key), String(a.status), ctx.id);
-      stored = ['cut', 'shipped'];
+      stored = Object.keys(after);
     } else if (body.op === 'set_code') {
       // changes._free_code: a feature code no other item or Ground Truth feature has; the title carries it.
       const s = seed(seen, key);
       if (takenFrom(s, (id) => db.feature_codes?.[id]))
         return json(422, { detail: 'Its code comes from its Ground Truth feature or its PRD' });
-      const code =
-        a.code == null || !String(a.code).trim() ? null : String(a.code).trim().toUpperCase();
+      // panel-stages (#1815): a slice's letter stays lower case (f-29A: F-29a).
+      const raw = a.code == null ? '' : String(a.code).trim();
+      const code = !raw
+        ? null
+        : /[a-z]$/i.test(raw)
+          ? raw.slice(0, -1).toUpperCase() + raw.slice(-1).toLowerCase()
+          : raw.toUpperCase();
       if (code && !/^[A-Z]{1,3}-\d+[a-j]?$/.test(code))
-        return json(422, { detail: 'after.code: a feature code, like F-31' });
+        return json(422, { detail: 'A code looks like F-31 or F-31a' });
       const taken = code ? codeTaken(db, seen, key, code) : null;
       if (taken) return json(422, { detail: taken });
       const name = codedTitle(s.title, codedTitle(s.title, null)[0] ?? prdCode(s.section))[1];
@@ -3534,7 +3601,7 @@ export function proposeOffAgenda(
     target: { ...body.target },
     before:
       body.op === 'set_status'
-        ? read(db, key, ['cut', 'shipped'], body.target)
+        ? read(db, key, Object.keys(after), body.target)
         : (body.before ?? read(db, key, fields, body.target)),
     after,
     status: 'proposed',

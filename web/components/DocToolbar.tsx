@@ -8,6 +8,7 @@ import { ArtifactMenu } from '@/components/ArtifactMenu';
 import { Icon, useDocumentDestination } from '@/components/ds';
 import type { DocumentOut } from '@/lib/api/client';
 import { REPLACED_PRD_HOME } from '@/lib/experience-paths';
+import { PRD_LIST } from '@/lib/prd-list-name';
 
 /** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), Company › Market › Pricing for pricing memos (H9), PRDs for the rest. */
 function home(doc?: DocumentOut) {
@@ -18,7 +19,7 @@ function home(doc?: DocumentOut) {
   // H9: a pricing memo belongs to Company › Market › Pricing.
   if (doc?.kind === 'pricing')
     return { href: '/company/market?tab=pricing', label: 'Company › Market › Pricing' };
-  return { href: '/documents', label: 'PRDs' };
+  return { href: '/documents', label: PRD_LIST };
 }
 
 /**

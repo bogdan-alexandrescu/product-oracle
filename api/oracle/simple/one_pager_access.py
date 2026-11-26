@@ -14,6 +14,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.members.names import display_name
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -474,7 +475,7 @@ async def _number_conflict(
     by = None
     if last is not None and last.by is not None:
         u = await db.get(User, last.by)
-        by = SimplePersonRef(id=last.by, name=(u.name or u.email) if u else "someone")
+        by = SimplePersonRef(id=last.by, name=display_name(u.email, u.name) if u else "someone")
         message = f"Changed by {by.name}"
     return ChangeError(
         409,

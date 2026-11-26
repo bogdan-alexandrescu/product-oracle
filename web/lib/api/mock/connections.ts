@@ -132,34 +132,53 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
+/** draw-time (#1870): one formatter per zone, built once. Building an Intl.DateTimeFormat is
+ * slow, and the mock answers a 500-item page by asking the company's day hundreds of times on
+ * the page's own thread, which held the Roadmap's first draw back by most of a second. */
+const zoneFormats = new Map<string, Intl.DateTimeFormat | null>();
+function zoneFormat(zone: string): Intl.DateTimeFormat | null {
+  if (!zoneFormats.has(zone)) {
+    let f: Intl.DateTimeFormat | null = null;
+    try {
+      f = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+        timeZoneName: 'short',
+      });
+    } catch {
+      f = null;
+    }
+    zoneFormats.set(zone, f);
+  }
+  return zoneFormats.get(zone) ?? null;
+}
+
 export function companyZone(): string {
   const zone = String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles');
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return zone;
-  } catch {
-    return 'America/Los_Angeles';
-  }
+  return zoneFormat(zone) ? zone : 'America/Los_Angeles';
 }
 
 function companyParts(at: string | Date): Record<string, string> {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: companyZone(),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    timeZoneName: 'short',
-  }).formatToParts(new Date(at));
+  const parts = zoneFormat(companyZone())!.formatToParts(new Date(at));
   return Object.fromEntries(parts.map((p) => [p.type, p.value]));
 }
 
 /** "2026-10-12": the Company time zone's day at `at`, as oracle.company_time.day (#463). */
+let lastDay = { zone: '', minute: NaN, day: '' };
 export function companyDayIso(at: string | Date): string {
-  const p = companyParts(at);
-  return `${p.year}-${p.month}-${p.day}`;
+  // draw-time (#1870): a 500-item read asks for the same minute's day for every item.
+  const zone = companyZone();
+  const minute = Math.floor(new Date(at).getTime() / 60_000);
+  if (lastDay.zone !== zone || lastDay.minute !== minute) {
+    const p = companyParts(at);
+    lastDay = { zone, minute, day: `${p.year}-${p.month}-${p.day}` };
+  }
+  return lastDay.day;
 }
 
 /**

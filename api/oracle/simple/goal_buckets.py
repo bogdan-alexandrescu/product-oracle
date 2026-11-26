@@ -46,6 +46,7 @@ from oracle.baseline.goals import figure_words, unit_ok
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
 from oracle.errors import exception_text
+from oracle.members.names import display_name
 from oracle.roadmap.models import RoadmapItem
 from oracle.routing import APIRouter
 from oracle.simple.router import Approver, Reader
@@ -303,7 +304,8 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID | None]) -> dict[uuid.UUID
     if not ids_:
         return {}
     return {
-        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids_)))
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(ids_)))
     }
 
 

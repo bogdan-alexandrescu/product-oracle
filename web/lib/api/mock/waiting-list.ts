@@ -1,6 +1,6 @@
 import type { Schemas } from '../client';
 import { mockNowMs } from './clock';
-import { companyZone } from './connections';
+import { companyDayIso } from './connections';
 
 type Item = Schemas['SimpleWaitingItem'];
 
@@ -15,20 +15,25 @@ const STOP_ACTION: Record<string, string> = {
   baseline_confirm: 'Confirm the Ground Truth',
 };
 
+/** draw-time (#1870): built once, not per row (building a formatter is slow on the page's thread). */
+const MONTH_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+});
+const MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
 /** "Nov 4", with the year when it is not this year's in the company's time zone ("Jan 8, 2027"). */
 function day(d: string): string {
   const at = new Date(`${d.slice(0, 10)}T00:00:00Z`);
-  const year = new Intl.DateTimeFormat('en-US', {
-    timeZone: companyZone(),
-    year: 'numeric',
-  }).format(new Date(mockNowMs()));
+  const year = companyDayIso(new Date(mockNowMs())).slice(0, 4);
   const thisYear = String(at.getUTCFullYear()) === year;
-  return at.toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric',
-    ...(thisYear ? {} : { year: 'numeric' }),
-  });
+  return (thisYear ? MONTH_DAY : MONTH_DAY_YEAR).format(at);
 }
 
 /**

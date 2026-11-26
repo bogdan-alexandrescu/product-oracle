@@ -27,6 +27,7 @@ from oracle.members.leads import (
     lead_stop,
     may_decide,
 )
+from oracle.members.names import display_name
 from oracle.priorities.schemas import PriorityCheck
 from oracle.runs import (
     apply_edits,
@@ -923,12 +924,12 @@ def decision_summary(
 
 
 async def _people_named(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Who decided, as the decisions list names them: a member's name, else their email
-    (a personal API token decides as its member); a service token's name."""
+    """Who decided, as the decisions list names them: a member's name, else one made from
+    their email (#1763; a personal API token decides as its member); a service token's name."""
     if not ids:
         return {}
     rows = (await db.execute(select(User.id, User.name, User.email).where(User.id.in_(ids)))).all()
-    out: dict[uuid.UUID, str] = {i: (name or "").strip() or email for i, name, email in rows}
+    out: dict[uuid.UUID, str] = {i: display_name(email, name) for i, name, email in rows}
     if rest := ids - set(out):
         out.update(
             (

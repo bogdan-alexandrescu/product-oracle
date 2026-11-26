@@ -155,6 +155,6 @@ test('detailed-b 21: an empty Trash leads to PRDs by their name', async ({ page 
   await login(page);
   await page.goto('/settings/trash');
   await expect(
-    page.getByTestId('trash-empty').getByRole('link', { name: 'Open PRDs' }),
+    page.getByTestId('trash-empty').getByRole('link', { name: 'Open One-pagers' }),
   ).toHaveAttribute('href', '/documents');
 });

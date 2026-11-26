@@ -3629,6 +3629,17 @@ function seedSimpleHomeScenario(): Db {
     horizon: 'short',
     guardrail: true,
   });
+  // #1892 "home-goal-status": Grow retention at 160 of 200 (on track by the Goal map's rule, though
+  // its digest has a broken link), Faster activation at $20,000 of $50,000 (at risk, no item at risk).
+  // The guardrail at 15 teams muting, past its 10 at most: broken, never Met.
+  const reads: Record<string, number> = {
+    'grow-retention': 160,
+    'faster-activation': 20000,
+    'quiet-alerts': 15,
+  };
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
+    for (const e of db.baseline.entities)
+      if (e.key in reads) e.attrs = { ...e.attrs, current: reads[e.key] };
   const owners = db.members
     .filter((m) => m.role === 'owner' && m.status !== 'disabled')
     .map((m) => m.id);
@@ -6909,6 +6920,76 @@ function runsContext(db: Db): Omit<RunsContext, 'db'> & { db?: RunsDb } {
  * the stored text, which drops the cache.
  */
 let cached: { raw: string; db: Db } | null = null;
+/**
+ * draw-time (#1870): a page's burst of reads saves the db once, after the last of them, not after
+ * each: writing the whole 500-item db out as text took longer than answering most of its reads.
+ * `cached` is then ahead of the stored text (`unsaved`); a write, a leaving page and the burst's
+ * last call save it first, unless another tab has written since (the next load reads theirs).
+ */
+let unsaved = false;
+let inFlight = 0;
+
+function flush() {
+  if (unsaved && cached && localStorage.getItem(STORAGE_KEY) === cached.raw) save(cached.db);
+  unsaved = false;
+}
+
+function leave() {
+  inFlight -= 1;
+  if (inFlight > 0) return;
+  answered = 0;
+  flush();
+}
+
+/** The db a call reads: a plain read takes it as the burst has it, any other call once it is saved. */
+function take(plainRead: boolean): Db {
+  if (!plainRead) flush();
+  return load();
+}
+
+/** What an answered call leaves: a plain read of the `stored` text waits for the burst's last call;
+ * any other call saves now, if it saves at all. A read that seeded a part of the db the stored text
+ * lacked (`had`: its parts before the call) saves now too, so the stored db holds it once the read
+ * answers, as it did before the burst's saves were put off. */
+function keep(db: Db, stored: string | false | null, saves: boolean, had?: Set<string>) {
+  const seeded = had && Object.keys(db).some((k) => db[k as keyof Db] !== undefined && !had.has(k));
+  if (typeof stored === 'string' && !seeded) {
+    cached = { raw: stored, db };
+    unsaved = true;
+  } else if (saves) save(db);
+}
+
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
+
+/**
+ * draw-time (#1870): each call is answered in a turn of its own, so a page's burst of reads lets it
+ * draw and take a click between two answers, as reads of a server do (a message, not a timer: a
+ * spec's stopped clock never holds it). A read past a burst's first six (as many as a browser asks a
+ * server at once) waits for the page to have nothing else to do: a server's answers take none of the
+ * page's own thread. A write never waits for that itself. Only the Roadmap's calls take turns.
+ */
+const AT_ONCE = 6;
+let answered = 0;
+const turns: (() => void)[] = [];
+const turn = typeof MessageChannel === 'undefined' ? null : new MessageChannel();
+if (turn) turn.port1.onmessage = () => turns.shift()?.();
+type Idle = { postTask?: (run: () => void, how: { priority: 'background' }) => Promise<unknown> };
+const idle = (globalThis as { scheduler?: Idle }).scheduler;
+/** Turns and the idle wait are the Roadmap's alone: other pages' calls answer one after another, as before. */
+const onRoadmap = () =>
+  typeof location !== 'undefined' && location.pathname.startsWith('/simple/roadmap');
+function ownTurn(read: boolean): Promise<void> {
+  answered += 1;
+  return new Promise((r) => {
+    if (!onRoadmap()) r();
+    else if (read && answered > AT_ONCE && idle?.postTask) {
+      void idle.postTask(r, { priority: 'background' });
+    } else if (turn) {
+      turns.push(r);
+      turn.port2.postMessage(null);
+    } else r();
+  });
+}
 
 /** qa-nov17: a seeded item that is a Ground Truth feature (SeedItem.gt_key) is linked to it (RoadmapItem.feature_id), as the API serves it. */
 function linkSeededFeatures(db: Db): void {
@@ -7141,7 +7222,9 @@ function load(): Db {
                                                                                                                                     'meeting-agenda-sheet'
                                                                                                                                   ? seedMeetingAgendaSheetScenario
                                                                                                                                   : scenario ===
-                                                                                                                                      'simple-home'
+                                                                                                                                        'simple-home' ||
+                                                                                                                                      scenario ===
+                                                                                                                                        'home-goal-status'
                                                                                                                                     ? seedSimpleHomeScenario
                                                                                                                                     : scenario ===
                                                                                                                                         'simple-home-move'
@@ -9911,6 +9994,7 @@ function save(db: Db) {
   // A read that changed nothing writes nothing (qa-plan-10).
   if (localStorage.getItem(STORAGE_KEY) !== raw) localStorage.setItem(STORAGE_KEY, raw);
   cached = { raw, db };
+  unsaved = false;
 }
 
 /** Drops all mock state (used by the "Reset mock data" control). */
@@ -16290,6 +16374,7 @@ export async function mockFetch(req: Request): Promise<Response> {
   // Tests act as Oracle's ticker (POST /v1/internal/tick) through this, as they would with page.request against the API.
   (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
+  inFlight += 1;
   await new Promise((r) => setTimeout(r, LATENCY_MS));
   // A path fails every GET of it; a path with its query ("/v1/documents?kind=prd") only that one.
   const failing = localStorage.getItem(MOCK_FAIL_KEY);
@@ -16297,6 +16382,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     req.method === 'GET' &&
     (url.pathname === failing || `${url.pathname}${url.search}` === failing)
   ) {
+    leave();
     return new Response(JSON.stringify({ detail: 'Mock failure' }), {
       status: 500,
       headers: { 'content-type': 'application/json' },
@@ -16304,15 +16390,22 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
     localStorage.removeItem(MOCK_FAIL_ONCE_KEY);
+    leave();
     return new Response(JSON.stringify({ detail: 'Mock failure' }), {
       status: 500,
       headers: { 'content-type': 'application/json' },
     });
   }
-  const next = queue.then(async () => {
-    const db = load();
+  // A read whose save may wait for the burst's last call: not one that marks something seen, nor
+  // a meeting chat's poll, which saves nothing of its own (S9).
+  const chatPoll =
+    req.method === 'GET' && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname);
+  const plainRead = req.method === 'GET' && !chatPoll && !url.searchParams.has('mark_seen');
+  const answer = async () => {
+    const db = take(plainRead);
     // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
     const stored = localStorage.getItem(STORAGE_KEY);
+    const had = new Set(Object.keys(db).filter((k) => db[k as keyof Db] !== undefined));
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
     // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
@@ -16359,14 +16452,13 @@ export async function mockFetch(req: Request): Promise<Response> {
     // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
     // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
     const overwrites = req.method === 'GET' && localStorage.getItem(STORAGE_KEY) !== stored;
-    if (
-      !overwrites &&
-      (!(req.method === 'GET' && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) ||
-        readerWrote)
-    )
-      save(db);
+    if (!overwrites) keep(db, plainRead && stored, !chatPoll || readerWrote, had);
     return res;
-  });
+  };
+  const next = queue
+    .then(() => ownTurn(plainRead))
+    .then(answer)
+    .finally(leave);
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   const prefix = slow?.endsWith('*') ? slow.slice(0, -1) : null;

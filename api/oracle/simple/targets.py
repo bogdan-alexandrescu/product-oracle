@@ -72,6 +72,7 @@ from oracle.errors import exception_text
 from oracle.launches import service as launches
 from oracle.launches.models import TASK_AUDIENCES, Launch, LaunchTask
 from oracle.launches.models import TASK_STATUSES as LAUNCH_TASK_STATUSES
+from oracle.members.names import display_name
 from oracle.priorities import service as priorities
 from oracle.priorities.models import PriorityOverride
 from oracle.priorities.schemas import OverrideCreate
@@ -734,7 +735,9 @@ async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         if name is None and rkind in ("unknown", "team"):
             # Named by no one (a teammate's own ask): asked by the teammate who filed it.
             u = await db.get(User, c.by)
-            name, rkind = (u.name or u.email, "team") if u is not None else (None, rkind)
+            name, rkind = (
+                (display_name(u.email, u.name), "team") if u is not None else (None, rkind)
+            )
         db.add(ProductRequest(id=uuid.UUID(t["request_id"]), title=a["title"],
                               channel=a["channel"], origin="person", requester_name=name,
                               requester_kind=rkind, filed_by=c.by))  # fmt: skip

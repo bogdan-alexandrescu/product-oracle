@@ -326,7 +326,7 @@ async def test_sent_draft_waits_for_its_decider(client):
     r = await client.get("/v1/simple/drafts", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     (d,) = [x for x in r.json() if x["status"] == "working"]
-    assert d["created_by_name"] == "owner@example.com"
+    assert d["created_by_name"] == "Owner"
     assert d["decider"] == {"id": str(ctx.users["decider"].id), "name": "Dee Cider"}
     r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text

@@ -112,10 +112,11 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.members.names import names_of
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import dates, drafts, service
+from oracle.simple import code_take, dates, drafts, service, stages
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -178,9 +179,6 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_code": ("code",),
 }
 CONFIDENCES = ("low", "medium", "high")
-# set_status: the statuses a person sets (the others come from the tracker or a merge).
-STATUSES = ("planned", "done", "cut")
-PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
 SHOWN = {
@@ -200,13 +198,14 @@ FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
 CUT_ALL = "cut_with_dependents"
 # The ops that key ``before``/``after`` by item id.
-KEYED = (*FIXES, "merge_item", CUT_ALL)
+KEYED = (*FIXES, "merge_item", CUT_ALL, code_take.OP)
 FLAG_KINDS = (
     "dependency_order",
     "blocker_date",
     "outside_milestone",
     "cut_with_dependents",
     "draft_without_owner",
+    "depends_on_draft",
 )
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
@@ -583,9 +582,7 @@ def current_route(
 
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     ids = {i for i in ids if i is not None}
-    if not ids:
-        return {}
-    return {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    return await names_of(db, ids)
 
 
 def _touched(c: SimpleChange) -> set[str]:
@@ -862,6 +859,8 @@ async def _plan(
         return entry, target, before, after
     if op == "merge_item":
         return await _merge_plan(db, entry, target, by_id)
+    if op == code_take.OP:
+        return (entry, target, *await code_take.plan(db, entry, body, target, read_))
     if op == CUT_ALL:
         # As a cut: ``before`` is the item's own {"cut"} as seen; the change is keyed by
         # item id, the item and its dependents (target.titles names them, the item first).
@@ -909,20 +908,9 @@ async def _plan(
         ):
             raise await _conflict(db, shown, {str(row.id)}, "Changed since you saw it")
     if op == "set_status":
-        status = body.after.get("status")
-        if status not in STATUSES:
-            raise ChangeError(422, "after.status: planned, done or cut")
-        # Planned clears only the panel's own mark: a shipped mark from elsewhere (the
-        # tracker, the item's talk) stays, so planned never undoes what the panel did not do.
-        shipped = None if (row.shipped or {}).get("note") == PANEL_DONE else row.shipped
-        if status == "done":
-            shipped = row.shipped or {
-                "note": PANEL_DONE,
-                "by": str(_me(principal)),
-                "on": company_time.today().isoformat(),
-            }
-        after = {"cut": status == "cut", "shipped": shipped}
-        return entry, target, read(row, ("cut", "shipped"), target), after
+        # panel-stages (#1879): any stage to any other (oracle.simple.stages).
+        after = stages.status_after(entry, body, target, str(_me(principal)))
+        return entry, target, read(row, tuple(after), target), after
     if op in SHOWN:
         current = seen_ = {}
     else:
@@ -1192,9 +1180,11 @@ async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str 
         raise ChangeError(422, "Its code comes from its Ground Truth feature or its PRD")
     if raw is None or not str(raw).strip():
         return None
-    code = str(raw).strip().upper()
+    # panel-stages (#1815): a slice's letter stays lower case (f-29A: F-29a).
+    code = str(raw).strip()
+    code = code[:-1].upper() + code[-1].lower() if code[-1:].isalpha() else code.upper()
     if not FEATURE_CODE.fullmatch(code):
-        raise ChangeError(422, "after.code: a feature code, like F-31")
+        raise ChangeError(422, "A code looks like F-31 or F-31a")
     await _not_taken(db, entry, code, read_.by_id())
     return code
 
@@ -1225,16 +1215,7 @@ async def _not_taken(
         raise ChangeError(422, f"{code} is already the code of a Ground Truth feature")
 
 
-async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> None:
-    """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
-    any code the read takes from a title: service.coded_title) gives the item that code: it is
-    checked as set_code checks it, in its words. ``entry`` None: an item being added."""
-    if entry is not None and _inherited(entry):
-        return  # its feature's or PRD's code stays its code; the title is only words
-    lead = service.coded_title(title, None)[0]
-    if lead and (entry is None or lead != service.coded_title(entry.row.title, None)[0]):
-        new = SimpleNamespace(row=SimpleNamespace(id=None))
-        await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
+_title_code = code_take.title_code
 
 
 def _with_code(code: str, name: str) -> str:

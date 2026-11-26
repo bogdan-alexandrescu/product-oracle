@@ -7,7 +7,7 @@ const DESTINATIONS = [
   ['nav-home', 'Home', '/home'],
   ['nav-requests', 'Requests', '/requests'],
   ['nav-baseline', 'Ground Truth', '/ground-truth'],
-  ['nav-prds', 'PRDs', '/documents'],
+  ['nav-prds', 'One-pagers', '/documents'],
   ['nav-priorities', 'Priorities', '/priorities'],
   ['nav-plan', 'Plan', '/plan'],
   ['nav-runs', 'Runs', '/runs'],
@@ -65,7 +65,7 @@ test('app shell: each destination routes to its page', async ({ page }) => {
     ['nav-plan', 'Plan', '/plan'],
     ['nav-inbox', 'Inbox', '/inbox'],
     ['nav-settings', 'Members', '/settings/members'],
-    ['nav-prds', 'PRDs', '/documents'],
+    ['nav-prds', 'One-pagers', '/documents'],
   ]) {
     await nav.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
@@ -181,7 +181,7 @@ test('phone: a tab bar with Home, PRDs, Plan, Inbox and More, no sideways scroll
   await login(page);
   const tabs = page.getByRole('navigation', { name: 'Oracle' });
   await expect(tabs).toHaveAttribute('data-testid', 'tab-bar');
-  for (const label of ['Home', 'PRDs', 'Plan', 'Inbox', 'More']) {
+  for (const label of ['Home', 'One-pagers', 'Plan', 'Inbox', 'More']) {
     await expect(tabs.getByText(label, { exact: true })).toBeVisible();
   }
   await tabs.getByTestId('tab-more').click();
@@ -253,7 +253,7 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await page.goto('/documents/annual-billing/v/2');
   // The page's own H1 (its sections draw an H1 of their own once they load).
   await expect(page.getByRole('heading', { level: 1, name: /Annual billing PRD/ })).toBeVisible();
-  await expect(title).toHaveText('PRDs');
+  await expect(title).toHaveText('One-pagers');
 
   const user = bar.getByTestId('phone-user-menu');
   await user.click();

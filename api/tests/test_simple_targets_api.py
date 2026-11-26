@@ -298,13 +298,13 @@ async def test_stale_before_is_409(client, op):
     assert r.status_code == 409, r.text
     detail = r.json()["detail"]
     assert detail["current"] == current
-    assert "owner@example.com" in detail["message"]
+    assert "changed by Owner" in detail["message"]
     assert len((await client.get(CHANGES, headers=ctx.as_("owner"))).json()) == len(before.json())
     assert not await w.changed(op)
     r = await client.post(f"{CHANGES}/{proposal['id']}/accept", json={},
                           headers=ctx.as_("decider"))  # fmt: skip
     assert r.status_code == 409, r.text
-    assert r.json()["detail"]["message"].startswith("outdated: changed by owner@example.com")
+    assert r.json()["detail"]["message"].startswith("outdated: changed by Owner")
     assert not await w.changed(op)
 
 

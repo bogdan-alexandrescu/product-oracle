@@ -122,9 +122,9 @@ for (const phone of [false, true]) {
         await expect(retention.getByTestId('home-goal-need')).toContainText(/needs? you/);
         await expect(
           goals.filter({ hasText: 'Faster activation' }).getByTestId('home-goal-status'),
-        ).toHaveText('Not measured yet');
+        ).toHaveText('Not measured');
         const quiet = goals.filter({ hasText: 'Keep alerts quiet' });
-        await expect(quiet.getByTestId('home-goal-status')).toHaveText('Not measured yet');
+        await expect(quiet.getByTestId('home-goal-status')).toHaveText('Not measured');
         await expect(quiet).toContainText('guardrail');
         // The plan strip: the PRD in play by month, its rows with their item counts (no per-item bars), today's line.
         await expect(card(page, 'plan').getByTestId('home-strip-today')).toHaveCount(1);
@@ -202,11 +202,12 @@ for (const phone of [false, true]) {
         await expect(
           page.getByTestId('home-draft').getByRole('link', { name: 'Open draft' }),
         ).toBeVisible();
+        // #1900: my own change is no row of what changed since my last visit.
         await expect(
           card(page, 'since')
             .getByTestId('home-since-row')
             .filter({ hasText: 'Weekly alert digest and its dependents after what it depends on' }),
-        ).toBeVisible();
+        ).toHaveCount(0);
         await page.getByRole('button', { name: 'Undo' }).click();
         await expect(
           card(page, 'plan')

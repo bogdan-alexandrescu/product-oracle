@@ -77,6 +77,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
+from oracle.members.names import names_of
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import TRACK_ORDER, ProductTrack, RoadmapItem, TrackPrd
 from oracle.roadmap.tracks import on_prd
@@ -1105,9 +1106,7 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         if item_ids
         else {}
     )
-    names = {
-        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(people)))
-    }
+    names = await names_of(db, people)
     for c in rows:
         kind = kinds.get(c.session_id) if c.session_id else None
         try:
@@ -1174,11 +1173,7 @@ async def outs(
         else {}
     )
     ids = {d.created_by for d in ds} | {x for d in ds if (x := w.deciders.get(d.document_id))}
-    names = (
-        {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
-        if ids
-        else {}
-    )
+    names = await names_of(db, ids)
     out = []
     for d in ds:
         doc = docs[d.document_id]

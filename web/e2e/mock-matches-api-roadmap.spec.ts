@@ -103,9 +103,15 @@ test("Cut from the panel's menu lists the feature as cut today, by who cut it", 
   ).toContainText(/Cut on [A-Z][a-z]{2} \d+ by Avery Stone/);
 });
 
-async function setStatus(page: Page, status: string, word: string) {
+async function setStatus(page: Page, status: string, word: string, reason?: string) {
   await tap(panel(page).getByRole('button', { name: 'Change the status' }));
-  await panel(page).getByTestId('card-status-edit').getByLabel('Status').selectOption(status);
+  const edit = panel(page).getByTestId('card-status-edit');
+  await edit.getByLabel('Status').selectOption(status);
+  // panel-stages (#1879): a move back says why before it applies.
+  if (reason) {
+    await edit.getByLabel('Why it moves back').fill(reason);
+    await tap(edit.getByRole('button', { name: 'Save' }));
+  }
   await expect(panel(page).getByTestId('card-status')).toContainText(word);
 }
 
@@ -118,7 +124,7 @@ test('an in-progress feature set to Done then to Planned reads In progress again
   await openRoadmapItem(page, 'alert-rules');
   await expect(panel(page).getByTestId('card-status')).toContainText('In progress');
   await setStatus(page, 'done', 'Done');
-  await setStatus(page, 'planned', 'In progress');
+  await setStatus(page, 'planned', 'In progress', 'Not live yet');
   await expect(panel(page).getByTestId('card-status')).not.toContainText('Planned');
 });
 

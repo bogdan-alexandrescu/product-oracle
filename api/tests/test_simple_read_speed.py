@@ -77,15 +77,18 @@ VIEWS = {
 # action-items (#1817): the four decisions views gain item_id (null on this seed) on each
 # meeting's minutes action item and nothing else (JSON diff against 771c5c633); roadmap and
 # priorities are unchanged.
+# names-wording (#1763), owners too: the two roadmap views name each owner and decider from their
+# email ("approver@example.com" -> "Approver": owner.name, decided_in[].decided_by.name) and
+# nothing else (JSON diff against main dcf1e64ce); the six others are unchanged.
 DIGESTS = {
-    "roadmap": "18d356376efd9c8dfe1b56ef957314ec4c3906217578682139e52b263f102d74",
-    "roadmap-viewer": "3d3d4ce268b8405e79b0b27b3d763bb9f3e8417a6294f3e3834968fa09bd305c",
+    "roadmap": "48db9e766d991bbbdb6e163a6af85f1d4ab2ddf27256431f4621d9079f95c6bd",
+    "roadmap-viewer": "ab651758c14dbf7608d7717e9d59f091fe697a72e4d772d4e6b2652128371187",
     "priorities": "b21526e73c21066f6027f67d6f1e116774a913778868391696c541a197bf6b45",
     "priorities-viewer": "2dca1614aa912c759813d3851df35897be11e298a3a9f9cf4eb6c4eb08b937c0",
-    "decisions": "d321c10acd3357ed7e33e68fbcc78100cef27535c2b45c7979d3bf6d9819bfe4",
-    "decisions-viewer": "28e0209c5be25140d432a69e56df40964278dd8320defe6d4f4ab52c33d61424",
-    "decisions-goal": "6df54f40fcca253d5b775c79c65841f59bff699397a726d77160a6726c13cf17",
-    "decisions-prd": "a5c124a76da77c785c43e37009383b7d13e64b32393366a8054e2a87726ed626",
+    "decisions": "722c78e64c088b5e1d673cd2af25e57a0c82aa6bb6c36566895b500b9b75094a",
+    "decisions-viewer": "e352f31f57f7d54ea85c4ea135d713e6d7c528c9f56c058e421b846a22606523",
+    "decisions-goal": "facffa20c8022ab061d849276a3106d7bb50a9de2f89329d98dcfb33ea85f925",
+    "decisions-prd": "973197f57d51a796df0e2d259a9b971ca447d8ee3b5ff557c577d5a6d0b32629",
 }
 
 

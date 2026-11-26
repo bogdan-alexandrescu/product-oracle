@@ -34,6 +34,7 @@ import { formatDate, formatDateTime, plural } from '@/lib/format';
 import { docLabel } from '@/lib/labels';
 import { useArtifactsChanged } from '@/lib/artifacts';
 import { useMe } from '@/lib/me';
+import { PRD_LIST } from '@/lib/prd-list-name';
 import { sortPrds } from '@/lib/prd-order';
 import { NAMES_FAILED, useTemplateNames, type TemplateNames } from '@/lib/template-names';
 import { useQuery } from '@/lib/use-query';
@@ -485,9 +486,9 @@ function DocumentsPage() {
 
   const header = (
     <PageHeader
-      title="PRDs"
+      title={PRD_LIST}
       info={
-        <InfoTip label="PRDs">
+        <InfoTip label={PRD_LIST}>
           Every PRD and the briefs (Ideas) waiting to become one. Roadmaps live under Plan. Open a
           PRD to read its versions, review it and publish it.
         </InfoTip>
@@ -530,7 +531,7 @@ function DocumentsPage() {
           onChange={setView}
           items={[
             // qa4-shell-18: no count on either side until both lists have loaded.
-            { value: 'prds', label: 'PRDs', count: q.data && ideasQ.data ? all.length : null },
+            { value: 'prds', label: PRD_LIST, count: q.data && ideasQ.data ? all.length : null },
             {
               value: 'ideas',
               label: 'Ideas',
@@ -614,7 +615,7 @@ function DocumentsPage() {
                 }}
               >
                 <DataTable
-                  label="PRDs"
+                  label={PRD_LIST}
                   testId="documents-table"
                   columns={columns}
                   rows={q.data ? documents : undefined}

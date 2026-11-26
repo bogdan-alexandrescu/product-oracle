@@ -33,6 +33,7 @@ from datetime import date
 
 from sqlalchemy import select
 
+from oracle.members.names import display_name
 from oracle.requests.models import ProductRequest
 from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
@@ -51,7 +52,7 @@ async def _inbox(client, w: World, who: str) -> dict:
 
 def _name(w: World, who: str) -> str:
     u = w.ctx.users[who]
-    return u.name or u.email
+    return display_name(u.email, u.name)
 
 
 async def test_open_date_suggestion_waits_on_who_may_decide_it(client):

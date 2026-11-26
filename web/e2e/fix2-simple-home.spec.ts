@@ -203,16 +203,16 @@ test('qa-simple-home-14: a toast holds while focus is on its Undo', async ({ pag
   await expect(toast).toBeVisible();
 });
 
-test('qa-simple-home-15: since my last visit says my own change as mine and drops it once undone', async ({
+test('qa-simple-home-15, #1900: since my last visit lists no change of my own, nor its undo', async ({
   page,
 }) => {
-  // fails_when: my change reads "Avery Stone moved ..." or stays as "... · undone" with an undo row
+  // fails_when: my change reads "You moved ..." or stays as "... · undone" with an undo row
   await signIn(page, EMAILS.owner);
   await digest(page).getByRole('button', { name: 'Move the dependents', exact: true }).click();
   const since = page.getByTestId('home-since');
   const rows = since.getByTestId('home-since-row').filter({ hasText: 'Weekly alert digest' });
-  await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText(/^You moved /);
+  await expect(page.getByText('Dependents moved in your working draft')).toBeVisible();
+  await expect(rows).toHaveCount(0);
   await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
   await expect(digest(page)).toBeVisible();
   await expect(rows).toHaveCount(0);
