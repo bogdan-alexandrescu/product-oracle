@@ -1,3 +1,4 @@
+import { INBOX_REPLACED_PROPOSAL_SCENARIO } from '../lib/api/mock/inbox-proposal-scenario';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 
 import { login, signOut } from './helpers';
@@ -9,8 +10,9 @@ import { expect, test, type Page } from './test';
  * its Welcome video and proposes it; then, as the approver in a 1512 x 756 window:
  * - #1912: in the Inbox the proposal's Item cell is the row's widest, and no column header shows;
  * - #1913: the row says the teammate asks to rename it, never "Renamed …" as if done;
- * - #1893: Decisions' Waiting for you lists the same proposal, with Accept and Decline (this held
- *   on the mock before the lane too: the live finding did not reproduce here).
+ * - #1893: Decisions' Waiting for you lists the same proposal, with Accept and Decline.
+ * And #1893 as reported, on "inbox-replaced-proposal": the Owner's Inbox counts an owner change on an
+ * item of a replaced PRD, which Decisions' Waiting for you left out ("Nothing waits on you").
  */
 
 test.use({ viewport: { width: 1512, height: 756 } });
@@ -79,5 +81,34 @@ test('a pending proposal reads as a request, has the room in its row and waits o
   await expect(waiting).toBeVisible();
   await expect(waiting).toContainText('Proposed by Theo Brandt');
   await expect(waiting.getByRole('button', { name: 'Accept' })).toBeVisible();
+  await expect(mine).not.toContainText('Nothing waits on you');
+});
+
+test('an owner change the Inbox counts for the Owner waits on Decisions too', async ({
+  page,
+  context,
+}) => {
+  await context.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    INBOX_REPLACED_PROPOSAL_SCENARIO,
+  ] as const);
+  await login(page);
+  await page.goto('/simple');
+  await page.getByTestId('simple-nav').getByRole('link', { name: 'Inbox', exact: true }).click();
+  await expect(
+    page
+      .locator('[role=tabpanel] tr[data-row]')
+      .filter({ has: page.getByTestId('meeting-proposal-context') })
+      .filter({ hasText: 'Trusted seller badge' }),
+  ).toBeVisible();
+
+  await page
+    .getByTestId('simple-nav')
+    .getByRole('link', { name: /^Decisions/ })
+    .click();
+  const mine = page.getByTestId('questions-mine');
+  await expect(
+    mine.getByRole('listitem').filter({ hasText: 'Trusted seller badge' }),
+  ).toBeVisible();
   await expect(mine).not.toContainText('Nothing waits on you');
 });

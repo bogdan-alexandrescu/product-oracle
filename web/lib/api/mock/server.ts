@@ -608,6 +608,7 @@ import {
   seedCompanyRoadmap,
   seedItemMilestones,
 } from './one-roadmap';
+import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import {
   APPROVED_ROADMAP_SCENARIO,
   applyApprovedRoadmap,
@@ -8495,7 +8496,9 @@ function load(): Db {
                                                                                                                                                                                                                                                                       true,
                                                                                                                                                                                                                                                                     )
                                                                                                                                                                                                                                                                 : scenario ===
-                                                                                                                                                                                                                                                                    ONE_ROADMAP_SCENARIO
+                                                                                                                                                                                                                                                                      ONE_ROADMAP_SCENARIO ||
+                                                                                                                                                                                                                                                                    scenario ===
+                                                                                                                                                                                                                                                                      INBOX_REPLACED_PROPOSAL_SCENARIO
                                                                                                                                                                                                                                                                   ? seedOneRoadmapScenario
                                                                                                                                                                                                                                                                   : scenario ===
                                                                                                                                                                                                                                                                       PRIORITIES_TWINS_SCENARIO
@@ -8884,6 +8887,9 @@ function load(): Db {
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === 'revoke-failures' ? seedRevokeFailures() : [];
   db.access_failures = scenario === 'access-failures' ? seedAccessFailures() : [];
+  // inbox-2 (#1893): an owner change on a replaced PRD's item, waiting on the owner.
+  if (scenario === INBOX_REPLACED_PROPOSAL_SCENARIO)
+    seedReplacedProposal(db.simple_roadmap!, db.members);
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === 'launches')
