@@ -35,10 +35,10 @@ const twinOf = (page: Page): Locator =>
     .filter({ has: page.getByTestId('prio-title').getByText(TWINS.unlinked, { exact: true }) })
     .getByTestId('prio-twin');
 
-/** The proposal's row in the Inbox: each feature by its code and name ("Merged BL2 Block list into BL Block list"). */
+/** The proposal's row in the Inbox: each feature by its code and name ("… asks to merge BL2 Block list into BL Block list"). */
 const proposalIn = (page: Page): Locator =>
   page.getByRole('row').filter({
-    hasText: new RegExp(`merged \\S+ ${TWINS.unlinked} into \\S+ ${TWINS.unlinked}`, 'i'),
+    hasText: new RegExp(`asks to merge \\S+ ${TWINS.unlinked} into \\S+ ${TWINS.unlinked}`, 'i'),
   });
 
 /** The commenter, signed in on Priorities, proposes merging Block list's twin into its row. */
@@ -64,6 +64,8 @@ async function propose(page: Page): Promise<Locator> {
   await expect(row).toHaveCount(1);
   // Each feature by its code, never an item's key.
   await expect(row).not.toContainText('block-list');
+  // #1913: while it waits it reads as a request, never as done.
+  await expect(row).not.toContainText(/\bmerged\b/i);
   return row;
 }
 
