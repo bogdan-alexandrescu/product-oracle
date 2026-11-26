@@ -27,6 +27,31 @@ async function addDecision(page: Page, title: string, decider: string) {
   await expect(s).toHaveCount(0);
 }
 
+type MockLog = {
+  __poMockCalls?: string[];
+  __poMockFetch?: (req: Request) => Promise<Response>;
+};
+
+/**
+ * Waits until the sheet's own read of the decision (GET /v1/decisions/{n}, can_decide) has
+ * landed: the in-browser mock answers in order after one fixed latency, so the same read sent
+ * after it lands after it.
+ */
+async function decisionReadLanded(page: Page) {
+  const sent = () =>
+    page.evaluate(
+      () =>
+        ((globalThis as MockLog).__poMockCalls ?? []).find((c) =>
+          /^GET \/v1\/decisions\/\d+$/.test(c),
+        ) ?? '',
+    );
+  await expect.poll(sent).not.toBe('');
+  const path = (await sent()).slice('GET '.length);
+  await page.evaluate(async (p) => {
+    await (globalThis as MockLog).__poMockFetch!(new Request(new URL(p, location.origin)));
+  }, path);
+}
+
 test("a one-option decision opened from Home is decided on Simple's sheet, never Detailed", async ({
   page,
 }) => {
@@ -75,13 +100,13 @@ test('who may not decide sees no Decide on the sheet', async ({ page }) => {
   await login(page);
   await addDecision(page, 'Pause the example newsletter', 'Priya Raman');
   await page.goto('/simple/decisions');
+  await page.evaluate(() => ((globalThis as MockLog).__poMockCalls = []));
   await page
     .getByTestId('decision-open')
     .filter({ hasText: 'Pause the example newsletter' })
     .click();
+  await decisionReadLanded(page);
   const s = sheet(page);
   await expect(s.getByRole('button', { name: 'Edit' })).toBeVisible();
-  // Decide waits on the decision's own read (can_decide): let it land (the mock answers in 60 ms).
-  await page.waitForTimeout(1000);
   await expect(s.getByRole('button', { name: /^Decide/ })).toHaveCount(0);
 });
