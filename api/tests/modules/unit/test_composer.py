@@ -6,7 +6,7 @@ conditional rules and company policies explain why modules are suggested.
 
 from oracle.modules.catalog import builtin_contracts
 from oracle.modules.composer import Advisory, Changes, Provenance, compose, validate_fields
-from oracle.v2.contract import validate_contract
+from oracle.v2.contract import FieldValidator, validate_contract
 from tests.modules.helpers import context
 
 PLATFORM_INPUTS = {
@@ -381,6 +381,43 @@ def test_field_values_are_validated_against_the_module_validators():
     assert ok == []
     comp = compose(context(field_values={"goals.outcomes": {"metric": ""}}))
     assert by_key(comp)["goals.outcomes"].field_problems
+
+
+def test_declarative_validators_refuse_out_of_bounds_values_and_pass_in_bounds_ones():
+    """Each declarative validator kind refuses a value outside its bound and passes one inside."""
+    # protects=min_length, max_length, min, max, one_of, pattern and a required validator on an
+    # optional field each report their own kind; fails_when=a kind never fires, or fires on a
+    # value inside its bound; no_claim=contract loading (validate_contract checks the values).
+    base = builtin_contracts()["goals.outcomes"]
+    rules = [
+        FieldValidator(kind="required", field="time_frame", message="When?"),
+        FieldValidator(kind="min_length", field="metric", value=5),
+        FieldValidator(kind="max_length", field="outcomes", value=2),
+        FieldValidator(kind="min", field="baseline_value", value=0),
+        FieldValidator(kind="max", field="target_value", value=100),
+        FieldValidator(kind="pattern", field="metric", value="[A-Z].*"),
+    ]
+    contract = base.model_copy(update={"validators": rules})
+    bad = {"outcomes": ["o-1", "o-2", "o-3"], "metric": "dau", "baseline_value": -1,
+           "target_value": 101}  # fmt: skip
+    found = {(p.field, p.kind, p.message) for p in validate_fields(contract, bad)}
+    assert found == {
+        ("time_frame", "required", "When?"),
+        ("metric", "min_length", "fails min_length"),
+        ("metric", "pattern", "fails pattern"),
+        ("outcomes", "max_length", "fails max_length"),
+        ("baseline_value", "min", "fails min"),
+        ("target_value", "max", "fails max"),
+    }
+    good = {"outcomes": ["o-1"], "metric": "Weekly active teams", "baseline_value": 0,
+            "target_value": 100, "time_frame": "Q3"}  # fmt: skip
+    assert validate_fields(contract, good) == []
+    pick = base.model_copy(
+        update={"validators": [FieldValidator(kind="one_of", field="time_frame", value=["Q3"])]}
+    )
+    assert [p.kind for p in validate_fields(pick, {**good, "time_frame": "Q4"})] == ["one_of"]
+    assert validate_fields(pick, good) == []
+    assert validate_fields(pick, {**good, "time_frame": ""}) == []  # an empty value is not checked
 
 
 def test_same_context_same_composition():
