@@ -67,9 +67,6 @@ ignore = ["B008"]
 [tool.coverage.run]
 source = ["oracle"]
 relative_files = true
-# SQLAlchemy's async layer runs on greenlets: without this, lines after a switch go unmeasured
-# at random and the total wobbles around the floor.
-concurrency = ["thread", "greenlet"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
