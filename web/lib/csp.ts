@@ -27,9 +27,9 @@ const NOTION_ICONS = [
 
 /**
  * The Saga apps hub shows Oracle in a frame, so its two hosts may embed the app; no other
- * site may.
+ * site may. They are also the only origins Oracle tells it is ready (lib/app-hub.ts).
  */
-const HUB_ORIGINS = ['https://hub.saga.xyz', 'https://hub.galatia.saga.xyz'].join(' ');
+export const APP_HUB_ORIGINS = ['https://hub.saga.xyz', 'https://hub.galatia.saga.xyz'] as const;
 
 export function appCsp(dev: boolean): string {
   return [
@@ -43,6 +43,6 @@ export function appCsp(dev: boolean): string {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    `frame-ancestors 'self' ${HUB_ORIGINS}`,
+    `frame-ancestors 'self' ${APP_HUB_ORIGINS.join(' ')}`,
   ].join('; ');
 }
