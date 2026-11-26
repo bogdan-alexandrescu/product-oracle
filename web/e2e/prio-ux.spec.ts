@@ -163,7 +163,9 @@ test('#1776 Value / effort: no mark covers another, and the side list says why i
   const shown = (await side.getByTestId('side-rank').allInnerTexts()).map(Number);
   expect([...shown].sort((a, b) => a - b)).toEqual(shown.map((_, i) => i + 1));
   await side.getByTestId('side-ranks-help').click();
-  await expect(page.getByRole('tooltip')).toContainText('rank in the Ranked list');
+  await expect(page.getByRole('tooltip')).toContainText(
+    'shown on hover over its number in the Ranked list',
+  );
 });
 
 test('#1738 a move on Goal buckets names the place the Ranked list shows, with a Done feature left out', async ({

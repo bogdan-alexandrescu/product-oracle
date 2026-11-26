@@ -865,7 +865,8 @@ function YourList({
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
   const goalOf = goalOfRow(data);
   // prio-2 (#1910): split at a dated line, the rows that miss it with no goal and no effort go last, folded under one
-  // "Needs triage"; (#1898) each part is numbered from 1, the rank in the number's title.
+  // "Needs triage" inside Misses (Misses counts it, as Value / effort does); (#1898) each part is numbered from 1, the
+  // rank in the number's title.
   const triaged = (r: Row) => !r.above_line && !goalOf(r) && r.effort == null;
   const rows = useMemo(() => {
     const of = goalOfRow(data);
@@ -909,9 +910,7 @@ function YourList({
       ? r.rank
       : i < split
         ? i + 1
-        : triageAt >= 0 && i >= triageAt
-          ? i - triageAt + 1
-          : i - split + 1;
+        : i - split + 1;
   const addsTo = (r: Row) =>
     mayChange && r.can_reorder && !r.on_roadmap ? data.company_roadmap : null;
   const adds = rows.map(addsTo).find(Boolean);
@@ -1029,7 +1028,7 @@ function YourList({
                         key="misses"
                         data={data}
                         makes={false}
-                        n={(triageAt >= 0 ? triageAt : rows.length) - split}
+                        n={rows.length - split}
                       />,
                     ]
                   : []),
@@ -2962,8 +2961,8 @@ function ValueEffort({
         <h2 className="mb-2 flex items-center gap-1.5 text-xl font-[650] leading-7">
           Ranked
           <InfoTip label="the ranks" align="start" testId="side-ranks-help">
-            Each number is the feature&apos;s rank in the Ranked list. What makes the line is listed
-            first
+            Each number is the feature&apos;s rank, shown on hover over its number in the Ranked
+            list. What makes the line is listed first
             {quad === null ? '' : ', and only the picked corner'}, so the numbers can skip.
           </InfoTip>
         </h2>
@@ -3477,7 +3476,7 @@ function AddsTag({ title }: { title: string }) {
   );
 }
 
-/** prio-2 (#1910): the folded group of rows that miss the line with no goal and no effort, numbered from 1 when open. */
+/** prio-2 (#1910): the folded group, at the end of Misses, of rows that miss the line with no goal and no effort. */
 function TriageHead({ n, open, onToggle }: { n: number; open: boolean; onToggle: () => void }) {
   return (
     <li

@@ -242,8 +242,15 @@ export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = 'priorities-plan-goal-twins';
  * the plan's work serves (the alerts roadmap's items serve it, outside the plan). Invented data.
  */
 export const PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO = 'priorities-plan-goal-outside';
+/** prio-2 (#1739 review), "priorities-one-feature": "priorities-plan-goal-outside" with one feature left, Alert rules engine. */
+export const PRIORITIES_ONE_FEATURE_SCENARIO = 'priorities-one-feature';
 export function seedPlanGoalTwins(db: SimpleDb, scenario?: string | null): void {
   if (!db.plan) throw new Error(`${scenario}: the seed has no plan to name its goals`);
+  if (scenario === PRIORITIES_ONE_FEATURE_SCENARIO) {
+    db.items = db.items.filter((i) => i.title === 'Alert rules engine');
+    seedPlanGoalTwins(db, PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO);
+    return;
+  }
   if (scenario !== PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO) {
     db.plan.twin_goals = true;
     return;
