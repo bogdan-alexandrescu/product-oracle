@@ -18,6 +18,7 @@ from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.docs.visibility import visible_to
 from oracle.roadmap import codes as roadmap_codes_of
+from oracle.roadmap.models import RoadmapItem
 from oracle.routing import APIRouter
 from oracle.simple import goal_reads, roadmap_codes, service
 from oracle.simple.goal_buckets import is_live
@@ -129,9 +130,17 @@ def _milestones(read: SimpleRoadmapOut) -> list[PaletteMilestone]:
     return out
 
 
-async def _features(db: TenantDB) -> list[PaletteFeature]:
-    """The confirmed Ground Truth features not in Trash that no roadmap item holds, by code."""
-    held = {r.feature_id for r in await roadmap_codes_of.item_links(db) if r.feature_id}
+async def _features(db: TenantDB, read: SimpleRoadmapOut) -> list[PaletteFeature]:
+    """The confirmed Ground Truth features not in Trash that no item of the roadmap read holds,
+    by code (a feature only an older version or a draft holds is on no roadmap a person sees)."""
+    ids = [i.id for i in read.items]
+    held = set(
+        await db.scalars(
+            select(RoadmapItem.feature_id).where(
+                RoadmapItem.id.in_(ids), RoadmapItem.feature_id.is_not(None)
+            )
+        )
+    )
     codes = await roadmap_codes_of.feature_codes(db)
     rows = await db.scalars(
         select(Entity).where(Entity.type == "feature", Entity.status == "confirmed")
@@ -154,8 +163,9 @@ async def get_palette(principal: Reader, db: TenantDB) -> PaletteOut:
     prds = [PalettePrd(id=d.id, slug=d.slug, title=d.title, status=d.status) for d in docs]
     goals, key_results = _goals(await goal_reads.goals_by_id(db))
     # Their rights, codes and folding are the roadmap read's own.
-    milestones = _milestones(await service.build(db, principal))
-    features = await _features(db)
+    roadmap = await service.build(db, principal)
+    milestones = _milestones(roadmap)
+    features = await _features(db, roadmap)
     return PaletteOut(
         prds=prds, goals=goals, key_results=key_results, milestones=milestones, features=features
     )
