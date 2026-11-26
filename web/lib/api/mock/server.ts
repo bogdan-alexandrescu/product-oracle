@@ -3629,6 +3629,13 @@ function seedSimpleHomeScenario(): Db {
     horizon: 'short',
     guardrail: true,
   });
+  // #1892 "home-goal-status": Grow retention at 160 of 200 (on track by the Goal map's rule, though
+  // its digest has a broken link), Faster activation at $20,000 of $50,000 (at risk, no item at risk).
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
+    for (const e of db.baseline.entities) {
+      if (e.key === 'grow-retention') e.attrs = { ...e.attrs, current: 160 };
+      if (e.key === 'faster-activation') e.attrs = { ...e.attrs, current: 20000 };
+    }
   const owners = db.members
     .filter((m) => m.role === 'owner' && m.status !== 'disabled')
     .map((m) => m.id);
@@ -7141,7 +7148,9 @@ function load(): Db {
                                                                                                                                     'meeting-agenda-sheet'
                                                                                                                                   ? seedMeetingAgendaSheetScenario
                                                                                                                                   : scenario ===
-                                                                                                                                      'simple-home'
+                                                                                                                                        'simple-home' ||
+                                                                                                                                      scenario ===
+                                                                                                                                        'home-goal-status'
                                                                                                                                     ? seedSimpleHomeScenario
                                                                                                                                     : scenario ===
                                                                                                                                         'simple-home-move'
