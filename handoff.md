@@ -1,8 +1,10 @@
 # inbox-codes (#1786 reopened) — handoff
 
-Base 926a307 (train night-m). Commits: ef61062 red pytest (proposals), 04e48a7 API item_code on
-InboxSimpleChange, 47ae178 web proposal row + mock + spec, da4136b request words, then red pytest
-(action items), 66bb3a7 action item rows. Worker publishes the branch (git push not available here).
+Base 926a307 (train night-m). Commits: 5af3e77 red pytest (proposals), e829e20 API item_code on
+InboxSimpleChange, 898c063 web proposal row + mock + spec, d00b425 request words, ad3d648 red
+pytest (action items), 20b935c action item rows, a791259 handoff. Review round (verdict NOT_YET,
+one major): 18cbbc6 red pytest (checkpoint child), then the API code on InboxChild, then the web
+row, mock and spec (see "Review round" below). Worker publishes the branch.
 
 ## What the auditor saw, and the cause
 A proposal row named its feature without its code. The row's code came only from the Simple
@@ -23,7 +25,7 @@ on it.
 | Date suggestion | _proposals.tsx dateSuggestionRows | Yes: an open suggestion's item is always on the roadmap read. Unchanged. |
 | Meeting action item (linked feature) | _action-items.tsx | Yes. Was missing off the read; fixed (API item_code on InboxSimpleActionItem). |
 | Track alert (stale marks, slips) | _track-alert.tsx AlertItem | Yes, already (item_code from the API, #1786 first pass). Unchanged. |
-| Checkpoint child (a run's draft item) | _needs.tsx childNeeds | No: InboxChild has no code field; a run's draft item before approval. Left (not a Ground Truth item yet; API change in runs). |
+| Checkpoint child (a run's item under its checkpoint) | _needs.tsx childNeeds | Yes now (review round): InboxChild carries `code` (its title's own, else its PRD section's: codes.code_of in runs/actions.summarize), rendered with Named. Before: name alone. An item with neither stays as its name. |
 | Launch (Ready to launch · X) | _needs.tsx launchNeeds | Names the launch by its own title (one or more items), not a feature. Left. |
 | Questions, discussions, Oracle-did summaries | _questions.tsx, _needs.tsx | Free text a person or Oracle wrote; not a feature field. Left. |
 
@@ -45,8 +47,9 @@ on it.
   visible change is a code (e.g. "F-45") placed before a feature name.
 
 ## Left
-- Checkpoint children (InboxChild, a run's draft items) carry no code; launch rows name a launch by
-  its own title. Neither is a coded Ground Truth feature field today; a follow-up if the owner wants it.
+- Launch rows name a launch by its own title, not a feature field. A checkpoint child whose key is
+  a live item's but whose title and section carry no code still reads as its name (the reviewer's
+  "if cheap" part: it needs a roadmap read per checkpoint; not done).
 
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 

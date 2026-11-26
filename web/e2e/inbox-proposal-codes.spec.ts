@@ -1,7 +1,8 @@
 import { INBOX_REPLACED_PROPOSAL_SCENARIO } from '../lib/api/mock/inbox-proposal-scenario';
+import { ROADMAP_REVIEW_RUN } from '../lib/api/mock/runs';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 
-import { login } from './helpers';
+import { login, seedRun } from './helpers';
 import { expect, test } from './test';
 
 /**
@@ -50,5 +51,41 @@ for (const path of ['/simple/inbox', '/inbox']) {
         .filter({ hasText: 'Check the badge rules' })
         .getByTestId('action-item-context'),
     ).toContainText('F-45 Trusted seller badge');
+  });
+}
+
+/**
+ * Review round: a run's item waiting on the Owner under its checkpoint's row names its feature
+ * with its code. The seeded roadmap review's Slack alerts comes from PRD section f-06 here; Budget
+ * caps' section is no code, so it stays as its name.
+ *
+ * protects=#1786; fails_when=the checkpoint child names its feature without its code.
+ */
+const CODED_REVIEW = {
+  run: ROADMAP_REVIEW_RUN.run,
+  artifacts: Object.fromEntries(
+    Object.entries(ROADMAP_REVIEW_RUN.artifacts).map(([k, v]) => [
+      k,
+      v.replace('prd_section: alerts-slack,', 'prd_section: f-06,'),
+    ]),
+  ),
+};
+const CP = ROADMAP_REVIEW_RUN.run.checkpoints[0].id;
+
+for (const path of ['/simple/inbox', '/inbox']) {
+  test(`a run's item under its checkpoint on ${path} names its feature with its code`, async ({
+    page,
+  }) => {
+    await login(page);
+    await seedRun(page, CODED_REVIEW);
+    await page.goto(path);
+    const child = (item: string) =>
+      page
+        .locator(`tr[data-key="${CP}-${item}"]`)
+        .filter({ visible: true })
+        .getByTestId('child-title');
+    await expect(child('slack-alerts')).toHaveText('F-06 Slack alerts');
+    await expect(child('slack-alerts').locator('.simple-code')).toHaveText('F-06');
+    await expect(child('budget-caps')).toHaveText('Budget caps');
   });
 }

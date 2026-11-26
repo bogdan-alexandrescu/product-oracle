@@ -14,6 +14,7 @@ import { companyDayInWords, companyDayIso, companyStamp } from './connections';
 import { FORMULAS, ranking } from './lane-f';
 import type { RowTally } from './from-run';
 import { fileItems } from './checkpoint-review';
+import { shownCode } from './item-code';
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from './agent-questions';
 import { readableRefusal } from './refusal';
 import { mockNowMs } from './clock';
@@ -7863,6 +7864,8 @@ function inboxSummary(
       child: {
         item: it.key,
         title: it.title ?? null,
+        // #1786: the code the item reads with (its title's, else its PRD section's).
+        code: shownCode({ title: it.title ?? '', section: it.prd_section }, () => null),
         reason: {
           code: shown.code,
           severity: shown.severity,

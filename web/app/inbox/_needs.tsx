@@ -16,6 +16,7 @@ import {
   type IconName,
 } from '@/components/ds';
 import { BUILD_PARAM } from '@/components/NextDraft';
+import { Named } from '@/components/simple/FeatureName';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import {
   alertSentence,
@@ -1439,6 +1440,18 @@ function itemHref(c: InboxCheckpointRow, item: string): string {
     : `/runs/${c.run_id}?item=${encodeURIComponent(item)}#decide`;
 }
 
+/** #1786: a run item under its checkpoint, its name with no leading code of its own. */
+function childTitle(child: InboxChild): string {
+  const title = child.title ?? child.item;
+  return child.code && title.startsWith(`${child.code} `)
+    ? title.slice(child.code.length + 1)
+    : title;
+}
+
+/** #1786: the run item as people read it, its code first ("F-06 Bulk edit"). */
+const childName = (child: InboxChild) =>
+  child.code ? `${child.code} ${childTitle(child)}` : childTitle(child);
+
 function childNeeds(
   c: InboxCheckpointRow,
   summary: InboxSummary,
@@ -1458,8 +1471,8 @@ function childNeeds(
     kind: '',
     item: (
       <>
-        <span className="truncate" data-testid="child-title" title={child.title ?? child.item}>
-          {child.title ?? child.item}
+        <span className="truncate" data-testid="child-title" title={childName(child)}>
+          <Named item={{ code: child.code, title: childTitle(child) }} />
         </span>
         <Chip
           kind={child.reason.severity === 'blocking' ? 'crit' : 'warn'}
