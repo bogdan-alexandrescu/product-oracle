@@ -17,7 +17,7 @@ import { KeyTips, PhoneSteps } from './KeyTips';
 const ROWS =
   '[data-keys-row], [data-testid=prio-row], [data-testid^="priority-row-"], [data-testid=timeline-row]';
 const OPENER =
-  '[data-keys-open], [data-testid=prio-title], [data-testid=timeline-bar], a[href], button:not([aria-label^="Drag"]):not([aria-haspopup])';
+  '[data-keys-open], [data-testid=prio-title], [data-testid=timeline-row-label], a[href], button:not([aria-label^="Drag"]):not([aria-haspopup])';
 const SEARCH =
   '[data-keys-search], input[type=search], input[placeholder^="Search"], input[placeholder^="Filter"]';
 const ADD = '[data-keys-add], #quick-add-title';

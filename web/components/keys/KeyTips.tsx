@@ -13,7 +13,7 @@ import type { Key } from './keys';
 
 type Tip = { label: string; k: Key; style: React.CSSProperties };
 
-const ROW_NAME = '[data-testid=prio-title], [data-testid=timeline-bar]';
+const ROW_NAME = '[data-testid=prio-title], [data-testid=timeline-row-label]';
 const PANEL_CLOSE = '[data-testid=item-panel] button[aria-label=Close]';
 
 function tipFor(el: Element, go: Key[]): Tip | null {
