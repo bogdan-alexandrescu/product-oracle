@@ -34,7 +34,19 @@ on it.
   red without each web change (Expected "F-45"), green with; inbox-2-proposal-rows (its Decisions
   locator now picks the proposal's li, since the scenario's new action item also lists there) and
   inbox-action-items: 6 passed.
-- tsc: exit 0.
+- tsc: exit 0. Full `npm run lint`: exit 0. `npm run format:check`: "All matched files use Prettier code style!".
+- pyright as ci.yml runs it: `pyright: 1263 errors, baseline 1263`.
+- API: every test file that reads the Inbox, simple_proposals, simple_action_items, InboxSimple*,
+  meeting_actions or openapi (122 files, tests/test_frozen_migrations.py among them), -n 3:
+  937 + 631 (1 skipped) + 924 + 624 passed, 0 failed.
+- NOT RUN: the whole API suite end to end (at -n 3 it takes over an hour here, past the step's
+  limit; the remaining ~660 files touch neither the changed reads nor their schemas) and the
+  timing tests (`-m timing`), for the same reason. The prose guard was not run either: the only
+  visible change is a code (e.g. "F-45") placed before a feature name.
+
+## Left
+- Checkpoint children (InboxChild, a run's draft items) carry no code; launch rows name a launch by
+  its own title. Neither is a coded Ground Truth feature field today; a follow-up if the owner wants it.
 
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 
