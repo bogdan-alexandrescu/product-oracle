@@ -169,6 +169,7 @@ function Inbox() {
           fixed,
           requests.rows,
           perms,
+          path.startsWith('/simple'),
         ),
         ...(webhooks.rows ?? []),
         ...reminderRows,

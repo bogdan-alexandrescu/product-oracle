@@ -2818,6 +2818,8 @@ export function allNeeds(
   accessRequests: Need[] = [],
   /** What the signed-in person may do (usePerms): rows draw only those actions. */
   perms: Perms = ALL,
+  /** #1818: shown in Simple, a decision opens in Simple's decision sheet. */
+  simple = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed, seenBefore);
   // A row may carry its own state and count (a question answered in place: ./_questions).
@@ -2856,7 +2858,7 @@ export function allNeeds(
     ...stated(outcomes.counted, 'outcomes'),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact, perms),
-    ...decisionNeeds(inbox, busy, act, seenBefore),
+    ...decisionNeeds(inbox, busy, act, seenBefore, simple),
     ...stated(accessRequests, 'access-requests'),
     ...stated(asked, 'questions'),
     // Shown only, under Open: nothing to decide, not an item.
@@ -2886,9 +2888,13 @@ export function decisionNeeds(
   busy: string | null,
   act: Act,
   seenBefore: string | null | undefined,
+  simple = false,
 ): StatedNeed[] {
   return (inbox.decisions ?? []).map((d) => {
-    const href = `/company/decisions?d=${d.number}`;
+    // #1818: in Simple, Simple's decision sheet (as Home's rows); else Company › Decisions.
+    const href = simple
+      ? `/simple/decisions?decision=${d.number}`
+      : `/company/decisions?d=${d.number}`;
     const live = d.state !== 'done';
     // qa-onboarding-27: the decision by its title, never its bare code ("D-5").
     const label = `${DECISION_KIND[d.reason]} · ${d.title}`;
