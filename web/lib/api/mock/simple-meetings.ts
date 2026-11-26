@@ -43,6 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from '@/lib/api/client';
+import { meetingActionItems, recordActionItems } from './action-items';
 import {
   agendaOut,
   decidedOutsideRows,
@@ -1111,6 +1112,10 @@ function one(
       (i) => ref(ctx, i),
     ),
     minutes: m.minutes,
+    action_items:
+      m.minutes_state === 'sent'
+        ? meetingActionItems(ctx.roadmap, m.id, ctx.me, (i) => nameOf(ctx, i))
+        : [],
     minutes_job:
       m.status === 'ended' && m.minutes_state === 'drafting' ? (m.minutes_job ?? 'drafting') : null,
     delivery: deliveryOut(ctx, m),
@@ -2465,6 +2470,7 @@ export async function routeSimpleMeetings(
             owner_name: owner ? nameOf(ctx, owner) : null,
             due_date: a.due_date ?? null,
             action_item_id: a.action_item_id ?? null,
+            item_id: a.item_id ?? null,
           };
         }),
       waits: m.minutes?.waits ?? [],
@@ -2527,6 +2533,8 @@ export async function routeSimpleMeetings(
     m.minutes_state = 'sent';
     m.minutes_job = null;
     m.sent_at = now;
+    // #1817 (meetings.send): each action item is recorded, under its linked item.
+    recordActionItems(ctx.roadmap, m.id, m.minutes, ctx.me.id);
     return reply('/v1/simple/meetings/{meeting_id}/send', 'post', meetingBody());
   }
   return null;
@@ -2913,9 +2921,33 @@ async function sheetDecision(
     });
   const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
   if (own) return { d: own, log };
+  const named = roadmapDecision(ctx, id);
+  if (named) return { d: named, log: null };
   if (!log || log.trashed || log.origin === 'checkpoint' || db.decisions.some((x) => x.id === id))
     return { d: null, log: null };
   return { d: fromLog(log), log };
+}
+
+/** #1818: an open decision the roadmap read names on a feature (simple-roadmap.ts), by its id. */
+function roadmapDecision(ctx: MeetingsCtx, id: string): Decision | null {
+  for (const [key, list] of Object.entries(ctx.roadmap.decisions ?? {})) {
+    const hit = list.find((x) => stableUuid(`simple-decision/${x.number}`) === id);
+    if (!hit) continue;
+    const item = items(ctx).find((i) => i.key === key);
+    return {
+      id,
+      number: hit.number,
+      title: hit.title,
+      origin: 'oracle',
+      status: 'proposed',
+      approver_id: null,
+      at: iso(mockNowMs()),
+      subjects: item ? [{ kind: 'roadmap_item', id: item.id, ref: key }] : [],
+      meeting_id: null,
+      change_ids: [],
+    };
+  }
+  return null;
 }
 
 /** A decision-log call as the sheet reads it (its own number, fields and last sheet edit). */

@@ -88867,6 +88867,14 @@
             "type": "array",
             "title": "Simple Minutes",
             "default": []
+          },
+          "simple_action_items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleActionItem"
+            },
+            "type": "array",
+            "title": "Simple Action Items",
+            "default": []
           }
         },
         "type": "object",
@@ -89530,6 +89538,116 @@
           "publication_id"
         ],
         "title": "InboxSharedLink"
+      },
+      "InboxSimpleActionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Id"
+          },
+          "meeting_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Title"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleActionItem",
+        "description": "#1817: an open meeting action item its owner is to do (``simple_action_items``,\ncounted in ``total``), with its due date, linked item and meeting."
       },
       "InboxSimpleApproval": {
         "properties": {
@@ -124637,6 +124755,18 @@
               }
             ],
             "title": "Action Item Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           }
         },
         "type": "object",
@@ -124688,6 +124818,18 @@
               }
             ],
             "title": "Action Item Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           },
           "owner_name": {
             "anyOf": [
@@ -128978,6 +129120,77 @@
         ],
         "title": "SimpleMatch"
       },
+      "SimpleMeetingActionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "owner_id",
+          "status"
+        ],
+        "title": "SimpleMeetingActionItem",
+        "description": "#1817: a sent meeting's recorded action item; ``can_change``: its owner, or one who\ndecides its item, marks it done or changes it."
+      },
       "SimpleMeetingBrief": {
         "properties": {
           "id": {
@@ -129648,6 +129861,14 @@
                 "type": "null"
               }
             ]
+          },
+          "action_items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingActionItem"
+            },
+            "type": "array",
+            "title": "Action Items",
+            "default": []
           },
           "minutes_job": {
             "anyOf": [

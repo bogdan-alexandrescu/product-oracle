@@ -10,7 +10,7 @@ import { expect, test, type Page } from './test';
  *
  * Card decision-notes-banner: protects = the one-pager's and the roadmap's working-draft
  * banners say in plain words which decision was reversed, by number and name, on which
- * day, and what it means for the draft, linked to the decision in Company › Decisions; under the banner one
+ * day, and what it means for the draft, linked to the decision in Simple; under the banner one
  * quiet line names the decisions the read left out, linked the same way; fails_when = a
  * note is missing, reads the raw "D-12" token, or links nowhere; no_claim = which drafts
  * get a note and which decisions are left out (api/tests/test_decisions_reversed_or_trashed.py).
@@ -37,15 +37,15 @@ async function reads(page: Page, banner: ReturnType<Page['getByTestId']>) {
   await expect(note).toHaveText(NOTE);
   await expect(
     note.getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' }),
-  ).toHaveAttribute('href', '/company/decisions?d=12');
+  ).toHaveAttribute('href', '/simple/decisions?decision=12');
   const line = page.getByTestId('left-out-line');
   await expect(line).toHaveText(LEFT_OUT);
   await expect(
     line.getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' }),
-  ).toHaveAttribute('href', '/company/decisions?d=12');
+  ).toHaveAttribute('href', '/simple/decisions?decision=12');
   await expect(
     line.getByRole('link', { name: 'Decision 9 Ship alerts by email only' }),
-  ).toHaveAttribute('href', '/company/decisions?d=9');
+  ).toHaveAttribute('href', '/simple/decisions?decision=9');
   await expect(page.getByText(/\bD-\d+\b/)).toHaveCount(0);
 }
 
@@ -68,7 +68,7 @@ for (const phone of [false, true]) {
         await banner
           .getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' })
           .click();
-        await expect(page).toHaveURL(/\/company\/decisions\?d=12$/);
+        await expect(page).toHaveURL(/\/simple\/decisions\?decision=12$/);
       });
 
       test("the roadmap's draft banner names the reversed decision and what was left out", async ({

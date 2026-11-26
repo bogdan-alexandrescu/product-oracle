@@ -10,6 +10,7 @@ import { inboxCounts } from '@/lib/inbox-counts';
 import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
+import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { routePalette } from './palette';
 import { mockName as displayName } from './people';
@@ -15293,6 +15294,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
     inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
+    // #1817: my open meeting action items (counted).
+    inbox.simple_action_items = actionItemRows(
+      db.simple_roadmap,
+      me.id,
+      (id) => db.simple_meetings?.meetings.find((x) => x.id === id)?.title ?? null,
+      seenBefore,
+    );
+    inbox.total += inbox.simple_action_items.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + inbox.simple_action_items.length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;

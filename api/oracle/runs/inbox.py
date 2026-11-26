@@ -676,6 +676,11 @@ async def _inbox(
         from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
         simple_minutes = [] if counts_only else await simple_minutes_rows(db, principal, seen)
+        # #1817: open meeting action items I own ("Needs you", counted).
+        from oracle.simple.meeting_actions import inbox_rows as action_item_rows
+
+        simple_action_items = await action_item_rows(db, principal, seen)
+        counted += len(simple_action_items)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -749,6 +754,7 @@ async def _inbox(
         simple_goal_suggestions=simple_goal_suggestions,
         simple_track_suggestions=simple_track_suggestions,
         simple_minutes=simple_minutes,
+        simple_action_items=simple_action_items,
     )
 
 

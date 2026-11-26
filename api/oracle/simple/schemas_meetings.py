@@ -69,10 +69,26 @@ class SimpleActionItemIn(BaseModel):
     due_date: dt.date | None = None
     # An action item recorded in the meeting (its row): Send adds only the new ones.
     action_item_id: uuid.UUID | None = None
+    # #1817: the roadmap item it is about (one of the agenda's features), if any.
+    item_id: uuid.UUID | None = None
 
 
 class SimpleActionItemOut(SimpleActionItemIn):
     owner_name: str | None = None
+
+
+class SimpleMeetingActionItem(BaseModel):
+    """#1817: a sent meeting's recorded action item; ``can_change``: its owner, or one who
+    decides its item, marks it done or changes it."""
+
+    id: uuid.UUID
+    title: str
+    owner_id: uuid.UUID
+    owner_name: str | None = None
+    due_date: dt.date | None = None
+    item_id: uuid.UUID | None = None
+    status: str
+    can_change: bool = False
 
 
 class SimpleWait(BaseModel):
@@ -309,6 +325,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     # be an attendee), for the banner's "Waiting on <name>'s approval".
     waiting_people: list[SimplePersonRef] = []
     minutes: SimpleMinutes | None = None
+    # #1817: once sent, its action items as recorded, each with its status.
+    action_items: list[SimpleMeetingActionItem] = []
     # The minutes job's state while ``minutes_state`` is "drafting" (else None).
     minutes_job: MinutesJobState | None = None
     delivery: SimpleDelivery | None = None
@@ -703,6 +721,23 @@ class InboxSimpleMinutes(BaseModel):
     ended_at: dt.datetime | None
     sent_at: dt.datetime | None
     decisions: int
+    state: Literal["new", "open"]
+
+
+class InboxSimpleActionItem(BaseModel):
+    """#1817: an open meeting action item its owner is to do (``simple_action_items``,
+    counted in ``total``), with its due date, linked item and meeting."""
+
+    id: uuid.UUID
+    title: str
+    due_date: dt.date | None = None
+    late: bool = False
+    item_id: uuid.UUID | None = None
+    item_title: str | None = None
+    roadmap_id: uuid.UUID | None = None
+    meeting_id: uuid.UUID | None = None
+    meeting_title: str | None = None
+    at: dt.datetime
     state: Literal["new", "open"]
 
 
