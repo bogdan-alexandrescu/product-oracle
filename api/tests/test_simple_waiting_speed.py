@@ -26,8 +26,10 @@ Test cards (protects / fails_when / no_claim):
   identical to the one the former list built from the roadmap, changes and suggestions pages'
   own reads (``former_items`` below, kept verbatim), with working drafts that change and add
   items, a replaced PRD, goal suggestions that failed their checks and items in Trash, with
-  and without a company roadmap; fails_when=any item, its order, words, link or time differs;
-  no_claim=kinds this seed does not hold (the Inbox's rows, read as before).
+  and without a company roadmap, plus (inbox-2, #1893) every proposal the Inbox counts for
+  them; fails_when=any item, its order, words, link or time differs, or the Inbox counts a
+  proposal the list leaves out; no_claim=kinds this seed does not hold (the Inbox's rows, read
+  as before).
 """
 
 import re
@@ -188,7 +190,16 @@ async def test_waiting_says_what_it_said_before(client, monkeypatch, company_roa
     monkeypatch.setattr(waiting_list, "items", former_items)
     for name, headers in people.items():
         _, _, before = await read(client, headers)
-        assert now[name] == before, name
+        # inbox-2 (#1893): the same, plus every proposal the Inbox counts that it missed.
+        r = await client.get("/v1/inbox", headers=headers)
+        counted = {p["id"] for p in r.json()["simple_proposals"]} if r.status_code == 200 else set()
+        had = {i["key"] for i in before["items"]}
+        added = [i for i in now[name]["items"] if i["key"] not in had]
+        assert {i["key"] for i in added} <= {f"proposal:{c}" for c in counted}, name
+        listed = {i["key"] for i in now[name]["items"]}
+        assert {f"proposal:{c}" for c in counted} <= listed, name
+        kept = {**now[name], "items": [i for i in now[name]["items"] if i["key"] in had]}
+        assert kept == before, name
     least = 100 if company_roadmap else 500
     assert len(now["approver"]["items"]) > least and len(now["owner"]["items"]) > least
     # The seed's cases are on the list: a working draft's renamed item; not an item in Trash
