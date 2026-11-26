@@ -1,3 +1,40 @@
+# panel-2 handoff (#1906, #1907: feature panel wording)
+
+## What changed (web only; no API change)
+- #1906 Decider (`web/app/simple/roadmap/_fields.tsx`, `DeciderNames`): several names (the API's rule in
+  `api/oracle/simple/service.py` `decider_ids`/`can_decide`: several only when no roadmap decider or deciding
+  track owner is set, so the company's owners decide, any one of them) read "Any of: A, B, C" with an (i) tip
+  "Any one of them can decide." One name and the editor are unchanged; who may decide is unchanged.
+- #1907 (`web/app/simple/roadmap/_panel-words.ts`, read-only words; every editor still edits the stored value):
+  - Notes: the notes Oracle writes on a roadmap version ("from version N", "carried from version N", ", deferred",
+    ", changed in Simple", "added in Simple on version N") read "Carried over from the last roadmap" (", moved
+    later" / ", changed in Simple") or "Added in Simple". A person's note shows as written.
+  - Dates: "Set here" reads "Set by a person" (the (i) tip is unchanged).
+  - Target and the Reading line drop a trailing milestone shorthand ("70% of teams (M2)" reads "70% of teams").
+  - Title (`_card.tsx` h2): the feature's name: a trailing "(P0)".."(P4)" and its PRD's name joined before or
+    after by ":", "-", "—", "·", "|" are dropped. The code chip, Status and rename are untouched.
+- Mock: new "panel-words" scenario (`web/lib/api/mock/panel-words.ts`, hooked in `server.ts` after the seed):
+  two more invented owners, "Usage alerts: Weekly alert digest (P0)", note "from version 21", target "(M2)".
+
+## Tests and gates
+- `web/e2e/panel-words.spec.ts`: red at a52045a (title and decider asserts failed; the notes, target and dates
+  asserts come after the title assert in the same test, so they were not reached in the red run), green after.
+- `qa-nov17-roadmap-data` and `flakes-dates-roadmap-dates-tip` now expect "Set by a person".
+- Unit: `_panel-words.test.ts` (3 tests).
+- tsc 0; full `npm run lint` 0; format:check clean; `npx vite build` 0; `npm run test:unit` 321 passed.
+- Playwright --retries=0, 2 workers: panel-words, feature-panel-gaps, goal-target-kept,
+  flakes-dates-roadmap-dates-tip, one-feature-panel, port-feature-panel, qa-nov17-roadmap-data,
+  simple-plan-dates-to-confirm (56 passed); fix4-simple-roadmap-card, item-talk-reads, present-slides,
+  roadmap-panel-overlap, simple-flows, simple-prd-calm-page, simple-visuals, simple-roadmap-talk, panel-ux,
+  panel-fits-viewport (167 passed, 2 skipped); prose-guard 35 passed with PROSE_BASE=8227775 (this clone has no
+  origin/main; without it its two merge-base checks fail on that alone).
+- No API change, so the API suite, timing tests, pyright and frozen migrations were not run.
+
+## Left
+- The live title's exact shape was not seen here; the stripping covers "PRD: name (P0)" and "name — PRD" forms.
+  If live titles join the PRD name another way, extend `featureTitle`.
+- Other pages (Timeline rows, Priorities) still show the stored title; out of this lane's scope (panel only).
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
