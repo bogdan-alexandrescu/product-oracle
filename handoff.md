@@ -14,7 +14,13 @@
 
 ## Gates this round
 - Playwright --retries=0 --workers=2: milestone-codes, prio-line-once, prio-company: 51 passed.
-- tsc --noEmit exit 0.
+- tsc --noEmit exit 0; full `npm run lint` EXIT 0 (run detached, about 10 min); format:check exit 0.
+- Playwright --retries=0 --workers=2, the 13 other specs that drive the line picker, part heads or Misses tags
+  (prio-line-track-prd, qa-nov17-goals-priorities, qa4/qa3-simple-plan, simple-goals-qa-nov14, simple-roadmap-plus,
+  fix3-minors, priorities-keydates, simple-plan-charts, build-plan-picks, build-plan-review, fix2-simple-plan,
+  simple-walk-prio): 160 passed. Prose specs (prose-guard, prose-rest, prose-tips, webhooks-share-prose) with
+  PROSE_BASE=c34b097: 69 passed.
+- No API change: API suite, timing tests, pyright and frozen migrations not run (nothing in api/ changed).
 
 # milestone-codes handoff (#1894, #1882)
 
