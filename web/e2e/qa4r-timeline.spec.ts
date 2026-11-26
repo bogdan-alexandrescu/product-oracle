@@ -219,7 +219,7 @@ test.describe('desktop', () => {
       await rows.nth(0).getAttribute('data-item'),
       await rows.nth(1).getAttribute('data-item'),
     ];
-    await rows.nth(0).locator('button[title]').focus();
+    await rows.nth(0).getByTestId('timeline-row-label').focus();
     await page.keyboard.press('Tab');
     const at = () =>
       page.evaluate(() => {
