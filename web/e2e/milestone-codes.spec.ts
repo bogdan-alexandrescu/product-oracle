@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
 
-import { ADMIN, login } from './helpers';
+import { ADMIN, lineOptionsSettled, login } from './helpers';
 import { expect, test, type Page } from './test';
 
 /*
@@ -10,7 +10,7 @@ import { expect, test, type Page } from './test';
  * by the PRD's number, so no code names two milestones there.
  * #1882: while the roadmap read is slow, the picker never lists a milestone without its code (no label that
  * changes under the reader).
- * fails_when = a picker option reads a PRD's own number ("From the PRD: M2 · Scale volume"), two options share a
+ * fails_when = a picker option or a part head reads a PRD's own number ("M2 · Scale volume"), two options share a
  * code, or a milestone option is drawn without its code before the roadmap read lands. Invented data.
  */
 
@@ -61,6 +61,39 @@ test('the Line picker names each milestone by the code the Roadmap shows', async
   const codes = shown.map((t) => /^[^:]+: (M\d+) /.exec(t)?.[1]);
   expect(codes.every(Boolean), shown.join(' | ')).toBe(true);
   expect(new Set(codes).size, shown.join(' | ')).toBe(codes.length);
+});
+
+test('a PRD line picked, the part heads and rows name its milestone by the Roadmap code', async ({
+  page,
+}) => {
+  await setUp(page);
+  await page.goto('/simple/roadmap');
+  const scale = page.getByRole('button', {
+    name: /^M\d+ Scale volume \(from the PRD Guided setup\)$/,
+  });
+  await expect(scale).toHaveCount(1);
+  const code = /^(M\d+) /.exec(
+    (await scale.getAttribute('aria-label')) ?? (await scale.innerText()),
+  )![1];
+
+  await page.goto('/simple/priorities');
+  await expect(page.getByTestId('simple-priorities')).toBeVisible();
+  await lineOptionsSettled(page);
+  const option = page.locator('#prio-line option').filter({ hasText: /Scale volume/ });
+  await expect(option).toHaveCount(1);
+  await page.locator('#prio-line').selectOption({ label: (await option.textContent())! });
+  const heads = page.getByTestId('prio-part-head');
+  await expect(heads.first()).toBeVisible();
+  for (const head of await heads.all())
+    await expect(head).toHaveAttribute(
+      'aria-label',
+      new RegExp(`^(Makes|Misses) ${code} Scale volume · `),
+    );
+  const words = [
+    ...(await heads.allInnerTexts()),
+    ...(await page.getByTestId('prio-milestone').allInnerTexts()),
+  ].join(' | ');
+  expect(words).not.toMatch(/M\d+ · /);
 });
 
 test('while the roadmap read is slow, no milestone option shows without its code', async ({
