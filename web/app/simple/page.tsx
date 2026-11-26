@@ -81,6 +81,7 @@ import {
   OP_WORDS,
   opWords,
   planByMonth,
+  withLate,
   waitSentence,
   type BrokenLink,
   type FixOp,
@@ -136,6 +137,45 @@ const SETUP_STEPS: Record<string, string> = {
 
 /** An item code before a name ("F-06 Weekly alert digest"): Simple says the name alone (qa-simple-home-13). */
 const withoutCodes = (text: string) => text.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, '');
+
+/** #1900: a change's words with its item named by code and name, opening the item's panel. */
+function ItemIn({
+  text,
+  item,
+  open,
+}: {
+  text: string;
+  item: Schemas['SimpleRoadmapItem'];
+  open: (i: Schemas['SimpleRoadmapItem']) => void;
+}) {
+  const bare = withoutCodes(text);
+  const at = [`'${item.title}'`, item.title, 'an item']
+    .map((w) => [bare.indexOf(w), w.length])
+    .find(([k]) => k >= 0);
+  const link = (
+    <button
+      type="button"
+      data-testid="home-since-item"
+      className="text-left text-accent-ink hover:underline"
+      onClick={() => open(item)}
+    >
+      <Named item={item} />
+    </button>
+  );
+  if (!at)
+    return (
+      <>
+        {bare} · {link}
+      </>
+    );
+  return (
+    <>
+      {bare.slice(0, at[0])}
+      {link}
+      {bare.slice(at[0] + at[1])}
+    </>
+  );
+}
 
 /**
  * The sentence under a broken link's item, without the item's name the heading already says
@@ -194,9 +234,17 @@ function shiftMoves(
     .filter((i): i is Schemas['SimpleRoadmapItem'] => !!i);
 }
 
+/** Home's plan strip, each milestone row with its items ending after its date (#1896). */
+function homePlan(r: Schemas['SimpleRoadmapOut']) {
+  const inputs = homePlanInputs(r);
+  const plan = planByMonth(inputs, r.today, r.windows.now.end);
+  return plan && withLate(plan, inputs);
+}
+
 const STATUS_TONE: Record<GoalTile['status'], string> = {
+  Met: 'simple-status-ok',
   'At risk': 'simple-status-risk',
-  'Not measured yet': 'simple-status-quiet',
+  'Not measured': 'simple-status-quiet',
   'On track': 'simple-status-ok',
 };
 
@@ -476,17 +524,7 @@ function SimpleHome() {
   // it once there is one: oracle.roadmap.company feeding_ids), every PRD's items in the
   // roadmap's own milestones by name, never one PRD's plan milestones; home-milestones-current:
   // its current ones only, as the Simple roadmap's lanes find them (homePlanInputs).
-  const plan = useMemo(
-    () =>
-      roadmap.data
-        ? planByMonth(
-            homePlanInputs(roadmap.data),
-            roadmap.data.today,
-            roadmap.data.windows.now.end,
-          )
-        : null,
-    [roadmap.data],
-  );
+  const plan = useMemo(() => (roadmap.data ? homePlan(roadmap.data) : null), [roadmap.data]);
   // home-milestone-rename: a plan row's milestone is renamed in place with the Roadmap's own card
   // (its rights, the PRD owner's ask, the proposal to the roadmap's decider, Undo).
   const ms = useMilestones({
@@ -499,7 +537,13 @@ function SimpleHome() {
     },
     openItem: (id) => setOpened(roadmap.data?.items.find((i) => i.id === id) ?? null),
   });
-  const renameMs = renameOf(ms);
+  // #1897: a milestone with no date opens its whole card (its date set there), the others their name alone.
+  const renameMs = (id: string) => {
+    const m = ms?.list.find((x) => x.id === id);
+    return ms && m && !m.date && !m.goal_target && (m.can_change || m.can_propose)
+      ? () => ms.edit(m)
+      : renameOf(ms)(id);
+  };
   const featureItem = useCallback(
     (f: Parameters<OpenFeature>[0]) => {
       const items = roadmap.data?.items ?? [];
@@ -517,6 +561,10 @@ function SimpleHome() {
   );
   const planNames = useMemo(
     () => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.title])),
+    [roadmap.data],
+  );
+  const planCodes = useMemo(
+    () => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code]] : []))),
     [roadmap.data],
   );
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
@@ -1172,6 +1220,7 @@ function SimpleHome() {
                 {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
                 <SimpleWelcome
                   show={setupQ.data?.welcome === true}
+                  setup={setupQ.data}
                   onDismissed={() => void setupQ.reload()}
                 />
                 {setupFirst && setup && (can('put_setting') || !setupQ.data?.welcome) && (
@@ -1286,7 +1335,6 @@ function SimpleHome() {
                               <div className="mt-auto flex flex-wrap items-center gap-2">
                                 <span
                                   data-testid="home-goal-status"
-                                  title={g.why ?? undefined}
                                   className={`simple-status ${STATUS_TONE[g.status]}`}
                                 >
                                   {g.status}
@@ -1918,6 +1966,7 @@ function SimpleHome() {
                             testId="home-strip"
                             named
                             names={planNames}
+                            codes={planCodes}
                             rename={renameMs}
                           />
                         ) : (
@@ -2200,38 +2249,27 @@ function SimpleHome() {
                     >
                       {(rows) => {
                         const seen = inbox.data?.last_seen_at ?? null;
-                        // What changed and stayed: never an undone change nor its undo; mine said as mine ("You moved ...").
+                        // What others changed and stayed (#1900: never my own): never an undone change nor its undo.
                         const fresh = rows.filter(
                           (c) =>
+                            c.by !== myId &&
                             c.status !== 'proposed' &&
                             c.status !== 'undone' &&
                             !c.undone &&
                             !c.undoes_id &&
                             (!seen || (c.decided_at ?? c.at) > seen),
                         );
-                        const said = (c: Change) => {
-                          const words =
-                            c.words ||
-                            `${c.by_name}: ${changeWords(
-                              c,
-                              roadmap.data?.items.find((i) => i.id === c.target.item_id),
-                            )}`;
-                          if (c.by !== myId) return words;
-                          if (c.words && c.words.startsWith(`${c.by_name} `))
-                            return `You ${c.words.slice(c.by_name.length + 1)}`;
-                          return c.words
-                            ? `You: ${c.words}`
-                            : `You: ${changeWords(
-                                c,
-                                roadmap.data?.items.find((i) => i.id === c.target.item_id),
-                              )}`;
-                        };
+                        const itemOf = (c: Change) =>
+                          roadmap.data?.items.find((i) => i.id === c.target.item_id);
+                        const said = (c: Change) =>
+                          c.words || `${c.by_name}: ${changeWords(c, itemOf(c))}`;
                         const recent = [
                           ...fresh.map((c) => ({
                             key: c.id,
                             at: c.decided_at ?? c.at,
                             icon: 'roadmap' as const,
                             title: said(c),
+                            item: itemOf(c),
                             who: null,
                             status: null,
                           })),
@@ -2246,6 +2284,7 @@ function SimpleHome() {
                               at: d.since,
                               icon: 'flag' as const,
                               title: d.title,
+                              item: undefined,
                               who: 'Decision',
                               status: 'decided',
                             })),
@@ -2261,7 +2300,13 @@ function SimpleHome() {
                                 key={r.key}
                                 testId="home-since-row"
                                 lead={<RowIcon name={r.icon} />}
-                                title={withoutCodes(r.title)}
+                                title={
+                                  r.item ? (
+                                    <ItemIn text={r.title} item={r.item} open={setOpened} />
+                                  ) : (
+                                    withoutCodes(r.title)
+                                  )
+                                }
                                 meta={`${r.who && r.status ? `${r.who} · ${r.status} · ` : ''}${formatInZone(r.at, zone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
                               />
                             )}
