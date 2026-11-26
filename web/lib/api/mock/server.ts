@@ -473,7 +473,9 @@ import {
   PRIORITIES_TWINS_OLD_SCENARIO,
   PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
+  PRIORITIES_ONE_FEATURE_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
+  PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
   PRIORITIES_PLAN_KEY_RESULTS_SCENARIO,
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
@@ -7689,12 +7691,17 @@ function load(): Db {
                                                                                                                                                                                                             return db;
                                                                                                                                                                                                           }
                                                                                                                                                                                                         : scenario ===
-                                                                                                                                                                                                            PRIORITIES_PLAN_GOAL_TWINS_SCENARIO
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_TWINS_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO
                                                                                                                                                                                                           ? () => {
                                                                                                                                                                                                               const db =
                                                                                                                                                                                                                 seedSimplePlanScenario();
                                                                                                                                                                                                               seedPlanGoalTwins(
                                                                                                                                                                                                                 db.simple_roadmap!,
+                                                                                                                                                                                                                scenario,
                                                                                                                                                                                                               );
                                                                                                                                                                                                               return db;
                                                                                                                                                                                                             }
@@ -9347,7 +9354,10 @@ function load(): Db {
   // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
   // dod-perf) has its own 500 items and none of the default company's map features.
   db.goal_map ??=
-    scenario === 'empty' || scenario === 'simple-500' || scenario === 'roadmap-milestones'
+    scenario === 'empty' ||
+    scenario === 'simple-500' ||
+    scenario === 'roadmap-milestones' ||
+    scenario === PRIORITIES_ONE_FEATURE_SCENARIO
       ? { ...seedGoalMap(scenario), features: [] }
       : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));

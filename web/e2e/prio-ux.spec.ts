@@ -163,7 +163,9 @@ test('#1776 Value / effort: no mark covers another, and the side list says why i
   const shown = (await side.getByTestId('side-rank').allInnerTexts()).map(Number);
   expect([...shown].sort((a, b) => a - b)).toEqual(shown.map((_, i) => i + 1));
   await side.getByTestId('side-ranks-help').click();
-  await expect(page.getByRole('tooltip')).toContainText('rank in the Ranked list');
+  await expect(page.getByRole('tooltip')).toContainText(
+    'shown on hover over its number in the Ranked list',
+  );
 });
 
 test('#1738 a move on Goal buckets names the place the Ranked list shows, with a Done feature left out', async ({
@@ -195,27 +197,23 @@ test('#1738 a move on Goal buckets names the place the Ranked list shows, with a
   await expect(rowByTitle(page, name).getByTestId('prio-rank')).toHaveText(String(place));
 });
 
+// prio-2 (#1895): the All chip counts the ranked features the list holds (the line's "N of M" too); a feature's
+// same-name lines sit on its row and items with no ranked feature in their own list, never added to All.
 for (const [what, scenario] of [
   ['a same-name line', PRIORITIES_TWINS_SCENARIO],
   ['an item not ranked yet', GROUND_TRUTH_FLAGS_SCENARIO],
 ] as const)
-  test(`#1739 the All chip's (i) says why it counts more than "N of M miss": ${what}`, async ({
+  test(`#1895 the All chip equals the ranked rows listed, with ${what} on the page`, async ({
     page,
   }) => {
     await open(page, '', scenario);
     const rows = await page.getByTestId('prio-row').count();
     const twins = await page.getByTestId('prio-twin').count();
     const unranked = await page.getByTestId('prio-unranked-row').count();
-    const all = rows + twins + unranked;
-    expect(all).toBeGreaterThan(rows);
+    expect(twins + unranked).toBeGreaterThan(0);
     await expect(page.getByTestId('cs-legend').getByRole('button', { name: /^All / })).toHaveText(
-      `All ${all}`,
+      `All ${rows}`,
     );
     await expect(page.getByTestId('line-caption').first()).toContainText(`of ${rows} miss`);
-    await page.getByRole('button', { name: 'About the All count' }).click();
-    const words = page.locator('#prio-all-text');
-    await expect(words).toContainText(`All ${all}: ${rows} ranked features`);
-    if (twins) await expect(words).toContainText(`${twins} same-name`);
-    if (unranked) await expect(words).toContainText(`${unranked} item`);
-    await expect(words).toContainText('"Miss" counts the ranked features only.');
+    await expect(page.getByTestId('prio-all-help')).toHaveCount(0);
   });

@@ -34,7 +34,13 @@ const moveDialog = (page: Page): Locator => page.getByRole('dialog', { name: /^W
 async function listed(page: Page): Promise<{ rank: number; above: boolean; title: string }[]> {
   return rows(page).evaluateAll((els) =>
     els.map((e) => ({
-      rank: Number(e.querySelector('[data-testid="prio-rank"]')!.textContent),
+      // prio-2 (#1898): split at the line, each part is numbered from 1; the rank is the number's title.
+      rank: Number(
+        (e.querySelector('[data-testid="prio-rank"]')!.getAttribute('title') ?? '').replace(
+          'Rank ',
+          '',
+        ) || e.querySelector('[data-testid="prio-rank"]')!.textContent,
+      ),
       above: e.getAttribute('data-above') === 'true',
       title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? '',
     })),
@@ -128,8 +134,8 @@ test.describe('fix2-simple-plan review: moves on a dated plan stay in rank order
       await rows(page)
         .nth(split - 1)
         .getByTestId('prio-rank')
-        .textContent(),
-    ).toBe(String(last.rank));
+        .getAttribute('title'),
+    ).toBe(`Rank ${last.rank}`);
   });
 });
 
