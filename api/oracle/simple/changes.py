@@ -2468,10 +2468,9 @@ async def inbox_rows(
     waiting = [c for c in rows if c.status == "proposed"]
     read_: service.Read | None = None
     if waiting:
-        # inbox-counts: the light read routes as the full one does (the items, their tracks'
-        # owners and the roadmaps' deciders), without the accepted dates routing never needs
-        # (main-ci); the plain read is read once per read (drafts.one_read), shared with the
-        # drafts pass below when I see no drafts.
+        # inbox-counts: the light read routes as the full one does (items, track owners,
+        # deciders), without the accepted dates routing never needs (main-ci); the plain read
+        # is read once (drafts.one_read), shared with the drafts pass below if I see no drafts.
         read_ = (
             await service.load(db, light=True, routing=True)
             if counting
@@ -2479,6 +2478,7 @@ async def inbox_rows(
         )
         from oracle.simple.inbox_route import waiting_for
 
+        assert read_ is not None  # inbox-2: narrowed for pyright (main-ci)
         waiting = await waiting_for(db, me, waiting, read_)
     if counting:
         return [_counted(c, seen) for c in waiting], []
