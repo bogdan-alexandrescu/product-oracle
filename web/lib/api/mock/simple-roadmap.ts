@@ -2318,6 +2318,17 @@ function flagsOf(
   // stale-flags (service.check's Node.owner_id): the owner its panel shows and set_owner writes.
   if (s.draft && !owned && !closed(s))
     flag('draft_without_owner', 'Draft with no owner to confirm it', []);
+  // panel-stages (#1879), as constraints.check: an item not a draft that depends on a draft.
+  for (const k of s.draft || closed(s) ? [] : (s.depends ?? [])) {
+    const dep = all.get(k);
+    if (dep && k !== s.key && dep.s.draft && !closed(dep.s))
+      flag(
+        'depends_on_draft',
+        `Depends on a draft: ‘${short(dep.s.title)}’`,
+        [],
+        stableUuid(`simple-item/${k}`),
+      );
+  }
   return out;
 }
 

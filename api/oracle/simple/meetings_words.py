@@ -52,6 +52,7 @@ PROPOSAL_WORDS = {
     "set_goals": "move to another goal:",
     "set_parent": "change what it is part of:",
     "set_code": "new code for",
+    "take_feature_code": "feature code given to",
 }
 
 

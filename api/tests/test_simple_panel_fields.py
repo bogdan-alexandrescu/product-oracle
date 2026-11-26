@@ -357,7 +357,9 @@ async def test_panel_status_planned_keeps_other_shipped(client):
     # The panel's own done mark is what planned clears.
     r = await p.post(client, "set_status", {"status": "planned"}, {"status": "done"}, item=p.b)
     assert r.status_code == 201, r.text
-    r = await p.post(client, "set_status", {"status": "done"}, {"status": "planned"}, item=p.b)
+    # panel-stages (#1879): a move back says why.
+    r = await p.post(client, "set_status", {"status": "done"},
+                     {"status": "planned", "reason": "Not live yet"}, item=p.b)  # fmt: skip
     assert r.status_code == 201, r.text
     assert (await p.read(client))["b"]["status"] == "planned"
 
