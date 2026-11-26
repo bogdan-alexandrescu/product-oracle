@@ -92,7 +92,9 @@ export function KeysHost({ pages, detailed }: { pages: Page[]; detailed: boolean
     Enter: (e) => {
       const r = focused();
       const to = r?.querySelector<HTMLElement>(OPENER);
-      if (!to || (document.activeElement && r?.contains(document.activeElement))) return;
+      // A focused link or button keeps its own Enter.
+      const a = document.activeElement;
+      if (!to || (a && a.matches('a[href], button, [role=button], summary, select'))) return;
       e.preventDefault();
       to.click();
     },
