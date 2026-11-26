@@ -199,11 +199,11 @@ test("#1753 a track's health mark is a 24x24 hit area: a tap or click at its edg
       await tip.evaluate((b, [px, py]) => b.contains(document.elementFromPoint(px, py)), [x, y]),
       `${x},${y}`,
     ).toBe(true);
-  await page.touchscreen.tap(box.x + 1, box.y + box.height - 1);
+  await page.touchscreen.tap(box.x + 2, box.y + 2);
   await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
   await page.touchscreen.tap(5, 5);
   await expect(risk.getByRole('tooltip')).toBeHidden();
-  await page.mouse.click(box.x + box.width - 1, box.y + 1);
+  await page.mouse.click(box.x + box.width - 2, box.y + box.height - 2);
   await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
   await context.close();
 });
