@@ -1,9 +1,10 @@
 import { Outlet, createRootRoute, redirect } from '@tanstack/react-router';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 
 import { AppShell } from '@/components/ds/AppShell';
 import { ScrollbarRoom } from '@/components/ds/ScrollbarRoom';
 import { CommandPalette } from '@/components/palette/Palette';
+import { tellHubReady } from '@/lib/app-hub';
 import { MeProvider, MeSync } from '@/lib/me';
 import { resolveRedirect } from '@/lib/redirects';
 
@@ -13,6 +14,7 @@ import './globals.css';
 
 // The html, head, fonts and the before-paint theme and mode scripts are in index.html (#1581).
 function RootLayout() {
+  useEffect(() => tellHubReady(window), []);
   return (
     <>
       <ScrollbarRoom />
