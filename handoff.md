@@ -530,8 +530,12 @@ Gates (all run after the last commit with code changes, d0b30e6e6):
 - API suite `uv run pytest -q -n 4 -m "not timing"`, run in 5 file chunks (one run passes the
   10-minute foreground limit): 2437 passed 1 skipped 1 xfailed; 2294 passed 2 skipped;
   2218 passed 6 skipped; 2246 passed 6 skipped; 2682 passed 1 skipped. 0 failed.
-- `uv run pytest -m timing tests`: NOT RUN TO THE END: stopped by my 400 s timeout with no
-  failure printed up to then (dots only); CI runs it.
+- `uv run pytest -m timing tests`: 417 passed, 2 failed, both roadmap read budgets:
+  test_simple_roadmap_api.py::test_500_items_answer_under_300_ms_and_grouped_by_goal_under_500_ms
+  (0.326 s vs 0.3) and test_simple_roadmap_speed.py::test_reads_answer_within_budget (0.478 s vs
+  0.36). Alone, the first passes and the second reads 0.398 s. The same test on unchanged main
+  e2ded48 in this container reads 0.413 s, so it fails there too: the container is slow, and the
+  train is not the cause (no lane touched the roadmap read). CI's timing job decides.
 - `tests/test_frozen_migrations.py`: 8 passed.
 - pyright as CI runs it: `pyright: 1263 errors, baseline 1263`, check exit 0.
 - web `npx tsc --noEmit`: exit 0. `npm run lint` (full): exit 0. `npm run format:check`:
