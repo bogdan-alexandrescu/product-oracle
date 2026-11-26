@@ -498,3 +498,47 @@ fixed; the first round's "7 of 8" was wrong about #1753).
   run (-n 4, timed out at 64%) showed one F at 57% whose name the timeout did not print; a second run (-n 5, more
   Postgres locks) passed that range to 62% with no failure (a load flake likely, unproven). A -n 6 run hit Postgres
   "out of shared memory" on DROP SCHEMA (max_locks_per_transaction=256): use 1024. Next step: run the whole suite.
+
+## train night-m (merge train, from main e2ded48)
+
+Six lanes merged with `git merge --no-ff`, in order, each head checked against its named sha
+(all matched): 1922 Inbox and Decisions (ddad55f119), 1928 Priorities re-audit (f8824413ac),
+1926 One milestone number (30b9374f70), 1925 Feature panel wording (2ffcae97bb), 1927 Runs
+names, test care (f9aa3ffe92), 1888 Command palette (75f49b67a8). No lane was left out.
+
+Conflicts and how each was resolved:
+- `api/tests/module_sizes.json` (1922): took main's lower drafts.py 2120 and meetings.py 1548
+  (the real lengths); lane 1 moved the Inbox routing to `oracle/simple/inbox_route.py`, so
+  changes.py fell to 2572 and its entry was lowered to 2572 (the ratchet asks for the exact length).
+- `handoff.md` (1928, 1926, 1925): kept main's content; these notes are added at the end.
+- `web/lib/api/mock/server.ts` (1925): kept both imports (inbox-proposal-scenario, panel-words).
+- `web/lib/api/mock/server.ts` (1888): kept both imports and main's deferred-save harness
+  (take/ownTurn/answer/leave); the palette's route runs ahead of the queue as in the lane, and
+  its early answer now calls `leave()` so the burst's in-flight count drops and the deferred
+  save still happens at the burst's last call. Priorities files (1928 vs 1926) merged cleanly.
+
+Train duties:
+- Migrations: one head, `0139_task_tracker_push_error (head)`; no lane added a migration.
+- `python3 docs/contracts/check.py`: exit 0. `make openapi`: no change.
+- Pinned read digests: no lane touched one; the speed tests pass in the suite.
+- Names (#1763): no added `name or email` / bare email in the merged diff.
+- Follow-up: the two raw `<button>`s from the Home fixes (`web/app/simple/page.tsx` others'
+  changes item, `web/components/simple/PlanByMonth.tsx` late item) are now the design system's
+  `Button` (ghost, styled as the inline link it was); no-raw-button counts back to 21 and 4.
+
+Gates (all run after the last commit with code changes, d0b30e6e6):
+- API suite `uv run pytest -q -n 4 -m "not timing"`, run in 5 file chunks (one run passes the
+  10-minute foreground limit): 2437 passed 1 skipped 1 xfailed; 2294 passed 2 skipped;
+  2218 passed 6 skipped; 2246 passed 6 skipped; 2682 passed 1 skipped. 0 failed.
+- `uv run pytest -m timing tests`: NOT RUN TO THE END: stopped by my 400 s timeout with no
+  failure printed up to then (dots only); CI runs it.
+- `tests/test_frozen_migrations.py`: 8 passed.
+- pyright as CI runs it: `pyright: 1263 errors, baseline 1263`, check exit 0.
+- web `npx tsc --noEmit`: exit 0. `npm run lint` (full): exit 0. `npm run format:check`:
+  All matched files use Prettier code style!
+- Playwright (`--retries=0 --workers=2`, prebuilt mock) on prose-guard.spec.ts, every spec
+  the lanes added or changed (64), and the four Home specs from the commit that added the two
+  buttons: 5 chunks, 135 + 115 + 99 + 197 (1 skipped) + 140 passed, 0 failed.
+
+Not done: pushing. This environment publishes the branch after the step, so no push ran
+after each merge.
