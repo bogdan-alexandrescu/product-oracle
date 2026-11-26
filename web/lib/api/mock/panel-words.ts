@@ -4,6 +4,7 @@
  * Weekly alert digest), its title carrying its PRD's name and a priority tag, the note Oracle
  * writes when it makes a roadmap version, and its goal's target ending in milestone shorthand.
  */
+import { goalBucketsDb } from './goal-buckets';
 import { stableUuid } from './ids';
 import { ROADMAPS, roadmapGoal, seedSimpleRoadmap, writeRoadmapGoal } from './simple-roadmap';
 
@@ -34,6 +35,11 @@ export function seedPanelWords(db: Db): void {
     digest.title = `${ROADMAPS[digest.roadmap].prd}: ${digest.title} (P0)`;
     digest.note = 'from version 21';
   }
+  // The goal store the panel reads (built here so the target written below is the one it reads).
+  goalBucketsDb(
+    rm,
+    db.members.map((m) => ({ id: m.id, name: m.name ?? m.email, email: m.email, role: m.role })),
+  );
   const goal = roadmapGoal(rm, 'grow-retention');
   writeRoadmapGoal(rm, 'grow-retention', { ...goal, target: `${goal.target} (M2)` });
 }
