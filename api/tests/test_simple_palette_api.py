@@ -29,6 +29,9 @@ Test cards (protects / fails_when / no_claim):
 - test_confirmed_features_on_no_roadmap_are_listed: protects=a confirmed live feature no item
   holds is listed by code and name; fails_when=it is missing, or an item's, a proposed, a
   trashed or another company's feature is listed.
+- test_a_feature_only_an_older_version_holds_is_listed: protects=a confirmed feature held by v1
+  only, with approved v2 without it, is listed (the roadmap read shows v2); fails_when=an item of
+  any version or draft counts as holding it.
 """
 
 from datetime import UTC, date, datetime
@@ -301,6 +304,31 @@ async def test_confirmed_features_on_no_roadmap_are_listed(client):
         got = (await read(client, ctx, role))["features"]
         assert [(f["code"], f["name"]) for f in got] == [("F-12", "Referral link")]
         assert got[0]["id"] == referral
+
+
+async def test_a_feature_only_an_older_version_holds_is_listed(client):
+    """F-12 Referral link was on roadmap v1; approved v2 holds F-13 only. The roadmap read
+    shows v2's items, so F-12 is on no roadmap and is found."""
+    ctx = await make_ctx(f"Example Co {uuid4().hex[:8]}")
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, v1 = await seed.roadmap("launch")
+        v2 = await seed.version(rm, n=2)
+        referral = await seed.entity("feature", "F-12")
+        referral.title = "Referral link"
+        invites = await seed.entity("feature", "F-13")
+        invites.title = "Team invites"
+        await seed.item(v1, pv, "f-12", feature_id=referral.id)
+        await seed.item(v1, pv, "f-13", feature_id=invites.id)
+        await seed.item(v2, pv, "f-13", feature_id=invites.id)
+        await s.commit()
+        referral_id = str(referral.id)
+    shown = (await get_roadmap(client, ctx, "viewer"))["items"]
+    assert [i["code"] for i in shown] == ["F-13"]
+    got = (await read(client, ctx, "viewer"))["features"]
+    assert [(f["id"], f["code"], f["name"]) for f in got] == [
+        (referral_id, "F-12", "Referral link")
+    ]
 
 
 async def features_world(prefix: str = "") -> tuple[Ctx, str]:
