@@ -183,6 +183,11 @@ test.describe('QA pass 2: simple-plan, the Ranked list', () => {
     // build-plan QP1: two headed parts, Makes and Misses, in place of the divider.
     await expect(page.getByTestId('prio-part-head')).toHaveCount(2);
     await expect(page.getByTestId('line-divider')).toHaveCount(0);
+    // prio-2 (#1910): the folded Needs triage rows miss the line too; open them to list every row.
+    await page
+      .getByTestId('prio-triage-head')
+      .getByRole('button', { name: /^. Needs triage$/ })
+      .click();
     const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-above')));
     const first = above.indexOf('false');
     expect(first).toBeGreaterThan(0);
