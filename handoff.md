@@ -1,3 +1,31 @@
+# prio-2 handoff (issues #1739, #1895, #1898, #1910, #1911; Simple > Priorities only)
+
+## What changed (web/app/simple/priorities, its mock)
+- #1898: split at a dated line, Makes and Misses are each numbered from 1; the rank is in the number's title
+  ("Rank 7"). Not split (rank order with a divider), the numbers stay the ranks (they already read in order).
+- #1895 = #1739's chip: All counts the ranked features (= Makes + Misses + Needs triage, as the kind chips do).
+  The (i) that explained the larger All is gone. A feature's same-name lines stay on its row; items with no ranked
+  feature keep their own "No ranked feature" list.
+- #1910: rows that miss the line with no goal and no effort fold under one "Needs triage · N features" (closed by
+  default, (i) "No goal and no effort yet."), numbered from 1 when open. Only when the list is split at a dated line.
+- #1911: the row sentence is now a small tag "Not on <company roadmap>"; the sentence is said once, in an (i) beside
+  the same tag above the list.
+- #1739 Goal buckets (dated plan): a goal card counts its plan features as before ("0 features in the plan") and,
+  when the goal has work this quarter outside the plan, "+ N outside the plan" scrolls to that goal's line in "Also
+  this quarter, outside the plan". "1 features" fixed in the Show note, the goal filter line and goal-buckets' move.
+- Mock: scenario "priorities-plan-goal-outside" (simple-plan plus an invented goal, Grow retention, with no plan work),
+  wired through seedPlanGoalTwins(db, scenario) so server.ts's nested chain changes by 4 lines only.
+
+## Already as asked at base (no code change)
+- #1910 first point: a feature's drafts and its same-name copies already sit on its one row (qa-prio-twins: RowDrafts,
+  Twins). NOT built: one Merge action for all of them at once (each copy keeps its own Merge into…); owner question
+  in questions.json.
+
+## Tests
+- web/e2e/prio-2.spec.ts: 3 tests, red at 0025dcb without the fix (3 failed), green with it.
+- Specs updated for the new behaviour: prio-ux (#1739 All tip -> #1895 All = rows), prio-twins (All), prio-company and
+  codes-at-write (the tag text).
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)

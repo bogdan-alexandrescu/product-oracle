@@ -864,16 +864,19 @@ function YourList({
   const goalName = params.get('name') ?? goal;
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
   const goalOf = goalOfRow(data);
-  const inGoal = byLine(data).filter(
-    (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOf(r) === goalName),
-  );
   // prio-2 (#1910): split at a dated line, the rows that miss it with no goal and no effort go last, folded under one
   // "Needs triage"; (#1898) each part is numbered from 1, the rank in the number's title.
   const triaged = (r: Row) => !r.above_line && !goalOf(r) && r.effort == null;
-  const rows =
-    splitAtLine(data) && !goal
-      ? [...inGoal.filter((r) => !triaged(r)), ...inGoal.filter(triaged)]
+  const rows = useMemo(() => {
+    const of = goalOfRow(data);
+    const late = (r: Row) => !r.above_line && !of(r) && r.effort == null;
+    const inGoal = byLine(data).filter(
+      (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : of(r) === goalName),
+    );
+    return splitAtLine(data) && !goal
+      ? [...inGoal.filter((r) => !late(r)), ...inGoal.filter(late)]
       : inGoal;
+  }, [data, goal, goalName]);
   const [triageOpen, setTriageOpen] = useState(false);
   const topValue = Math.max(0, ...data.rows.map((r) => r.goal_value ?? 0));
   const setParams = useSetParams();
@@ -3481,14 +3484,9 @@ function TriageHead({ n, open, onToggle }: { n: number; open: boolean; onToggle:
       data-testid="prio-triage-head"
       className="mt-2 flex flex-wrap items-center gap-x-2 border-t-2 border-line pt-3"
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]"
-      >
+      <Button variant="ghost" aria-expanded={open} onClick={onToggle} className="-ml-2.5">
         {open ? '▾' : '▸'} Needs triage
-      </button>
+      </Button>
       <span
         className="text-[length:var(--simple-small)] text-text2"
         data-testid="prio-triage-count"
@@ -4543,8 +4541,8 @@ function PlanBuckets({
                     >
                       {count(n)}
                       {outsideOf(g) && (
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
                           data-testid="plan-goal-outside"
                           className="ml-1 underline"
                           onClick={() =>
@@ -4554,7 +4552,7 @@ function PlanBuckets({
                           }
                         >
                           + {outsideOf(g)!.rows.length} outside the plan
-                        </button>
+                        </Button>
                       )}
                     </span>
                     {rights.edit(rec) && (
