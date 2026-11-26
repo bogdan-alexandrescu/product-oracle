@@ -2514,6 +2514,37 @@ function seedRoadmapKeyDatesTiedPrdsScenario(): Db {
 }
 
 /**
+ * #1894, the "milestone-codes-prd" scenario: "roadmap-keydates" whose roadmap read carries the PRD plan's
+ * milestones (M1 Prove it, M2 Scale volume, M3 Open to all) as goal milestones too, as the API's goal_milestones brings
+ * each PRD milestone onto its roadmap, so each has the roadmap's own code beside the PRD's. Invented data.
+ */
+function seedMilestoneCodesPrdScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const rm = db.simple_roadmap!;
+  const prd = { slug: PLAN_PRD_SLUG, title: 'Guided setup' };
+  rm.goal_milestones = [
+    ...(rm.goal_milestones ?? []),
+    ...[
+      ['M1', 'Prove it', KEYDATES_PRD_DAYS.m1],
+      ['M2', 'Scale volume', KEYDATES_PRD_DAYS.m2],
+      ['M3', 'Open to all', '2027-02-12'],
+    ].map(([code, name, date]) => ({
+      id: stableUuid(`simple-gm/prd-${code}`),
+      roadmap: 'onboarding-roadmap',
+      code,
+      name,
+      date,
+      goal: null,
+      gates: [],
+      counts_when: '',
+      progress: 'not_started' as const,
+      prd,
+    })),
+  ];
+  return db;
+}
+
+/**
  * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
  * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
  * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
@@ -8969,7 +9000,10 @@ function load(): Db {
                                                                                                                                                                                                                                                                                                                                 : scenario ===
                                                                                                                                                                                                                                                                                                                                     'strategy-none'
                                                                                                                                                                                                                                                                                                                                   ? seedNoStrategyScenario
-                                                                                                                                                                                                                                                                                                                                  : seed,
+                                                                                                                                                                                                                                                                                                                                  : scenario ===
+                                                                                                                                                                                                                                                                                                                                      'milestone-codes-prd'
+                                                                                                                                                                                                                                                                                                                                    ? seedMilestoneCodesPrdScenario
+                                                                                                                                                                                                                                                                                                                                    : seed,
   );
   // The 500-item scenario's plans, known only while its items are the roadmap's.
   knowManyPlans(db.simple_roadmap);

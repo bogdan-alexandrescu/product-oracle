@@ -114,12 +114,14 @@ for (const [name, viewport] of [
           .getByTestId('line-picker')
           .getByLabel('Line', { exact: true })
           .locator('option');
-        await expect(options.filter({ hasText: `From the PRD: ${M1}` })).toHaveCount(1);
+        // #1894: by the roadmap's one code for it (the track's Prove it, M1), never the PRD's own number beside it.
+        const coded = 'From the PRD: M1 Prove it · Nov 27, 2026';
+        await expect(options.filter({ hasText: coded })).toHaveCount(1);
         const texts = await options.allTextContents();
         expect(
           texts.filter((t) => t.includes('Prove it')),
           texts.join('\n'),
-        ).toEqual([`From the PRD: ${M1}`]);
+        ).toEqual([coded]);
       });
 
       test("a saved pick of the plan's M1 draws the same line, shown as From the PRD", async ({
