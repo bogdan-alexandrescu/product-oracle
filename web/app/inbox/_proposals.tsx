@@ -132,6 +132,20 @@ const askedBy = (p: Proposal): string =>
     ? requestWords(`The meeting ${p.from_meeting.title}`, p.asked)
     : requestWords(p.by_name, p.asked, p.from_ask ? ' through Ask Oracle' : '');
 
+/** inbox-codes (#1786): the request's words with its item named as the cell above names it, its code first. */
+function withCode(words: string, p: Proposal) {
+  const name = p.item_title ?? '';
+  const at = name && p.item_code && !name.startsWith(`${p.item_code} `) ? words.indexOf(name) : -1;
+  if (at < 0) return words;
+  return (
+    <>
+      {words.slice(0, at)}
+      <Named item={{ code: p.item_code, title: name }} />
+      {words.slice(at + name.length)}
+    </>
+  );
+}
+
 /**
  * inbox-meeting-proposals: every Simple proposal waiting on me (the API's `simple_proposals`):
  * one a meeting asked for on an item it does not review, one asked through Ask Oracle, one a
@@ -169,7 +183,7 @@ export function proposalRows(
             className="block basis-full text-sm break-words whitespace-normal text-text2"
             data-testid="meeting-proposal-context"
           >
-            {askedBy(p)} · {formatDateTime(p.at)}
+            {withCode(askedBy(p), p)} · {formatDateTime(p.at)}
           </span>
         </>
       ),

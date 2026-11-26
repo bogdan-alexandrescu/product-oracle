@@ -9,7 +9,8 @@ import { expect, test } from './test';
  * proposal row. On "inbox-replaced-proposal" (invented data) a commenter's owner change waits on
  * the Owner for Trusted seller badge, an item of a replaced roadmap (no roadmap Simple reads holds
  * it) that came from its PRD's section F-45. Its row in Simple > Inbox and in Detailed > Inbox
- * names it "F-45 Trusted seller badge", the code before the name, as every page does.
+ * names it "F-45 Trusted seller badge", the code before the name, as every page does, in its item
+ * cell and in the request's words under it.
  *
  * protects=#1786; fails_when=the proposal row names its feature without its code.
  */
@@ -38,5 +39,9 @@ for (const path of ['/simple/inbox', '/inbox']) {
     await expect(row).toBeVisible();
     await expect(row.locator('.simple-code').first()).toHaveText('F-45');
     await expect(row).toContainText('F-45 Trusted seller badge');
+    // The request's words under it name the badge the same way.
+    await expect(row.getByTestId('meeting-proposal-context')).toContainText(
+      'F-45 Trusted seller badge',
+    );
   });
 }
