@@ -88,9 +88,9 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId('meetings-live-empty')).toHaveText('No meeting is on now.');
         await expect(page.getByTestId('meetings-live-empty')).not.toHaveClass(/simple-card/);
         await expect(page.getByRole('button', { name: 'Start a review' })).toHaveCount(0);
-        // Each upcoming row leads to its pre-read and agenda, or says it is not ready.
+        // #1914: a row leads to its pre-read and agenda once one is due; none says "not ready yet".
         for (const row of await page.getByTestId('meetings-upcoming-row').all())
-          await expect(row).toContainText(/Pre-read and agenda|Pre-read not ready yet/);
+          await expect(row).not.toContainText('not ready yet');
         // simple-home #13 (br-zone-style): each time carries its short zone, "9:00 AM PDT".
         await expect(page.getByRole('region', { name: 'Upcoming' })).toContainText(
           /\d:\d\d [AP]M P[SD]T\b/,

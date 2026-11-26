@@ -80,7 +80,8 @@ test.describe('desktop 1440x900', () => {
         .getByTestId('card-decisions')
         .getByRole('link', { name: 'Send the digest weekly or daily?' }),
     ).toBeVisible();
-    await expect(card.getByTestId('card-reasons')).not.toContainText('(draft');
+    // #1915: the PRD's draft as the API words it, as One-pagers does ("Approved draft n").
+    await expect(card.getByTestId('card-reasons')).toContainText(/ \(draft \d+\): /);
     await expect(card.getByTestId('card-reasons')).not.toContainText('F-79');
     await expect(card.getByTestId('card-needed')).toHaveText('None');
     // BGD (Nov 4): the item's own code shows once (its chip, or since PR 1404 its editable Code field); no other code shows.

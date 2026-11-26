@@ -1,3 +1,56 @@
+# meet-onepager handoff (#1914, #1915)
+
+## Fix round 1 (review NOT_YET, one major, fixed)
+- The mock's cited draft is now the PRD's own version (`web/lib/api/mock/simple-roadmap.ts` ROADMAPS):
+  Usage alerts' roadmap cites draft 1 (One-pagers shows "Approved draft 1"; was 5), Guided setup's draft 3
+  (its one-pager seed is version 3, as Decisions' "Guided setup PRD (draft 3)"; was 2). Plan changes (3),
+  the Help desk roadmap (3) and the many-PRDs scenario have no PRD document in the mock, so nothing on
+  One-pagers can contradict them; left as is.
+- `web/e2e/meet-onepager.spec.ts` reads the chip's draft number and checks the card cites the same one
+  (or, only when the chip says a newer draft is in progress, any draft). Red on the old mock build
+  (commit 9cd9721: "Expected From Usage alerts (draft 1)", received "(draft 5)"), green after f7f19e3.
+- `simple-walk-fixes` and `simple-walk-fixes3-rw` expect "(draft 1)"; the latter's comment and title
+  no longer say "no draft number" (minor).
+- Gates: Playwright --retries=0 --trace=off on the 8 specs that read the card's reasons or the cited draft
+  (fix4-simple-roadmap-card, meet-onepager, roadmap, simple-additions, simple-decisions-questions,
+  simple-roadmap, simple-walk-fixes, simple-walk-fixes3-rw): 146 passed. tsc exit 0, full
+  `npm run lint` exit 0, format:check exit 0. No API change: API suite, timing, pyright, frozen migrations not run.
+- Minor left: Home's "Next review meeting" "Pre-read not ready yet" (outside this lane's scope).
+
+## Round 0
+## What changed
+- #1914 (`web/app/simple/meetings/page.tsx`): an Upcoming row whose occurrence is not made yet no longer says
+  "Pre-read not ready yet". Rituals make an occurrence (and its pre-read) only `prep_hours` before the meeting
+  (`api/oracle/simple/meetings.py` `_upcoming`), so a row without one has no pre-read due; a row with one keeps
+  its "Pre-read and agenda" link (one line, as before). Web only; no API change.
+- #1915 (`web/components/simple/PrdStatus.tsx`): the One-pagers chip (and a one-pager's header, same component)
+  names the version as Simple's feature card does: "Approved draft 3", and with a newer one
+  "Approved draft 3 · draft in progress" / "· changes in review" (was "Approved" / "Approved v3 · ...").
+  The feature card's line is unchanged: the API writes "From <PRD> (draft n): <section>."
+  (`api/oracle/simple/service.py:1342`). The mock had dropped "(draft n)"; it now carries it
+  (`web/lib/api/mock/simple-roadmap.ts`, ROADMAPS[..].draft), so the mock matches the API.
+- Specs: new `web/e2e/meet-onepager.spec.ts` (red on base cf1f3f4, commit f28da9b; green after).
+  Updated to the new behaviour: `qa2-simple-meetings` (no row says "not ready yet"), `qa4-simple-decide-meetings`
+  (-34: only a row with a pre-read link has "Pre-read", kept on one line), `simple-walk-fixes`,
+  `simple-walk-fixes3-rw` ("From Usage alerts (draft 5): ..."), `fix4-simple-roadmap-card` (it asserted
+  no "(draft" on the card, which pinned the mock's drift from the API; it now expects the draft wording).
+
+## Gates
+- `npx tsc --noEmit -p .` exit 0; full `npm run lint` exit 0; `npm run format:check` exit 0.
+- Playwright --retries=0, --trace=off: all 90 specs that drive Meetings, One-pagers, a one-pager's header or the
+  card's reasons, in 8 chunks: 1009 passed, 1 skipped; the 3 failures met along the way (fix4 card, qa4 -34 x2,
+  qa2 x4) were the older assertions above, fixed and rerun green.
+- Prose guard: the page groups with /simple/meetings and /simple/one-pagers pass. Its two merge-base tests
+  fail here only because the clone has no origin/main merge base (env); no ceiling was touched.
+- No API change: API suite, timing, pyright and frozen migrations not run (not needed).
+
+## Left
+- Home's "Next review meeting" (`web/app/simple/page.tsx:1856`) still says "Pre-read not ready yet" for a review
+  with no occurrence; Home was outside this lane's scope (Meetings only).
+- Mock seed: the Usage alerts PRD is approved at version 1 while its roadmap's items cite draft 5
+  (ROADMAPS.draft); invented data, left as is.
+- Owner question (questions.json): "draft n" vs "v n" as the one version word in Simple.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)

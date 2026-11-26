@@ -123,9 +123,12 @@ for (const phone of [false, true]) {
       const rows = page.getByTestId('meetings-upcoming-row');
       await expect(rows.first()).toBeVisible();
       for (const row of await rows.all()) {
+        // #1914: a row says nothing of a pre-read not due yet; one that is due keeps one line.
         const pre = row.getByText('Pre-read', { exact: true });
-        await expect(pre).toHaveCount(1);
-        expect(await lines(pre)).toBe(1);
+        await expect(pre).toHaveCount(
+          (await row.getByTestId('meetings-pre-read-link').count()) ? 1 : 0,
+        );
+        for (const p of await pre.all()) expect(await lines(p)).toBe(1);
         const due = row.getByText(MOMENT);
         await expect(due).toHaveCount(1);
         expect(await lines(due)).toBe(1);

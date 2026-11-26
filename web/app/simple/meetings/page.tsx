@@ -152,8 +152,9 @@ function Meetings() {
                     <strong>{o.ritual_title}</strong> ·{' '}
                     <span className="inline-block whitespace-nowrap">{when(o.due_at)}</span> ·{' '}
                     {o.length_min} min · {o.attendees.map((a) => a.name).join(', ')}
-                    {/* qa-simple-decide-37: its pre-read and agenda before it starts. */}
-                    {o.occurrence_id ? (
+                    {/* qa-simple-decide-37: its pre-read and agenda before it starts. #1914: none
+                        is due before its occurrence is made (the ritual's lead time), so no note. */}
+                    {o.occurrence_id && (
                       <>
                         {' · '}
                         <Link
@@ -164,11 +165,6 @@ function Meetings() {
                           <span className="whitespace-nowrap">Pre-read</span> and agenda
                         </Link>
                       </>
-                    ) : (
-                      <span className="simple-small">
-                        {' '}
-                        · <span className="whitespace-nowrap">Pre-read</span> not ready yet
-                      </span>
                     )}
                   </span>
                   {o.meeting_id ? (
