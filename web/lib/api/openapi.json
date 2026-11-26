@@ -87356,6 +87356,17 @@
             ],
             "title": "Title"
           },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "reason": {
             "$ref": "#/components/schemas/InboxChildReason"
           },
@@ -87396,7 +87407,7 @@
           "reason"
         ],
         "title": "InboxChild",
-        "description": "One item under a checkpoint's Inbox row (D9): an item still needing the caller, its\nfirst open reason, the safe one-click fix of that reason (None when it has none) and a\ncommenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves\nits slot (the Inbox page keeps the row it just fixed, done, with Undo)."
+        "description": "One item under a checkpoint's Inbox row (D9): an item still needing the caller, its\nfirst open reason, the safe one-click fix of that reason (None when it has none) and a\ncommenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves\nits slot (the Inbox page keeps the row it just fixed, done, with Undo). ``code``: the\ncode the item reads with (its title's, else its PRD section's); None when it has none."
       },
       "InboxChildReason": {
         "properties": {

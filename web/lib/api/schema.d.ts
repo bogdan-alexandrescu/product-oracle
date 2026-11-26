@@ -28065,13 +28065,16 @@ export interface components {
          * @description One item under a checkpoint's Inbox row (D9): an item still needing the caller, its
          *     first open reason, the safe one-click fix of that reason (None when it has none) and a
          *     commenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves
-         *     its slot (the Inbox page keeps the row it just fixed, done, with Undo).
+         *     its slot (the Inbox page keeps the row it just fixed, done, with Undo). ``code``: the
+         *     code the item reads with (its title's, else its PRD section's); None when it has none.
          */
         InboxChild: {
             /** Item */
             item: string;
             /** Title */
             title?: string | null;
+            /** Code */
+            code?: string | null;
             reason: components["schemas"]["InboxChildReason"];
             fix?: components["schemas"]["ReasonFix"] | null;
             staged?: components["schemas"]["ReviewAction"] | null;
