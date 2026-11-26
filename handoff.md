@@ -1,3 +1,41 @@
+# inbox-codes (#1786 reopened) — handoff
+
+Base 926a307 (train night-m). Commits: ef61062 red pytest (proposals), 04e48a7 API item_code on
+InboxSimpleChange, 47ae178 web proposal row + mock + spec, da4136b request words, then red pytest
+(action items), 66bb3a7 action item rows. Worker publishes the branch (git push not available here).
+
+## What the auditor saw, and the cause
+A proposal row named its feature without its code. The row's code came only from the Simple
+roadmap read (useItemRef, GET /v1/simple/roadmap), which leaves out an item of a replaced roadmap;
+such a row showed the bare name (no code, no flag). Fix: the API read behind the row now carries
+`item_code` (codes.code_of, as the roadmap reads it) and the row's name takes it first, through
+the one helper (`Named` in components/simple/FeatureName.tsx, via app/inbox/_proposals.tsx's
+FeatureName). Reproduced on the mock's "inbox-replaced-proposal" scenario: its Trusted seller
+badge (replaced roadmap) now comes from section F-45, and the Owner has an invented action item
+on it.
+
+## Every Inbox row kind that names a feature (Simple > Inbox and Detailed > Inbox: one page, app/inbox/_inbox.tsx)
+| Row kind | Where | Code shown? |
+| --- | --- | --- |
+| Proposal, item cell | _proposals.tsx proposalRows | Yes. Was missing for an item off the roadmap read; fixed (API item_code). |
+| Proposal, request words ("X asks to change the owner of …") | _proposals.tsx withCode | Yes now (code inserted before the name, via Named); before: name alone. |
+| Decision on my proposal | same rows (simple_decisions) | Shown on Decisions/Home lists, not as an Inbox row kind; same field now carried. |
+| Date suggestion | _proposals.tsx dateSuggestionRows | Yes: an open suggestion's item is always on the roadmap read. Unchanged. |
+| Meeting action item (linked feature) | _action-items.tsx | Yes. Was missing off the read; fixed (API item_code on InboxSimpleActionItem). |
+| Track alert (stale marks, slips) | _track-alert.tsx AlertItem | Yes, already (item_code from the API, #1786 first pass). Unchanged. |
+| Checkpoint child (a run's draft item) | _needs.tsx childNeeds | No: InboxChild has no code field; a run's draft item before approval. Left (not a Ground Truth item yet; API change in runs). |
+| Launch (Ready to launch · X) | _needs.tsx launchNeeds | Names the launch by its own title (one or more items), not a feature. Left. |
+| Questions, discussions, Oracle-did summaries | _questions.tsx, _needs.tsx | Free text a person or Oracle wrote; not a feature field. Left. |
+
+## Tests
+- pytest (runner's Postgres): tests/test_inbox_proposal_codes.py (2) and
+  tests/test_inbox_action_item_codes.py (1): red before each fix (KeyError item_code), green after.
+- Playwright --retries=0, 2 workers: e2e/inbox-proposal-codes.spec.ts (Simple and Detailed Inbox)
+  red without each web change (Expected "F-45"), green with; inbox-2-proposal-rows (its Decisions
+  locator now picks the proposal's li, since the scenario's new action item also lists there) and
+  inbox-action-items: 6 passed.
+- tsc: exit 0.
+
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 
 Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
