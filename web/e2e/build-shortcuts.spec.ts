@@ -147,3 +147,49 @@ test.describe('KS3 A: Esc steps out of the field first', () => {
     await expect(panel).toBeHidden();
   });
 });
+
+test.describe('KS2 A: keys in the tooltips a person already gets', () => {
+  test("the rail's Roadmap tip says g then r; a row's name says Open Enter", async ({ page }) => {
+    await priorities(page);
+    await page.getByTestId('simple-nav-roadmap').hover();
+    const tip = page.getByTestId('key-tip');
+    await expect(tip).toBeVisible();
+    await expect(tip).toContainText('g');
+    await expect(tip).toContainText('then');
+    await expect(tip).toContainText('r');
+    await rows(page).first().getByTestId('prio-title').hover();
+    await expect(tip).toContainText('Open');
+    await expect(tip).toContainText('Enter');
+  });
+
+  test('Shift J moves the focused row down, as its grip does', async ({ page }) => {
+    await priorities(page);
+    const first = (await rows(page).nth(0).getByTestId('prio-title').innerText()).trim();
+    await page.keyboard.press('j');
+    await page.keyboard.press('Shift+J');
+    await expect(rows(page).nth(1).getByTestId('prio-title')).toHaveText(first);
+  });
+});
+
+test.describe('KS3 A on a phone: no keys; previous and next in the feature panel', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('the panel steps to the next feature and back, in row order', async ({ page }) => {
+    await login(page);
+    await page.goto('/simple/priorities');
+    await expect(rows(page).first()).toBeVisible();
+    await expect(page.getByTestId('keys-entry')).toBeHidden();
+    const names = rows(page).getByTestId('prio-title');
+    const one = (await names.nth(0).innerText()).trim();
+    const two = (await names.nth(1).innerText()).trim();
+    await names.nth(0).click();
+    const panel = page.getByTestId('item-panel');
+    await expect(panel).toHaveAttribute('aria-label', one);
+    await page.getByRole('button', { name: 'Next feature' }).click();
+    await expect(panel).toHaveAttribute('aria-label', two);
+    await page.getByRole('button', { name: 'Previous feature' }).click();
+    await expect(panel).toHaveAttribute('aria-label', one);
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(wide).toBeLessThanOrEqual(390);
+  });
+});
