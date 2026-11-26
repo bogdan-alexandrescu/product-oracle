@@ -81,7 +81,7 @@ import {
   usePriorityKeyResults,
   type PriorityKeyResults,
 } from './key-results';
-import { useCodedMilestone } from './milestone-codes';
+import { codedLine, useCodedMilestone } from './milestone-codes';
 import { pinAt, placed } from './places';
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
@@ -186,11 +186,11 @@ function allWords(data: Out, all: number): string {
 }
 
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
-const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
+const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean, line: string): string => {
   const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
   const tap = phone ? 'tap' : 'click';
   // PV-1 One count per spot: every mark opens the one feature panel; a count lists the marks it holds.
-  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? 'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change.' : 'Select a mark to open its feature.'} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
+  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data, line)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? 'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change.' : 'Select a mark to open its feature.'} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
 };
 
 /** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
@@ -259,6 +259,7 @@ export function Priorities() {
   const params = useSearchParams();
   const setParams = useSetParams();
   const phone = usePhone();
+  const lineWordsOf = useLineLabel();
   const { can, capsReady } = useMe();
   const urlTab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'ranked') as Tab;
   // qa-simple-plan-42: a tab picked shows at once, whatever else rewrites the URL meanwhile (the
@@ -464,7 +465,9 @@ export function Priorities() {
               {data && tab === 'ranked' && splitAtLine(data)
                 ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? '' : 's'} what makes the line, so what makes it is listed first, each part by rank.`
                 : ''}
-              {tab === 'value-effort' && data ? ` ${VE_WORDS(data, mayChange, phone)}` : ''}
+              {tab === 'value-effort' && data
+                ? ` ${VE_WORDS(data, mayChange, phone, lineWordsOf(data))}`
+                : ''}
               {tab === 'buckets' && data && !(data.plan?.milestones.length && data.plan.span) ? (
                 <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span>
               ) : (
@@ -3055,11 +3058,9 @@ function ValueEffort({
 // --------------------------------------------------------------------------- the line
 
 /** The line in words: "not this quarter" for Now, else "not done by <day>". */
-function lineWords(data: Out): string {
+function lineWords(data: Out, line = lineLabel(data)): string {
   const l = data.line;
-  return !l || l.kind === 'now'
-    ? 'not this quarter'
-    : `not planned to finish by ${l.label.replace(/^By /, '')}`;
+  return !l || l.kind === 'now' ? 'not this quarter' : `not planned to finish by ${line}`;
 }
 
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
@@ -3067,11 +3068,7 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
   const coded = useCodedMilestone();
   // #1894: a PRD's key date ("M1 · Beta") by the roadmap's one code too, never the PRD's own number.
-  const msLine = (l: Line) => {
-    const at = l.label.lastIndexOf(' · ');
-    if (at < 0) return l.label;
-    return `${coded(l.label.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null, prd: l.kind === 'key_date' ? l.prd : null })}${l.label.slice(at)}`;
-  };
+  const msLine = (l: Line) => codedLine(coded, l, l.label);
   const current = data.line ?? {
     key: 'now',
     kind: 'now' as const,
@@ -3235,14 +3232,7 @@ const lineLabel = (data: Out): string =>
 /** qa-nov17 G8: the line inside a sentence, a milestone's by its code and name as the Line picker reads it ("M6 Beta · Nov 30, 2026"). */
 function useLineLabel(): (data: Out) => string {
   const coded = useCodedMilestone();
-  return (data) => {
-    const words = lineLabel(data);
-    const l = data.line;
-    if (!l || l.kind !== 'milestone') return words;
-    const at = words.lastIndexOf(' · ');
-    if (at < 0) return words;
-    return `${coded(words.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${words.slice(at)}`;
-  };
+  return (data) => (data.line ? codedLine(coded, data.line, lineLabel(data)) : lineLabel(data));
 }
 
 /**

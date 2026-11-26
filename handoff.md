@@ -1,3 +1,21 @@
+# milestone-codes handoff (#1894, #1882), review fix round 1
+
+## This round (verdict NOT_YET: one blocker, one major, both fixed)
+- Blocker: a picked PRD key-date line kept the PRD's number in Priorities' Makes/Misses heads, the "N of M miss"
+  count, "The line: ..." caption and the Value/effort (i) words ("Makes M2 · Scale volume"). New `codedLine`
+  (milestone-codes.ts) codes a milestone line or a PRD key-date line; LinePicker's msLine, useLineLabel and the
+  (i) words (lineWords, via VE_WORDS) all use it, so they read "Makes M3 Scale volume · Dec 25, 2026".
+- Major: e2e/milestone-codes.spec.ts has a third test: pick the Scale volume line, every part head reads the
+  Roadmap's code, and no head or row milestone reads a PRD number ("M2 · "). Red at the round's base (committed
+  first: received "Makes M2 · Scale volume · Dec 25, 2026"), green with the fix.
+- Left as is: the "Misses its own milestone" compare (priorities.tsx MissesTag) compares raw name to raw name and
+  only for milestone lines, so coding does not change it. Minors (bare-name fallback, PRD number when no roadmap
+  code) not touched, as the brief says.
+
+## Gates this round
+- Playwright --retries=0 --workers=2: milestone-codes, prio-line-once, prio-company: 51 passed.
+- tsc --noEmit exit 0.
+
 # milestone-codes handoff (#1894, #1882)
 
 ## Cause (#1894)

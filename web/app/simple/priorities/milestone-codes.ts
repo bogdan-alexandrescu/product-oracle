@@ -109,3 +109,22 @@ export function useCodedMilestone(): ((
     { ready: !!read || !!q.error },
   );
 }
+
+/**
+ * #1894: a line's words with its milestone by the roadmap's one code: a milestone's line, or a PRD's key date
+ * ("M2 · Scale volume · Dec 25, 2026" reads "M3 Scale volume · Dec 25, 2026"), in the picker and in the rows' heads.
+ */
+export function codedLine(
+  coded: (
+    name: string,
+    by?: { id?: string | null; prd?: { id: string; slug: string } | null },
+  ) => string,
+  l: { key: string; kind: string; prd?: { id: string; slug: string } | null },
+  words: string,
+): string {
+  if (l.kind !== 'milestone' && !(l.kind === 'key_date' && l.prd)) return words;
+  const at = words.lastIndexOf(' · ');
+  if (at < 0) return words;
+  const id = l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null;
+  return `${coded(words.slice(0, at), { id, prd: l.kind === 'key_date' ? l.prd : null })}${words.slice(at)}`;
+}
