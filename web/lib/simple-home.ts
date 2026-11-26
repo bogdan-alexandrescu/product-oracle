@@ -116,6 +116,28 @@ export function goalStatus(current: number | null, target: number | null): GoalS
   return current >= 0.75 * target ? 'On track' : 'At risk';
 }
 
+/**
+ * A guardrail by the Goal map's own rule (goal_map.build): it holds while its value meets its
+ * comparison against the target (at most, unless it says otherwise); never Met.
+ */
+export function guardrailStatus(
+  current: number | null,
+  target: number | null,
+  comparison: unknown,
+): GoalStatus {
+  if (current === null) return 'Not measured';
+  if (target === null) return 'On track';
+  const held =
+    comparison === 'at_least'
+      ? current >= target
+      : comparison === 'above'
+        ? current > target
+        : comparison === 'below'
+          ? current < target
+          : current <= target;
+  return held ? 'On track' : 'At risk';
+}
+
 /** The goal band: one tile per confirmed top-level goal, in the one goal order (lib/goal-order.ts). */
 export function goalTiles(
   goals: Entity[],
@@ -132,6 +154,7 @@ export function goalTiles(
       const items = (roadmap?.items ?? []).filter(
         (i) => i.goal?.id === v.id && i.status !== 'cut' && i.status !== 'done',
       );
+      const guardrail = a.guardrail === true || a.kind === 'guardrail';
       return {
         id: v.id,
         key: byId.get(v.id)?.key ?? v.id,
@@ -140,8 +163,10 @@ export function goalTiles(
         weight: num(a.weight),
         path: targetPath(a),
         progress: progressLine(a),
-        status: goalStatus(num(a.current), num(a.target)),
-        guardrail: a.guardrail === true || a.kind === 'guardrail',
+        status: guardrail
+          ? guardrailStatus(num(a.current), num(a.target), a.comparison)
+          : goalStatus(num(a.current), num(a.target)),
+        guardrail,
         needYou: items.filter((i) => waiting.has(i.id)).length,
       };
     });
