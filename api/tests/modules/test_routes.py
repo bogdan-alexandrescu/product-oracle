@@ -270,11 +270,12 @@ async def test_composition_lifecycle_records_who_why_changes_and_publish(client)
 
     async with tenant_session(ctx.tenant_id) as s:
         events = (await s.scalars(select(ChangeEvent).order_by(ChangeEvent.created_at))).all()
-        # #1918: one confirm's events share its transaction's created_at, so the stored rows
-        # come back in either order; the order they are emitted in is `seen` above.
-        last = {e.subject_kind: e for e in events[-2:]}
-        assert set(last) == {"composition_revision", "document_section"}
-        assert last["document_section"].data["change"] == "module_removed"
+        # One transaction writes both, and now() is the transaction's start: they share a
+        # created_at, so their order between themselves is arbitrary.
+        latest = [e for e in events if e.created_at == events[-1].created_at]
+        by_kind = {e.subject_kind: e for e in latest}
+        assert len(latest) == 2 and set(by_kind) == {"composition_revision", "document_section"}
+        assert by_kind["document_section"].data["change"] == "module_removed"
         audits = (
             await s.scalars(
                 select(AuditEvent)

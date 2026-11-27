@@ -230,13 +230,17 @@ const BASE_COLUMNS: Column<Need>[] = [
   },
 ];
 
-// qa-leftovers: the "For" cell (a proposal's item, an access request's quote) wraps to two lines at
-// every width rather than being cut on one; below 1100 px it wraps in full, as before.
+/** A cell's text wraps in full at every width, never cut. */
+const FULL_WRAP =
+  'overflow-visible whitespace-normal break-words [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words';
+
+// qa-leftovers: the "For" cell (a proposal's item, an access request's quote) wraps rather than
+// being cut, at every width: with Item taking the free width (#1912) it may need three lines.
 export const NEED_COLUMNS: Column<Need>[] = BASE_COLUMNS.map((c) =>
   c.key === 'kind'
     ? { ...c, className: `${c.className ?? ''} ${SIDE_WRAP}` }
     : c.key === 'context'
-      ? { ...c, wrap: true, className: `${c.className ?? ''} ${SIDE_WRAP} ${WRAP_TWO}` }
+      ? { ...c, wrap: true, className: `${c.className ?? ''} ${FULL_WRAP}` }
       : c,
 );
 
