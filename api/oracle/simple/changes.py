@@ -114,6 +114,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.members.names import names_of
 from oracle.review.models import DocumentReviewPolicy
+from oracle.roadmap import codes
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
 from oracle.simple import code_take, dates, drafts, service, stages
@@ -1195,7 +1196,6 @@ async def _not_taken(
     """One code, one item: 422 when another item of the roadmap reads ``code`` (``own_only``:
     as its own, its title's, not from its feature or PRD) or, but for ``own_only``, a Ground
     Truth feature has it. The code an item shows is oracle.roadmap.codes.shown_code's."""
-    from oracle.roadmap import codes
     from oracle.simple.priorities import _short_codes
 
     await service.item_codes(db, list(by_id.values()))
@@ -1237,8 +1237,6 @@ def _code_of(e: Any) -> str | None:
 def _inherited(e: Any) -> str | None:
     """unique-codes: the code ``e`` takes from its feature or PRD section, None when its title
     gives it its own (oracle.roadmap.codes.code_of)."""
-    from oracle.roadmap import codes
-
     return None if codes.title_code(e.row.title) else _code_of(e)
 
 
@@ -1448,7 +1446,6 @@ async def _number_linked(
     """codes-at-write: the next free number and the feature's code, when linking ``entry`` to
     feature ``fid`` would show a code another item of its roadmap (in the read ``by_id``, its
     draft too) shows; None when the item may keep the feature's code."""
-    from oracle.roadmap import codes
     from oracle.simple.additions import _next_code
 
     if codes.title_code(entry.row.title):
@@ -1483,8 +1480,6 @@ async def _apply(
     if c.op == "merge_item" and not undo and (n := c.target.get("numbered")):
         # codes-at-write: the link gave the item its own number (_merge_plan); audited and
         # carried in the write's response.
-        from oracle.roadmap import codes
-
         row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
         if row is not None:
             name = values[str(row.id)]["title"].split(" ", 1)[1]
@@ -2474,9 +2469,6 @@ async def inbox_rows(
             pass
     items = list(await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids))))
     titles = {r.id: r.title for r in items}
-    # inbox-codes (#1786): each item's code read here, so a row never names a feature without it.
-    from oracle.roadmap import codes
-
     by_feature = await codes.feature_codes(db) if any(r.feature_id for r in items) else {}
     item_codes = {r.id: codes.code_of(r, by_feature) for r in items}
     # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
