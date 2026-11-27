@@ -11,6 +11,14 @@ const EDGE_X = 4;
  */
 export const EDGE_SETTLE_MS = 200;
 
+/**
+ * Repaints with no DOM change: a transition ending after a read, a scroll bringing another
+ * background under the edge, a stylesheet loading late. Heard in the capture phase, as a scroll
+ * in a nested container and a link's load do not bubble to the document.
+ */
+const REPAINT_EVENTS = ['transitionend', 'scroll', 'load'] as const;
+const LISTEN = { capture: true, passive: true } as const;
+
 type Rgb = [number, number, number];
 type Rgba = [number, number, number, number];
 
@@ -107,6 +115,7 @@ export function watchHubEdge(win: Window): () => void {
   const scheme = win.matchMedia('(prefers-color-scheme: dark)');
   scheme.addEventListener('change', reportSoon);
   win.addEventListener('resize', reportSoon);
+  for (const type of REPAINT_EVENTS) win.document.addEventListener(type, reportSoon, LISTEN);
   reportSoon();
 
   return () => {
@@ -114,5 +123,6 @@ export function watchHubEdge(win: Window): () => void {
     observer.disconnect();
     scheme.removeEventListener('change', reportSoon);
     win.removeEventListener('resize', reportSoon);
+    for (const type of REPAINT_EVENTS) win.document.removeEventListener(type, reportSoon, LISTEN);
   };
 }
