@@ -94,10 +94,11 @@ test('on a phone long milestone names wrap inside each card and the page does no
 }) => {
   await page.setViewportSize(PHONE);
   await open(page, 'simple-priorities-long-milestones');
-  const milestone = page.getByText(/^Milestone M1 · /).first();
-  await expect(milestone).toContainText(
-    'Milestone M1 · Guided setup ready for the first paying teams',
-  );
+  // #1894: the roadmap's M1 is another milestone (Beta), so this one's own "M1" is not shown.
+  const milestone = page
+    .getByText(/^Milestone Guided setup ready for the first paying teams/)
+    .first();
+  await expect(milestone).not.toContainText('M1');
   // Each code in a milestone name is shown with its name, never bare.
   await expect(milestone).toContainText('(F-30a Team invites); F-30b Billing page follows');
   await expect(milestone).not.toContainText(/F-\d+[a-z]?[);]/);
