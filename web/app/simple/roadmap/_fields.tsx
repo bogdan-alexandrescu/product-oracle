@@ -123,11 +123,11 @@ function Field({
                     setState('open');
                   }}
                 >
-                  <span id={valueId}>{value}</span>{' '}
+                  <span id={valueId}>{value}</span>
                   <Icon
                     name="pencil"
                     size={16}
-                    className="invisible inline align-[-3px] text-text2 group-hover:visible group-focus-visible:visible"
+                    className="invisible ml-1.5 inline align-[-3px] text-text2 group-hover:visible group-focus-visible:visible"
                   />
                 </span>
               ) : (
