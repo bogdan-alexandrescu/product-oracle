@@ -776,6 +776,7 @@ import {
   seedHomeMilestoneTwinTracks,
   seedHomeMilestoneTwoRoadmaps,
 } from './home-milestones';
+import { HOME_3_SCENARIO, withHome3 } from './home-3';
 import {
   AUDIENCES,
   audienceLabel,
@@ -3673,6 +3674,8 @@ function seedSimpleHomeScenario(): Db {
     'faster-activation': 20000,
     'quiet-alerts': 15,
   };
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === HOME_3_SCENARIO)
+    db.simple_roadmap = withHome3(db.simple_roadmap);
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
     for (const e of db.baseline.entities)
       if (e.key in reads) e.attrs = { ...e.attrs, current: reads[e.key] };
@@ -7260,7 +7263,9 @@ function load(): Db {
                                                                                                                                   : scenario ===
                                                                                                                                         'simple-home' ||
                                                                                                                                       scenario ===
-                                                                                                                                        'home-goal-status'
+                                                                                                                                        'home-goal-status' ||
+                                                                                                                                      scenario ===
+                                                                                                                                        HOME_3_SCENARIO
                                                                                                                                     ? seedSimpleHomeScenario
                                                                                                                                     : scenario ===
                                                                                                                                         'simple-home-move'

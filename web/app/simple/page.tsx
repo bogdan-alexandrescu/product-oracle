@@ -544,6 +544,14 @@ function SimpleHome() {
       ? () => ms.edit(m)
       : renameOf(ms)(id);
   };
+  // #1897: who sets an undated milestone's date when the reader may not (a track's: on the Plan page).
+  const dateBy = (id: string | undefined) => {
+    const m = id ? ms?.list.find((x) => x.id === id) : undefined;
+    if (!m) return 'Its date is set on the Plan page.';
+    return m.prd
+      ? `${m.prd_owner ?? "The PRD's owner"} sets its date in ${m.prd.title}.`
+      : "The roadmap's owner or decider sets its date.";
+  };
   const featureItem = useCallback(
     (f: Parameters<OpenFeature>[0]) => {
       const items = roadmap.data?.items ?? [];
@@ -1973,6 +1981,7 @@ function SimpleHome() {
                             names={planNames}
                             codes={planCodes}
                             rename={renameMs}
+                            dateBy={dateBy}
                           />
                         ) : (
                           <p className="simple-small" data-testid="home-plan-empty">
