@@ -2228,14 +2228,7 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict)
     and name as this reader reads it, "· undone" once undone."""
     from oracle.simple import change_words
 
-    e = (v.entry(c) if c.target.get("item_id") else None) or v.past.get(
-        str(c.target.get("item_id")), (None, ""))[0]  # fmt: skip
-    item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
-    if item is None and c.target.get("item_id"):
-        ref = str(c.target["item_id"])
-        item = v.deleted.get(ref) or v.past.get(ref, (None, ""))[1] or None
-    if c.op == "delete_goal":
-        item = v.deleted.get(str(c.target.get("goal_id")))
+    item = change_items.name(c, v)
     return change_words.sentence(c.op, target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
