@@ -143,7 +143,8 @@ for (const size of SIZES) {
       await page.getByRole('menuitem', { name: 'Archive goal' }).click();
       const dialog = page.getByRole('dialog', { name: 'Archive Revenue' });
       await expect(dialog).toContainText(
-        'It holds 5 features with work in M1 Prove it, M2 Scale volume and M3 Open to all.',
+        // #1894: the plan's milestones have no roadmap code: their names, never the PRD's own M1, M2, M3.
+        'It holds 5 features with work in Prove it, Scale volume and Open to all.',
       );
       await expect(dialog).toContainText(
         '1 serves another goal too and goes there: Plan limits → Growth',
@@ -296,9 +297,9 @@ for (const size of SIZES) {
         'Plan limits',
       );
       for (const t of await page.getByTestId('plan-chip').allInnerTexts())
-        expect(t.replace(/\s+/g, ' ')).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
+        expect(t.replace(/\s+/g, ' ')).toMatch(/^(Prove it|Scale volume|Open to all)$/);
       for (const t of await page.getByTestId('goal-bar-label').allInnerTexts())
-        expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ weeks?$/);
+        expect(t).toMatch(/^(Prove it|Scale volume|Open to all) · [\d.]+ weeks?$/);
     });
   });
 }

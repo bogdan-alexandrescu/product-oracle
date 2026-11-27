@@ -25,7 +25,7 @@ async function open(page: Page, who: string) {
 }
 
 const count = (page: Page, goal: string) =>
-  bucket(page, goal).getByText(/^\d+ features? in the plan$/);
+  bucket(page, goal).getByText(/^\d+ features? in the Guided setup plan$/);
 const bucket = (page: Page, goal: string) =>
   page
     .locator('[data-testid="plan-goal"]')
@@ -85,9 +85,9 @@ test("a commenter's proposed move, once accepted, moves the task in the dated go
   await page.goto('/simple/priorities?tab=buckets');
   await expect(bucket(page, 'Growth').locator('[data-code="F-03"]')).toBeVisible();
   await expect(bucket(page, 'Reliability').locator('[data-code="F-03"]')).toHaveCount(0);
-  expect(growthCount).toMatch(/features? in the plan/);
+  expect(growthCount).toMatch(/features? in the Guided setup plan/);
   await expect(count(page, 'Growth')).toHaveText(
-    `${Number(growthCount!.split(' ')[0]) + 1} features in the plan`,
+    `${Number(growthCount!.split(' ')[0]) + 1} features in the Guided setup plan`,
   );
 });
 

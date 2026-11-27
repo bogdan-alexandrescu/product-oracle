@@ -107,6 +107,8 @@ export function TaskForm({
   const done = !!f.name.trim();
   const set = (k: keyof TaskFields) => (e: { target: { value: string } }) =>
     setF((x) => ({ ...x, [k]: e.target.value }));
+  // #1894: each milestone by the roadmap's one code, never a PRD's own number.
+  const coded = useCodedMilestone();
   const options =
     f.milestone && !milestones.some((m) => m.name === f.milestone)
       ? [...milestones, { name: f.milestone, date: null }]
@@ -161,7 +163,7 @@ export function TaskForm({
           <option value="">No milestone</option>
           {options.map((m) => (
             <option key={m.name} value={m.name}>
-              {m.name}
+              {coded(m.name)}
             </option>
           ))}
         </select>

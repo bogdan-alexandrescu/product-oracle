@@ -392,7 +392,7 @@ for (const view of VIEWS) {
             .getByTestId('plan-chip')
             .first()
             .locator('span')
-            .nth(1)
+            .last()
             .textContent())!.trim();
           await row.getByRole('button', { name: 'Edit Setup failure alerts' }).click();
           await row.getByTestId('task-form').getByLabel('Milestone').selectOption({ label: name });
