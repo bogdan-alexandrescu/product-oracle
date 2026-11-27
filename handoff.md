@@ -76,6 +76,40 @@ on it.
   a live item's but whose title and section carry no code still reads as its name (the reviewer's
   "if cheap" part: it needs a roadmap read per checkpoint; not done).
 
+## Fix round 2 (re-review NOT_YET: one blocker, one pre_existing, three minors)
+
+- Merged the train (origin/swarm/task_f89b44cdd78343dc8bfa at f2308a78) with no conflict: its
+  palette-open, prio-twin-propose and inbox-for-wrap specs and app/inbox/_needs.tsx are kept as
+  the train wrote them.
+- Blocker (module sizes), 827833f: tests/test_module_size.py was already red on the branch, so it
+  is the red test (red at the parent: "runs/schemas.py: 1995 ... 1993", "simple/changes.py: 2576 ...
+  2572"; green after). simple/changes.py imports `codes` at module level; its four local copies,
+  the comment and the blank line go; its entry is lowered to 2568, since a shorter module than its
+  entry fails as stale. InboxChild's docstring now has three lines, so the `code` field is the only
+  new line (1993). `make openapi` changed only that description.
+- pre_existing (prio-twin-propose :84/:141, qa-leftovers :195): the train closed it. On the merged
+  tree all 34 pass.
+- Minor, commit ids: corrected in the header and in "Review round" above.
+- Minor, withCode's words.indexOf(name): still open. Deciding which mention of the name gets the
+  code is a design call with its own spec, not a one-line change.
+- Minor, a checkpoint child whose key is a coded item but whose title and section have no code:
+  still left (see "Left").
+- Push: git_push_branch refuses any commit whose message carries the Co-Authored-By line (code
+  foreign_author, field message), whoever the author is. The commits keep the line and the
+  worker publishes the branch.
+
+### Gates (merged tree, at 827833f)
+- ruff check + format --check on the two modules: clean. tsc: 0. `npm run lint`: 0. prettier on
+  openapi.json and schema.d.ts: clean.
+- Whole API suite, in seven shards, -n 7: 11,762 passed, 15 skipped, 1 xfailed, 4 failed. The four
+  failures are timing-budget tests (test_simple_roadmap_card, _api 500 items, _reads_perf,
+  _roadmap_speed) that ran over budget under the 7-worker load. Run alone: one of them failed once
+  more, then all 9 tests in those files passed. Note: at -n 7, Postgres needs
+  max_locks_per_transaction=1024. At 256, setup fails with "out of shared memory".
+- Playwright (vite mock build, E2E_PREBUILT=1, --retries=0, 2 workers): inbox-2-proposal-rows,
+  inbox-for-wrap, inbox-proposal-codes, palette-open, prio-twin-propose, qa-leftovers: 34 passed.
+- Prose guard: not run, because no word a person sees changed (only an API docstring).
+
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 
 Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
