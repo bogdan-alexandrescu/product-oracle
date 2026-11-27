@@ -16,6 +16,10 @@ import { expect, test, type Locator, type Page } from './test';
  *   fails_when=no pick on the bar, or the owner stays.
  * - rename: protects=a click on the open row's name gives a field; Enter saves the new name,
  *   kept with its code; Escape leaves the old name; fails_when=no field, or the name stays.
+ * - rename while the page reads again: protects=the field keeps the focus and what was typed
+ *   when the page's data is read again behind it (a change made elsewhere, the add's own late
+ *   reads); fails_when=the open panel takes the focus back, so the field saves half a name or
+ *   closes before Enter.
  */
 
 const coded = (title: string) => new RegExp(`^[A-Z][A-Z0-9]*-\\d+ ${title}`);
@@ -103,6 +107,31 @@ test.describe('de-r1 grab the bar', () => {
     await page.getByTestId('timeline-row-rename').press('Enter');
     await expect(rowOf(page, 'Gutter flow sensor')).toHaveCount(1);
     await expect(rowOf(page, 'Gutter sensor')).toHaveCount(0);
+  });
+
+  test('the name field keeps the focus while the page reads again', async ({ page }) => {
+    await open(page);
+    await addOn(page, 'Guided setup track', 'Rain barrel');
+    const label = rowOf(page, 'Rain barrel').getByTestId('timeline-row-label');
+    await label.click();
+    await expect(page.getByTestId('item-panel')).toBeVisible();
+    await label.click();
+    const field = page.getByTestId('timeline-row-rename');
+    await expect(field).toBeFocused();
+    await field.fill('Rain barrel');
+    await field.pressSequentially(' gauge');
+    // A change made elsewhere: every read on the page runs again (lib/use-query.ts).
+    const calls = () =>
+      page.evaluate(() => (globalThis as { __poMockCalls?: string[] }).__poMockCalls?.length ?? 0);
+    const before = await calls();
+    await page.evaluate(() => window.dispatchEvent(new Event('po:data-changed')));
+    await expect.poll(calls).toBeGreaterThan(before);
+    // The reads answer after the mock's 60 ms; give the page time to draw them.
+    await page.waitForTimeout(600);
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue('Rain barrel gauge');
+    await field.press('Enter');
+    await expect(rowOf(page, 'Rain barrel gauge')).toHaveCount(1);
   });
 
   test("the open bar's owner initials pick a person, saved at once", async ({ page }) => {
