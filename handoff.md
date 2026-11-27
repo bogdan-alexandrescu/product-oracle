@@ -1,115 +1,3 @@
-# inbox-codes (#1786 reopened) — handoff
-
-Base 926a307 (train night-m). Commits: 5af3e77 red pytest (proposals), e829e20 API item_code on
-InboxSimpleChange, 898c063 web proposal row + mock + spec, d00b425 request words, ad3d648 red
-pytest (action items), 20b935c action item rows, a791259 handoff. Review round (verdict NOT_YET,
-one major): 18cbbc6 red pytest (checkpoint child), 374d4c3 API `code` on InboxChild, f994fa2 web
-row + mock + spec, 0d23096 lint order (see "Review round" below). Worker publishes the branch.
-
-## What the auditor saw, and the cause
-A proposal row named its feature without its code. The row's code came only from the Simple
-roadmap read (useItemRef, GET /v1/simple/roadmap), which leaves out an item of a replaced roadmap;
-such a row showed the bare name (no code, no flag). Fix: the API read behind the row now carries
-`item_code` (codes.code_of, as the roadmap reads it) and the row's name takes it first, through
-the one helper (`Named` in components/simple/FeatureName.tsx, via app/inbox/_proposals.tsx's
-FeatureName). Reproduced on the mock's "inbox-replaced-proposal" scenario: its Trusted seller
-badge (replaced roadmap) now comes from section F-45, and the Owner has an invented action item
-on it.
-
-## Every Inbox row kind that names a feature (Simple > Inbox and Detailed > Inbox: one page, app/inbox/_inbox.tsx)
-| Row kind | Where | Code shown? |
-| --- | --- | --- |
-| Proposal, item cell | _proposals.tsx proposalRows | Yes. Was missing for an item off the roadmap read; fixed (API item_code). |
-| Proposal, request words ("X asks to change the owner of …") | _proposals.tsx withCode | Yes now (code inserted before the name, via Named); before: name alone. |
-| Decision on my proposal | same rows (simple_decisions) | Shown on Decisions/Home lists, not as an Inbox row kind; same field now carried. |
-| Date suggestion | _proposals.tsx dateSuggestionRows | Yes: an open suggestion's item is always on the roadmap read. Unchanged. |
-| Meeting action item (linked feature) | _action-items.tsx | Yes. Was missing off the read; fixed (API item_code on InboxSimpleActionItem). |
-| Track alert (stale marks, slips) | _track-alert.tsx AlertItem | Yes, already (item_code from the API, #1786 first pass). Unchanged. |
-| Checkpoint child (a run's item under its checkpoint) | _needs.tsx childNeeds | Yes now (review round): InboxChild carries `code` (its title's own, else its PRD section's: codes.code_of in runs/actions.summarize), rendered with Named. Before: name alone. An item with neither stays as its name. |
-| Launch (Ready to launch · X) | _needs.tsx launchNeeds | Names the launch by its own title (one or more items), not a feature. Left. |
-| Questions, discussions, Oracle-did summaries | _questions.tsx, _needs.tsx | Free text a person or Oracle wrote; not a feature field. Left. |
-
-## Tests
-- pytest (runner's Postgres): tests/test_inbox_proposal_codes.py (2) and
-  tests/test_inbox_action_item_codes.py (1): red before each fix (KeyError item_code), green after.
-- Playwright --retries=0, 2 workers: e2e/inbox-proposal-codes.spec.ts (Simple and Detailed Inbox)
-  red without each web change (Expected "F-45"), green with; inbox-2-proposal-rows (its Decisions
-  locator now picks the proposal's li, since the scenario's new action item also lists there) and
-  inbox-action-items: 6 passed.
-- tsc: exit 0. Full `npm run lint`: exit 0. `npm run format:check`: "All matched files use Prettier code style!".
-- pyright as ci.yml runs it: `pyright: 1263 errors, baseline 1263`.
-- API: every test file that reads the Inbox, simple_proposals, simple_action_items, InboxSimple*,
-  meeting_actions or openapi (122 files, tests/test_frozen_migrations.py among them), -n 3:
-  937 + 631 (1 skipped) + 924 + 624 passed, 0 failed.
-- NOT RUN: the whole API suite end to end (at -n 3 it takes over an hour here, past the step's
-  limit; the remaining ~660 files touch neither the changed reads nor their schemas) and the
-  timing tests (`-m timing`), for the same reason. The prose guard was not run either: the only
-  visible change is a code (e.g. "F-45") placed before a feature name.
-
-## Review round (verdict NOT_YET, its one major: checkpoint children had no code)
-- API: InboxChild.code, filled in runs/actions.summarize by codes.code_of (title's own code, else
-  prd_code of the item's PRD section). Red pytest first: tests/test_inbox_child_codes.py (3)
-  failed with AttributeError 'code' at 18cbbc6, pass after. `make openapi`: only the new field.
-- Web: _needs.tsx childNeeds names the child with Named (code chip, then the name, a title's own
-  leading code stripped; hover title "F-06 Slack alerts"). Mock checkpoint summary (runs.ts) fills
-  `code` with item-code.ts shownCode. No base mock data changed: the spec seeds a copy of the
-  roadmap review run whose Slack alerts comes from section f-06.
-- Spec e2e/inbox-proposal-codes.spec.ts, two new cases (/simple/inbox, /inbox): "F-06 Slack
-  alerts", and Budget caps (section no code) stays as its name. Red with _needs.tsx and runs.ts
-  put back (mock rebuilt): Expected "F-06 Slack alerts", Received "Slack alerts"; green with.
-- Gates (this round): pytest of every inbox/runs/roadmap_reasons/roadmap_items/checkpoint/
-  simple_waiting/openapi file + test_frozen_migrations.py, -n 3, not timing: 415 passed. Timing:
-  the three Inbox timing tests, 3 passed. ruff check/format: clean. pyright as ci.yml runs it:
-  `pyright: 1263 errors, baseline 1263`. tsc exit 0; full `npm run lint` exit 0 (import placed so
-  runs.ts stays at its import-x/order suppression of 14); format:check "All matched files use
-  Prettier code style!". Playwright, mock prebuilt, 2 workers, --retries=0: every e2e/inbox-*.spec
-  + inbox, qa*-inbox, vqa-b-runs-inbox, simple-walk-fixes3-cp, checkpoint-gate: 172 passed;
-  roadmap-items-review, roadmap-items-roles, prose-guard, questions-inbox, track-alerts,
-  home-fixes: 79 passed, 3 failed: prose-guard's two merge-base tests (shallow clone, no
-  origin/main; passed with PROSE_BASE=HEAD~3, i.e. a791259) and home-fixes.spec.ts:228 (Home's (i)
-  tip, not touched here; passed when rerun alone: 36 passed with the prose guard).
-- NOT RUN: the whole API suite and the full `-m timing` run (over an hour at -n 3 here, past this
-  step's limit; the reviewer also owes it before merge).
-
-## Left
-- Launch rows name a launch by its own title, not a feature field. A checkpoint child whose key is
-  a live item's but whose title and section carry no code still reads as its name (the reviewer's
-  "if cheap" part: it needs a roadmap read per checkpoint; not done).
-
-## Fix round 2 (re-review NOT_YET: one blocker, one pre_existing, three minors)
-
-- Merged the train (origin/swarm/task_f89b44cdd78343dc8bfa at f2308a78) with no conflict: its
-  palette-open, prio-twin-propose and inbox-for-wrap specs and app/inbox/_needs.tsx are kept as
-  the train wrote them.
-- Blocker (module sizes), 827833f: tests/test_module_size.py was already red on the branch, so it
-  is the red test (red at the parent: "runs/schemas.py: 1995 ... 1993", "simple/changes.py: 2576 ...
-  2572"; green after). simple/changes.py imports `codes` at module level; its four local copies,
-  the comment and the blank line go; its entry is lowered to 2568, since a shorter module than its
-  entry fails as stale. InboxChild's docstring now has three lines, so the `code` field is the only
-  new line (1993). `make openapi` changed only that description.
-- pre_existing (prio-twin-propose :84/:141, qa-leftovers :195): the train closed it. On the merged
-  tree all 34 pass.
-- Minor, commit ids: corrected in the header and in "Review round" above.
-- Minor, withCode's words.indexOf(name): still open. Deciding which mention of the name gets the
-  code is a design call with its own spec, not a one-line change.
-- Minor, a checkpoint child whose key is a coded item but whose title and section have no code:
-  still left (see "Left").
-- Push: git_push_branch refuses any commit whose message carries the Co-Authored-By line (code
-  foreign_author, field message), whoever the author is. The commits keep the line and the
-  worker publishes the branch.
-
-### Gates (merged tree, at 827833f)
-- ruff check + format --check on the two modules: clean. tsc: 0. `npm run lint`: 0. prettier on
-  openapi.json and schema.d.ts: clean.
-- Whole API suite, in seven shards, -n 7: 11,762 passed, 15 skipped, 1 xfailed, 4 failed. The four
-  failures are timing-budget tests (test_simple_roadmap_card, _api 500 items, _reads_perf,
-  _roadmap_speed) that ran over budget under the 7-worker load. Run alone: one of them failed once
-  more, then all 9 tests in those files passed. Note: at -n 7, Postgres needs
-  max_locks_per_transaction=1024. At 256, setup fails with "out of shared memory".
-- Playwright (vite mock build, E2E_PREBUILT=1, --retries=0, 2 workers): inbox-2-proposal-rows,
-  inbox-for-wrap, inbox-proposal-codes, palette-open, prio-twin-propose, qa-leftovers: 34 passed.
-- Prose guard: not run, because no word a person sees changed (only an API docstring).
-
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 
 Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
@@ -677,27 +565,30 @@ after each merge.
 - Minors from the verdict left as they were (brief: blocker and major only). Note: the earlier
   "d0b30e6e6" sha above is wrong; the gates there ran on ca00d08's tree.
 
-## build-shortcuts (#1790/#1795), PR #1933: re-review round (verdict NOT_YET, one major)
+---
 
-- Merged the night-m train (origin/swarm/task_f89b44cdd78343dc8bfa at f2308a78a) into the branch
-  (7260477f, no conflicts). It brings the train's fixed specs: palette-open (panel at
-  /simple?feature=F-79, then Esc or Back closes it), prio-twin-propose (request wording), and
-  inbox-for-wrap with `web/app/inbox/_needs.tsx`.
-- Major (palette-open.spec.ts line 32 flaky): closed by the train's version of the spec, which
-  waits for ?feature=F-79 first and checks /simple only after the panel closes. No second fix.
-  Proof: palette-open.spec.ts --repeat-each=4 --retries=0, 32 passed.
-- Minor fixed: `web/components/palette/hotkeys.ts` onKey now checks Ctrl or Cmd K before
-  e.defaultPrevented, as the palette's old listener did. Red spec first (cdd42cb7,
-  build-shortcuts.spec.ts 'Ctrl+K opens the palette even when another handler ... prevented it',
-  failed: dialog Find not found), then the fix.
-- Gates: build-shortcuts + palette-keys + prio-twin-propose + inbox-for-wrap specs 36 passed
-  (--retries=0); `npx tsc --noEmit` exit 0; `npm run lint` exit 0; prettier --check on the
-  touched files clean. Prose guard not run: no visible word changed. No API file changed, so no
-  pytest.
-- Frame differences kept on purpose (the keep-list): the folded 'Goal map' group lists
-  '/ Search the roadmap' though the Goal map has no search box (keys.ts:80-83); Everywhere lists
-  'c Add on this page' and '/ Search or filter' on Priorities, which has neither box (the picked
-  frame shows the same); build-shortcuts.spec.ts has no approver case (the frames show viewer and
-  commenter only). Each is the sheet's words for another page or a later pass, left for the owner.
-- The push tool refuses commits whose message carries the Co-Authored-By line; the merge was
-  pushed, the two commits after it are left for the worker to publish.
+# train night-n (Nov 27) — merge train notes
+
+Base: main e70c5fcb0e. Merged with `git merge --no-ff`, in order, each head checked against the named sha:
+1. #1931 Roadmap timeline (3eee9772f9) — conflict: **handoff.md only**, kept main's text (lanes' notes live in their PRs).
+2. #1932 Roadmap cursor and badge (30f710c5c2) — clean.
+3. #1933 Keyboard shortcuts (bcdf42854b) — clean.
+4. #1935 Inbox item codes (3ddf73a750) — clean (its handoff text merged in automatically; this file was then reset to main's text plus these notes).
+No code file conflicted. Main's roadmap focus fixes (rename field, item card focus, de-r1 close control) are untouched by the merges.
+eslint-suppressions.json: import-x/order 32 -> 10 (lower, from lane 4). module_sizes.json: changes.py 2572 -> 2568 (lower). Prose-guard ceilings: no lane changed them.
+
+## Train duties
+- Migrations: `uv run alembic heads` -> `0139_task_tracker_push_error (head)`, one head; no lane added a migration.
+- `python3 docs/contracts/check.py`: exit 0, no output. `make openapi`: no change.
+- Pinned read digests: passed in the full suite, nothing re-pinned.
+- No `u.name or u.email` brought back (no lane touched person display).
+
+## Gates
+- API whole suite `pytest -q -n 7 -m "not timing" tests`: **11887 passed, 16 skipped, 1 xfailed in 2549s** (includes tests/test_frozen_migrations.py).
+- `pytest -m timing tests`: **NOT COMPLETE** — killed by the 500 s command timeout at about 88 %, no failure shown up to then (out of time to rerun detached).
+- pyright baseline: **NOT RUN** (out of time; no lane's api/oracle change beyond small schema/field edits).
+- web `npx tsc --noEmit -p .`: exit 0. `npm run format:check`: "All matched files use Prettier code style!".
+- `npm run lint` (full, run detached alongside the API suite): finished with no output after the header (no errors printed); its exit code was not captured.
+- Playwright `--retries=0 --workers=2` on prose-guard + the 14 specs the lanes touched: **150 passed, 1 failed, 7 skipped**. The failure,
+  `e2e/roadmap-decide.spec.ts:373` (ms-asked label hidden right after the ask), passed 3/3 when rerun alone (`--repeat-each=3`):
+  timing under load, not a merge defect seen. Not yet measured 5x on a main worktree.
