@@ -19,10 +19,19 @@ export function featureTitle(title: string, prd?: string | null): string {
   return out || title;
 }
 
-/** #1907: a goal's target without the milestone shorthand at its end ("70% of teams (M2)" reads
- * "70% of teams"). */
+/** One part of a milestone bracket: a code, optionally after "by", and any short words after it
+ * ("M1", "by M2", "M1 pilot", "M2 40"). */
+const MILESTONE_PART = String.raw`(?:by\s+)?M\d+\b[^,/&()[\]]{0,40}`;
+const MILESTONE_TAIL = new RegExp(
+  String.raw`\s*[([]\s*${MILESTONE_PART}(?:[,/&]\s*${MILESTONE_PART})*[)\]]\s*$`,
+  'i',
+);
+
+/** #1907: a goal's target without the milestone shorthand at its end: a trailing bracket whose
+ * parts each begin with a milestone code ("70% of teams (M2)" and "70% of teams (M1 pilot, M2 40)"
+ * read "70% of teams"). */
 export const targetWords = (target: string): string =>
-  target.replace(/\s*[([]\s*(?:by\s+)?M\d+(?:\s*[,/&]\s*M\d+)*\s*[)\]]\s*$/i, '').trim() || target;
+  target.replace(MILESTONE_TAIL, '').trim() || target;
 
 /** #1907: the notes Oracle writes when it makes a roadmap version, in plain words (a person's
  * own note reads as written). */
