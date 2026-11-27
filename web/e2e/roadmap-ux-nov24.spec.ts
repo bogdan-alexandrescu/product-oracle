@@ -9,7 +9,7 @@ import { expect, test, type Page } from './test';
  * fails_when = a count has no tip (hover, tap, focus) saying what it covers; Key dates stays open on an outside click,
  * mixes outside events with PRD milestones under one list, or shows the browser's own date
  * format; the open feature's row and bar are barely marked; a cut label has no full name on
- * hover; a track's health reason does not open on a tap or focus; every track reads "No owner".
+ * hover; a track's health reason does not open on a tap or focus, or its mark is under 24x24; every track reads "No owner".
  */
 
 const WIDE = { width: 1500, height: 620 };
@@ -164,6 +164,46 @@ test("#1753 (already fixed) a track's health reason shows on a tap and on focus"
   await expect(risk.getByRole('tooltip')).toBeHidden();
   // Keyboard focus, as Tab lands on it.
   await mark.focus();
+  await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
+  await context.close();
+});
+
+test("#1753 a track's health mark is a 24x24 hit area: a tap or click at its edge opens the reason; the row keeps its height", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ hasTouch: true, viewport: WIDE });
+  const page = await context.newPage();
+  await open(page, 'roadmap-milestones');
+  const risk = page
+    .getByTestId('timeline-lane')
+    .filter({ hasText: 'Usage alerts track' })
+    .getByTestId('track-head');
+  const tip = risk.getByTestId('track-health-tip');
+  await tip.scrollIntoViewIfNeeded();
+  const box = (await tip.locator(':scope > span').boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  // The row's line is as tall as the track's name: the bigger mark adds no height.
+  const head = (await risk.boundingBox())!;
+  const name = (await risk.getByTestId('track-name').boundingBox())!;
+  expect(head.height).toBeLessThanOrEqual(name.height + 1);
+  // Each corner of the 24x24 box presses the mark's button.
+  const corners = [
+    [box.x + 1, box.y + 1],
+    [box.x + box.width - 1, box.y + 1],
+    [box.x + 1, box.y + box.height - 1],
+    [box.x + box.width - 1, box.y + box.height - 1],
+  ];
+  for (const [x, y] of corners)
+    expect(
+      await tip.evaluate((b, [px, py]) => b.contains(document.elementFromPoint(px, py)), [x, y]),
+      `${x},${y}`,
+    ).toBe(true);
+  await page.touchscreen.tap(box.x + 2, box.y + 2);
+  await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
+  await page.touchscreen.tap(5, 5);
+  await expect(risk.getByRole('tooltip')).toBeHidden();
+  await page.mouse.click(box.x + box.width - 2, box.y + box.height - 2);
   await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
   await context.close();
 });

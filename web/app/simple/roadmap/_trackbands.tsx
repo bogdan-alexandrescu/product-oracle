@@ -38,14 +38,18 @@ export function trackLaned(data: Roadmap): Roadmap {
   };
 }
 
+// #1753: the mark is a 24x24 hit area a finger can press; its negative margins keep the row's
+// height and the mark's place as they were.
+const HIT = 'inline-grid size-6 -mx-[5px] -my-[3px] place-items-center font-bold';
+
 function Mark({ t }: { t: Track }) {
   return t.health === 'on_track' ? (
-    <span className="font-bold text-pass">
+    <span className={`${HIT} text-pass`}>
       <span aria-hidden>✓</span>
       <span className="sr-only">On track</span>
     </span>
   ) : (
-    <span className="font-bold text-warn">
+    <span className={`${HIT} text-warn`}>
       <span aria-hidden>⚠</span>
       <span className="sr-only">Needs a look</span>
     </span>
