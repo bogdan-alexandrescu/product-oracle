@@ -1049,10 +1049,14 @@ export function FloatingCard({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    // Opening an item never scrolls the page: the clicked row stays where it was.
-    ref.current?.focus({ preventScroll: true });
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  // The card takes the focus once, as it opens (it is keyed by item), never scrolling the page:
+  // the clicked row stays where it was. onClose is new on each render of the page, so focusing
+  // with it would take the focus back from a field (the row's name) each time the page redraws.
+  useEffect(() => {
+    ref.current?.focus({ preventScroll: true });
+  }, []);
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside, ref);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
