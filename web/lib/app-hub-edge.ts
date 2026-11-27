@@ -5,7 +5,10 @@ export const HUB_EDGE_TYPE = 'hub:edge';
 
 /** How far in from the left edge the colour is read: under the hub's strip and handle. */
 const EDGE_X = 4;
-/** DOM changes come in bursts; the edge is read once the burst settles. */
+/**
+ * DOM changes come in bursts; the edge is read at most once per window, even on a page that
+ * never settles.
+ */
 export const EDGE_SETTLE_MS = 200;
 
 type Rgb = [number, number, number];
@@ -37,11 +40,14 @@ function toRgba(doc: Document, color: string): Rgba | undefined {
   return [Number(r), Number(g), Number(b), a];
 }
 
-/** The element's background as rgb: its colour, else its gradient's first; none if see-through. */
+/**
+ * The element's background as rgb: its gradient's first colour, which paints above its colour,
+ * else its colour; none if see-through.
+ */
 function backgroundOf(win: Window, element: Element): Rgb | undefined {
   const style = win.getComputedStyle(element);
   const gradient = FIRST_COLOR.exec(style.backgroundImage)?.[0];
-  for (const color of [style.backgroundColor, gradient]) {
+  for (const color of [gradient, style.backgroundColor]) {
     const rgba = color ? toRgba(win.document, color) : undefined;
     if (rgba && rgba[3] >= 0.5) {
       return [Math.round(rgba[0]), Math.round(rgba[1]), Math.round(rgba[2])];
@@ -85,8 +91,10 @@ export function watchHubEdge(win: Window): () => void {
     }
   };
   const reportSoon = () => {
-    clearTimeout(timer);
-    timer = setTimeout(report, EDGE_SETTLE_MS);
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      report();
+    }, EDGE_SETTLE_MS);
   };
 
   const observer = new MutationObserver(reportSoon);
