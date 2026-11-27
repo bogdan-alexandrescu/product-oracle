@@ -1,5 +1,5 @@
-import { HOME_MILESTONES_SCENARIO } from '../lib/api/mock/home-milestones';
 import { HOME_3_SCENARIO } from '../lib/api/mock/home-3';
+import { HOME_MILESTONES_SCENARIO } from '../lib/api/mock/home-milestones';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
 
 import { login } from './helpers';

@@ -12,6 +12,7 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { HOME_3_SCENARIO, withHome3 } from './home-3';
 import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { routePalette } from './palette';
 import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
@@ -776,7 +777,6 @@ import {
   seedHomeMilestoneTwinTracks,
   seedHomeMilestoneTwoRoadmaps,
 } from './home-milestones';
-import { HOME_3_SCENARIO, withHome3 } from './home-3';
 import {
   AUDIENCES,
   audienceLabel,

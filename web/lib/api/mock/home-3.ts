@@ -1,8 +1,9 @@
 // home-3 (issues 1900, 1897): Home's live shapes the tidy mock lacked (invented data).
+import type { Schemas } from '@/lib/api/client';
+
 import { stableUuid } from './ids';
 
 import type { SimpleDb } from './simple-roadmap';
-import type { Schemas } from '@/lib/api/client';
 
 export const HOME_3_SCENARIO = 'home-3';
 
