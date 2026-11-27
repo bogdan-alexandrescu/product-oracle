@@ -237,7 +237,7 @@ test.each(['transitionend', 'scroll', 'load'])(
 
 /*
  * protects=nothing posted after the watcher is stopped;
- * fails_when=the disposer leaves the observer, the pending read or an event listener running;
+ * fails_when=the disposer leaves the observer or the pending read running;
  * no_claim=the resize and colour-scheme listeners (the same disposer removes them).
  */
 test('a stopped watcher posts nothing more', async () => {
@@ -248,11 +248,23 @@ test('a stopped watcher posts nothing more', async () => {
   watchHubEdge(window)();
   rail.style.backgroundColor = 'rgb(255, 255, 255)';
   await settle();
-  for (const type of ['transitionend', 'scroll', 'load']) {
-    rail.dispatchEvent(new Event(type, { bubbles: false }));
-  }
-  await settle();
   expect(postMessage).not.toHaveBeenCalled();
+});
+
+/*
+ * protects=the document keeping no listener of a stopped watcher;
+ * fails_when=the disposer leaves a transitionend, scroll or load listener on the document;
+ * no_claim=that a left listener would post (a stopped watcher's throttle never fires again).
+ */
+test('a stopped watcher takes its repaint listeners off the document', () => {
+  frameIn({ postMessage: vi.fn() });
+  const added = vi.spyOn(document, 'addEventListener');
+  const removed = vi.spyOn(document, 'removeEventListener');
+  watchHubEdge(window)();
+  const repaint = (calls: unknown[][]) =>
+    calls.filter(([type]) => ['transitionend', 'scroll', 'load'].includes(type as string));
+  expect(repaint(added.mock.calls)).toHaveLength(3);
+  expect(repaint(removed.mock.calls)).toEqual(repaint(added.mock.calls));
 });
 
 /*
