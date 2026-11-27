@@ -2307,7 +2307,9 @@ async def _past(db: AsyncSession, changes: list[SimpleChange], v: _View) -> dict
             ids.add(item)
     if not ids:
         return {}
-    now = {(e.roadmap.id, e.row.item_key): e for e in v.by_id.values()}
+    now: dict[tuple[uuid.UUID | None, str], service.Entry] = {
+        (e.roadmap.id, e.row.item_key): e for e in v.by_id.values()
+    }
     rows = await db.execute(
         select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key,
                RoadmapItem.title).where(RoadmapItem.id.in_(ids))
