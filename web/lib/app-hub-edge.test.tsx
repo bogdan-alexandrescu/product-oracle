@@ -211,8 +211,33 @@ test('a theme switch, picked or from the system, posts the new edge colour', asy
 });
 
 /*
+ * protects=the edge read again when it changes with no DOM mutation: a transition that ends after
+ * a read, a scroll in any container, a stylesheet that loads late;
+ * fails_when=the event goes unheard, or is heard only when it bubbles to the document;
+ * no_claim=which events a browser fires for a given repaint.
+ */
+test.each(['transitionend', 'scroll', 'load'])(
+  'a %s anywhere in the page posts the new edge colour',
+  async (type) => {
+    const postMessage = vi.fn();
+    frameIn({ postMessage });
+    const rail = layer({ backgroundColor: 'rgb(12, 26, 46)' });
+    const surface = layer({ backgroundColor: 'rgb(255, 255, 255)' });
+    let stack = [rail];
+    atEdge(() => stack);
+    stop = watchHubEdge(window);
+    await settle();
+
+    stack = [surface];
+    surface.dispatchEvent(new Event(type, { bubbles: false }));
+    await settle();
+    expect(posted(postMessage).at(-1)).toEqual([255, 255, 255]);
+  },
+);
+
+/*
  * protects=nothing posted after the watcher is stopped;
- * fails_when=the disposer leaves the observer or the pending read running;
+ * fails_when=the disposer leaves the observer, the pending read or an event listener running;
  * no_claim=the resize and colour-scheme listeners (the same disposer removes them).
  */
 test('a stopped watcher posts nothing more', async () => {
@@ -222,6 +247,10 @@ test('a stopped watcher posts nothing more', async () => {
   atEdge(() => [rail]);
   watchHubEdge(window)();
   rail.style.backgroundColor = 'rgb(255, 255, 255)';
+  await settle();
+  for (const type of ['transitionend', 'scroll', 'load']) {
+    rail.dispatchEvent(new Event(type, { bubbles: false }));
+  }
   await settle();
   expect(postMessage).not.toHaveBeenCalled();
 });
