@@ -1112,17 +1112,17 @@ async def _job_document(
     first: dict[str, Document | None] | None = None,
 ) -> Document | None:
     """The roadmap a goal's suggestions job is filed under (and whose decider decides its
-    suggestions): the company roadmap while there is one, else one holding its items, else
-    the company's first roadmap. ``active``: company.active, when the caller read it;
-    ``first``: where a caller asking for several goals keeps the first roadmap, read once."""
+    suggestions): the company roadmap while there is one, else the first-created one holding
+    its items (never the read's order), else the company's first roadmap. ``active``, ``first``:
+    company.active and the first roadmap, when a caller asking for several goals read them."""
     if active is _ACTIVE:
         active = await company.active(db)
     if active is not None:
         return active
     read_ = read_ or await service.load(db)
-    for e in read_.entries:
-        if e.goal is not None and e.goal.id == goal.id:
-            return e.roadmap
+    holding = [e.roadmap for e in read_.entries if e.goal is not None and e.goal.id == goal.id]
+    if holding:
+        return min(holding, key=lambda d: (d.created_at, d.title, str(d.id)))
     if first is not None and "doc" in first:
         return first["doc"]
     doc = await db.scalar(
