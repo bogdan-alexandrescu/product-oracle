@@ -14,7 +14,7 @@ import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { routePalette } from './palette';
-import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
+import { isPanelWords, seedPanelWords } from './panel-words';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
@@ -9070,7 +9070,7 @@ function load(): Db {
       roadmap.status = 'approved';
     }
   }
-  if (scenario === PANEL_WORDS_SCENARIO) seedPanelWords(db);
+  if (isPanelWords(scenario)) seedPanelWords(db, scenario);
   // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
   if (scenario === TWO_WAY_DATES_SCENARIO) {
     const roadmap = db.documents.find((d) => d.slug === 'usage-alerts-roadmap');

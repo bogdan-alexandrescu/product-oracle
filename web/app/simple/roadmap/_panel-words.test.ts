@@ -19,6 +19,18 @@ describe('panel-2 panel words', () => {
     expect(targetWords('70% of teams (by M1, M2)')).toBe('70% of teams');
     expect(targetWords('Under 10% (of teams)')).toBe('Under 10% (of teams)');
   });
+  it('drops a milestone bracket whose codes carry words or numbers (the live shape)', () => {
+    expect(targetWords('70% of teams (M1 pilot, M2 wide)')).toBe('70% of teams');
+    expect(targetWords('70% of teams (M1 20, M2 40)')).toBe('70% of teams');
+    expect(targetWords('70% of teams [by M1 pilot / M2 40%]')).toBe('70% of teams');
+    expect(targetWords('70% of teams (M1 pilot & by M3 all)')).toBe('70% of teams');
+  });
+  it('keeps a bracket that is not milestone shorthand, or not at the end, and never empties', () => {
+    expect(targetWords('70% of teams (pilot, M2 40)')).toBe('70% of teams (pilot, M2 40)');
+    expect(targetWords('70% of teams (Mobile, web)')).toBe('70% of teams (Mobile, web)');
+    expect(targetWords('70% (M1 pilot) of teams')).toBe('70% (M1 pilot) of teams');
+    expect(targetWords('(M1 pilot, M2 40)')).toBe('(M1 pilot, M2 40)');
+  });
   it("words Oracle's version notes and keeps a person's", () => {
     expect(noteWords('from version 21')).toBe('Carried over from the last roadmap');
     expect(noteWords('from version 21, deferred')).toBe(
