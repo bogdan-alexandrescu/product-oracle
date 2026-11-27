@@ -37,11 +37,11 @@ test('#1739 Goal buckets reads the weeks the other tabs read and names the PRD w
   await expect(page.getByTestId('buckets-summary')).not.toContainText(/(^|\D)0 engineer-weeks/);
   const bar = page.locator('[data-testid="goal-bar"][data-goal="Grow retention"]');
   await expect(bar.getByTestId('goal-bar-total')).toHaveText('6 weeks');
-  await expect(
-    page
-      .locator('[data-testid="goal-bar"][data-goal="Faster activation"]')
-      .getByTestId('goal-bar-total'),
-  ).toHaveText('6 weeks');
+  // The first milestone holds the plan's work: its weeks, not 0.
+  await expect(page.getByTestId('milestone-chip').first()).not.toContainText(/(^|\D)0 weeks/);
+  // A plan feature with no weeks of its own reads its row's effort, never 0 weeks.
+  const setup = page.locator('[data-testid="plan-goal"][data-goal="Activation"]');
+  await expect(setup.getByTestId('plan-feature-total').first()).toHaveText('3 weeks');
   // "In the plan" is one PRD's plan: the label says which.
   const card = page.locator('[data-testid="plan-goal"][data-goal="Grow retention"]');
   await expect(card.getByTestId('plan-goal-count')).toContainText(

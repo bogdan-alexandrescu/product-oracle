@@ -2,6 +2,7 @@ import { api, type Schemas } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
 
 type Read = Schemas['SimpleRoadmapOut'];
+type By = NonNullable<Parameters<typeof codedMilestone>[2]>;
 
 /** A name that already starts with its code ("M6 · Beta", "F-26: Keys"). */
 const CODED = /^[A-Z][A-Z0-9]*-?\d+[a-z]?(\s|·|:|$)/;
@@ -27,6 +28,8 @@ export function codedMilestone(
     id?: string | null;
     itemId?: string | null;
     prd?: { id: string; slug: string } | null;
+    /** The PRD's own plan milestones (SimplePlanOut.milestones), whose numbers are the PRD's, not the roadmap's. */
+    plan?: readonly { code: string; name: string }[];
   } = {},
 ): string {
   const own = OWN.exec(name.trim());
@@ -79,35 +82,33 @@ export function codedMilestone(
   const codes = [
     ...new Set((held.length ? held : named).map((m) => m.code).filter((c): c is string => !!c)),
   ];
-  if (codes.length !== 1) return name;
-  return own ? `${codes[0]} ${rest}` : `${codes[0]} ${name}`;
+  if (codes.length === 1) return own ? `${codes[0]} ${rest}` : `${codes[0]} ${name}`;
+  if (!own) return name;
+  // #1894: a PRD's own number the roadmap does not give is never shown: the PRD milestone's name ("M2 (60% by Dec)"
+  // reads "Scale volume (60% by Dec)", by its roadmap code when it has one), else the words after the number.
+  const tail = own[2].trim();
+  const mine = by.plan?.find((m) => m.code.toUpperCase() === own[1].toUpperCase());
+  if (mine && bare(mine.name) !== bare(tail)) {
+    const head = codedMilestone(read, `${own[1]} · ${bare(mine.name)}`, { prd: by.prd });
+    return tail.startsWith('(') ? `${head} ${tail}` : head;
+  }
+  return tail || name;
 }
 
 /**
  * The page's coder: the roadmap's read (the one the buckets' tasks read, task-edit's useRoadmapItems) gives each
  * milestone its code. ``ready``: the read has landed (or failed), so a milestone is drawn once, with its code (#1882).
  */
-export function useCodedMilestone(): ((
-  name: string,
-  by?: { id?: string | null; itemId?: string | null; prd?: { id: string; slug: string } | null },
-) => string) & { ready: boolean } {
+export function useCodedMilestone(): ((name: string, by?: By) => string) & { ready: boolean } {
   const q = useQuery('simple-roadmap:{}', async () => {
     const { data } = await api.GET('/v1/simple/roadmap', {});
     if (!data) throw new Error('Could not read the roadmap');
     return data;
   });
   const read = q.data;
-  return Object.assign(
-    (
-      name: string,
-      by?: {
-        id?: string | null;
-        itemId?: string | null;
-        prd?: { id: string; slug: string } | null;
-      },
-    ) => codedMilestone(read, name, by),
-    { ready: !!read || !!q.error },
-  );
+  return Object.assign((name: string, by?: By) => codedMilestone(read, name, by), {
+    ready: !!read || !!q.error,
+  });
 }
 
 /**
@@ -127,4 +128,24 @@ export function codedLine(
   if (at < 0) return words;
   const id = l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null;
   return `${coded(words.slice(0, at), { id, prd: l.kind === 'key_date' ? l.prd : null })}${words.slice(at)}`;
+}
+
+/**
+ * #1894: a plan milestone as a person reads it: the roadmap's one code and its name ("M23 Prove it"), else its name
+ * alone, never the PRD's own number.
+ */
+export function planMilestone(
+  coded: (name: string, by?: By) => string,
+  plan: {
+    prd: { id: string; slug: string };
+    milestones: readonly { code: string; name: string }[];
+  },
+  code: string,
+): { code: string | null; name: string } {
+  const m = plan.milestones.find((x) => x.code === code);
+  const words = coded(`${code} · ${m?.name || code}`, { prd: plan.prd });
+  const own = OWN.exec(words);
+  return own && words !== `${code} · ${m?.name || code}`
+    ? { code: own[1], name: own[2] }
+    : { code: null, name: m?.name || words };
 }

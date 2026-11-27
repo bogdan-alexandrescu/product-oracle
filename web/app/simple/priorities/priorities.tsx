@@ -860,8 +860,8 @@ function YourList({
   const open = useContext(OpenRow);
   const coded = useCodedMilestone();
   const msWords = (name: string, itemId?: string | null) => {
-    const w = coded(name, { itemId });
-    return w === name ? `Milestone ${name}` : w;
+    const w = coded(name, { itemId, prd: data.plan?.prd, plan: data.plan?.milestones });
+    return w === name || !/^M\d{1,2}\s/.test(w) ? `Milestone ${w}` : w;
   };
   const goal = params.get('goal');
   const goalName = params.get('name') ?? goal;
@@ -871,16 +871,7 @@ function YourList({
   // "Needs triage" inside Misses (Misses counts it, as Value / effort does); (#1898) each part is numbered from 1, the
   // rank in the number's title.
   const triaged = (r: Row) => !r.above_line && !goalOf(r) && r.effort == null;
-  const rows = useMemo(() => {
-    const of = goalOfRow(data);
-    const late = (r: Row) => !r.above_line && !of(r) && r.effort == null;
-    const inGoal = byLine(data).filter(
-      (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : of(r) === goalName),
-    );
-    return splitAtLine(data) && !goal
-      ? [...inGoal.filter((r) => !late(r)), ...inGoal.filter(late)]
-      : inGoal;
-  }, [data, goal, goalName]);
+  const rows = useMemo(() => rankedOrder(data, goal, goalName), [data, goal, goalName]);
   const [triageOpen, setTriageOpen] = useState(false);
   const topValue = Math.max(0, ...data.rows.map((r) => r.goal_value ?? 0));
   const setParams = useSetParams();
@@ -908,8 +899,8 @@ function YourList({
   const split = lineSplit(rows);
   const apart = split >= 0 && splitAtLine(data);
   const triageAt = apart && !goal ? rows.findIndex(triaged) : -1;
-  const placeOf = (r: Row, i: number): number =>
-    !apart ? r.rank : i < split ? i + 1 : i - split + 1;
+  const places = listPlaces(data, rows);
+  const placeOf = (r: Row): number => places.get(r.feature_id) ?? r.rank;
   const addsTo = (r: Row) =>
     mayChange && r.can_reorder && !r.on_roadmap ? data.company_roadmap : null;
   const adds = rows.map(addsTo).find(Boolean);
@@ -1107,7 +1098,7 @@ function YourList({
                   data-testid="prio-rank"
                   title={apart ? `Rank ${r.rank}` : undefined}
                 >
-                  {placeOf(r, i)}
+                  {placeOf(r)}
                 </span>
                 <span
                   aria-label={r.above_line ? 'Above the line' : 'Below the line'}
@@ -2647,6 +2638,9 @@ function ValueEffort({
   const dragRow = drag ? rows.find((r) => r.code === drag.code) : undefined;
   const pending = dragRow && drag ? dragTo(dragRow, drag.dx, drag.dy) : null;
   const listed = byLine(data).filter((r) => quad === null || quadrant(r) === quad);
+  // #1898: the Ranked list's number for each feature.
+  const places = listPlaces(data);
+  const placeOf = (r: Row) => places.get(r.feature_id) ?? r.rank;
   const heldKey = (r: Row) =>
     r.after ? rows.find((x) => x.code === r.after!.code)?.own_key || null : null;
   const split = lineSplit(listed);
@@ -2804,7 +2798,7 @@ function ValueEffort({
                   data-moved={isMoved ? 'true' : undefined}
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? 'PM-owned, no effort' : `effort ${weeksWords(r.effort)}`}${r.above_line ? '' : ', below the line'}${goalOf(r) ? '' : ', no goal'}`}
+                  aria-label={`#${placeOf(r)} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? 'PM-owned, no effort' : `effort ${weeksWords(r.effort)}`}${r.above_line ? '' : ', below the line'}${goalOf(r) ? '' : ', no goal'}`}
                   className={`group absolute -translate-x-1/2 -translate-y-1/2 rounded-full hover:z-30 focus-visible:z-30 ${isSelected ? 'z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface' : isMoved ? 'z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface' : ''} ${mayChange && r.can_reorder ? 'cursor-grab touch-none' : 'cursor-pointer'}`}
                   style={{ left, top }}
                   onClick={() => {
@@ -2845,7 +2839,7 @@ function ValueEffort({
                     className={`pointer-events-none absolute ${onRight ? 'right-0' : 'left-0'} ${tagAbove ? 'bottom-full mb-1' : 'top-full mt-1'} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-sm font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? 'block' : 'hidden'}`}
                     style={{ maxWidth: tagRoom }}
                   >
-                    #{r.rank} {r.own_key ? `${r.own_key} · ${r.title}` : r.title}
+                    #{placeOf(r)} {r.own_key ? `${r.own_key} · ${r.title}` : r.title}
                   </span>
                 </button>
               );
@@ -2949,13 +2943,12 @@ function ValueEffort({
         </ul>
       </section>
       <section aria-label="Ranked side list" className="min-w-0">
-        {/* prio-ux (#1776): why the numbers can skip, behind an (i): they are the Ranked list's ranks. */}
+        {/* #1898: each number is the Ranked list's (listPlaces), behind an (i). */}
         <h2 className="mb-2 flex items-center gap-1.5 text-xl font-[650] leading-7">
           Ranked
           <InfoTip label="the ranks" align="start" testId="side-ranks-help">
-            Each number is the feature&apos;s rank, shown on hover over its number in the Ranked
-            list. What makes the line is listed first
-            {quad === null ? '' : ', and only the picked corner'}, so the numbers can skip.
+            Each number is the feature&apos;s number in the Ranked list
+            {quad === null ? '' : ', only the picked corner listed'}.
           </InfoTip>
         </h2>
         <LineCaption data={data} compact />
@@ -2993,7 +2986,7 @@ function ValueEffort({
                     className="w-5 flex-none text-right font-[650] tabular-nums"
                     data-testid="side-rank"
                   >
-                    {r.rank}
+                    {placeOf(r)}
                   </span>
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   {r.own_key && (
@@ -3332,6 +3325,30 @@ function regrouped(rows: Row[]): boolean {
  * row after it misses it too (rank order is dependency order and stays; otherwise each row
  * that misses is marked on its own and there is no divider). -1: no divider.
  */
+/** The Ranked list's rows in its order: split at a dated line, the rows that miss it with no goal and no effort last. */
+function rankedOrder(data: Out, goal: string | null, goalName: string | null): Row[] {
+  const of = goalOfRow(data);
+  const late = (r: Row) => !r.above_line && !of(r) && r.effort == null;
+  const inGoal = byLine(data).filter(
+    (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : of(r) === goalName),
+  );
+  return splitAtLine(data) && !goal
+    ? [...inGoal.filter((r) => !late(r)), ...inGoal.filter(late)]
+    : inGoal;
+}
+
+/**
+ * #1898: each row's number, one rule for the Ranked list and Value / effort: split at a dated line, each part
+ * numbered from 1 in the Ranked list's order; else its rank.
+ */
+function listPlaces(data: Out, rows: Row[] = rankedOrder(data, null, null)): Map<string, number> {
+  const split = lineSplit(rows);
+  const apart = split >= 0 && splitAtLine(data);
+  return new Map(
+    rows.map((r, i) => [r.feature_id, !apart ? r.rank : i < split ? i + 1 : i - split + 1]),
+  );
+}
+
 function lineSplit(rows: Row[]): number {
   const first = rows.findIndex((r) => !r.above_line);
   return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
@@ -4241,7 +4258,7 @@ function PlanBuckets({
   const readGb = bucketsQ.data;
   const gb = useMemo(() => topGoalBuckets(readGb, kr.krs), [readGb, kr.krs]);
   // mk-goalbuckets: each feature under the first goal its links name, the goals in the owner's order.
-  const plan = placedPlan(topGoalPlan(read, kr.top), gb);
+  const plan = placedPlan(topGoalPlan(read, kr.top), gb, data.rows);
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
@@ -4396,6 +4413,9 @@ function PlanBuckets({
   // prio-2 (#1739): a goal's card counts its plan features and leads to its features this quarter outside the plan.
   const outsideOf = (g: string) =>
     outside.find(({ b }) => !b.no_goal && (b.title === g || b.title === goalLabel(g).name));
+  // #1739: a goal's engineer-weeks this quarter, as the Ranked list and Value / effort read them.
+  const bucketOf = (g: string) =>
+    data.buckets.find((b) => !b.no_goal && (b.title === g || b.title === goalLabel(g).name));
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
   const acts = useGoalActs({
@@ -4444,6 +4464,7 @@ function PlanBuckets({
         codeOf={codeOf}
         milestoneOf={milestoneOf}
         onMilestone={(m) => ms?.edit(m)}
+        quarterWeeks={(g) => bucketOf(g)?.weeks}
       />
       <div ref={noteSlot} className="scroll-mt-4" />
       {note && (
@@ -4521,7 +4542,7 @@ function PlanBuckets({
                       data-testid="plan-goal-count"
                       className={`mt-1 flex-none text-base text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? 'max-sm:pl-8' : ''}`}
                     >
-                      {count(n)}
+                      {count(n, read.prd.title)}
                       {outsideOf(g) && (
                         <Button
                           variant="ghost"
