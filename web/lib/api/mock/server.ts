@@ -476,6 +476,7 @@ import {
   PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_ONE_FEATURE_SCENARIO,
+  PRIORITIES_LIVE_SHAPE_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -7728,7 +7729,9 @@ function load(): Db {
                                                                                                                                                                                                             scenario ===
                                                                                                                                                                                                               PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO ||
                                                                                                                                                                                                             scenario ===
-                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO
+                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_LIVE_SHAPE_SCENARIO
                                                                                                                                                                                                           ? () => {
                                                                                                                                                                                                               const db =
                                                                                                                                                                                                                 seedSimplePlanScenario();
