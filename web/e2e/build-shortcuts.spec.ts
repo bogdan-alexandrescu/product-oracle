@@ -244,3 +244,23 @@ test.describe('KS3 A on a phone: no keys; previous and next in the feature panel
     expect(wide).toBeLessThanOrEqual(390);
   });
 });
+
+test.describe('Ctrl or ⌘ K comes first in the key layer', () => {
+  test('Ctrl+K opens the palette even when another handler on the page has already prevented it', async ({
+    page,
+  }) => {
+    await priorities(page);
+    // Another handler (an embedded editor, an extension) takes Ctrl+K's default before ours.
+    await page.evaluate(() =>
+      document.addEventListener(
+        'keydown',
+        (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') e.preventDefault();
+        },
+        true,
+      ),
+    );
+    await page.keyboard.press('ControlOrMeta+K');
+    await expect(page.getByRole('dialog', { name: 'Find' })).toBeVisible();
+  });
+});
