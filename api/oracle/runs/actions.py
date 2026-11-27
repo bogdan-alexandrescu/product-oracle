@@ -27,6 +27,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import func, select
@@ -50,6 +51,7 @@ from oracle.members.leads import (
 )
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
+from oracle.roadmap import codes
 from oracle.runs import batch, gate, reasons, roadmap, service
 from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
@@ -1381,6 +1383,7 @@ def summarize(review: CheckpointReview) -> InboxSummary:
         child = InboxChild(
             item=it.key,
             title=it.title,
+            code=codes.code_of(SimpleNamespace(title=it.title, prd_section_key=it.prd_section), {}),
             reason=InboxChildReason(
                 code=shown.code, severity=shown.severity, label=shown.label, text=shown.text
             ),

@@ -28062,16 +28062,17 @@ export interface components {
         };
         /**
          * InboxChild
-         * @description One item under a checkpoint's Inbox row (D9): an item still needing the caller, its
-         *     first open reason, the safe one-click fix of that reason (None when it has none) and a
-         *     commenter's suggestion on the item. ``staged`` stays null: an item fixed earlier leaves
-         *     its slot (the Inbox page keeps the row it just fixed, done, with Undo).
+         * @description One item under a checkpoint's Inbox row (D9) still needing the caller: its code (title's,
+         *     else PRD section's; None if none), first open reason, its safe one-click fix (None if none) and
+         *     a commenter's suggestion. ``staged`` is null: the Inbox keeps a fixed row, done, with Undo.
          */
         InboxChild: {
             /** Item */
             item: string;
             /** Title */
             title?: string | null;
+            /** Code */
+            code?: string | null;
             reason: components["schemas"]["InboxChildReason"];
             fix?: components["schemas"]["ReasonFix"] | null;
             staged?: components["schemas"]["ReviewAction"] | null;
@@ -29058,6 +29059,8 @@ export interface components {
             item_id?: string | null;
             /** Item Title */
             item_title?: string | null;
+            /** Item Code */
+            item_code?: string | null;
             /** Roadmap Id */
             roadmap_id?: string | null;
             /** Meeting Id */
@@ -29161,6 +29164,8 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open" | "done";
+            /** Item Code */
+            item_code?: string | null;
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
             /** Asked */
             asked?: string | null;

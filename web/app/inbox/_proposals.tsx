@@ -27,18 +27,24 @@ export function FeatureName({
   name,
   itemId,
   documentId,
+  code: given,
 }: {
   name: string;
   itemId?: string | null;
   documentId?: string | null;
+  /** inbox-codes (#1786): the item's code as its row's API read gives it; else the roadmap read's. */
+  code?: string | null;
 }) {
   // simple-home-qa-nov12 #4: the item's code before its name, as its panel reads it.
   const read = useItemRef(itemId);
   const ref = itemRefOf(read);
-  const named = <Named item={{ code: ref?.code, title: name }} />;
+  const code = given ?? ref?.code;
+  // A title that leads with its own code ("F-07 Alpha") is named once: its code, then "Alpha".
+  const title = code && name.startsWith(`${code} `) ? name.slice(code.length + 1) : name;
+  const named = <Named item={{ code, title }} />;
   // simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden; #1586: one
   // whose roadmap could not be read says so, never no code.
-  const flag = ref ? <NotInGt item={ref} /> : <ItemRefFailed read={read} />;
+  const flag = code ? null : ref ? <NotInGt item={ref} /> : <ItemRefFailed read={read} />;
   if (!itemId || !documentId)
     return (
       <>
@@ -126,6 +132,20 @@ const askedBy = (p: Proposal): string =>
     ? requestWords(`The meeting ${p.from_meeting.title}`, p.asked)
     : requestWords(p.by_name, p.asked, p.from_ask ? ' through Ask Oracle' : '');
 
+/** inbox-codes (#1786): the request's words with its item named as the cell above names it, its code first. */
+function withCode(words: string, p: Proposal) {
+  const name = p.item_title ?? '';
+  const at = name && p.item_code && !name.startsWith(`${p.item_code} `) ? words.indexOf(name) : -1;
+  if (at < 0) return words;
+  return (
+    <>
+      {words.slice(0, at)}
+      <Named item={{ code: p.item_code, title: name }} />
+      {words.slice(at + name.length)}
+    </>
+  );
+}
+
 /**
  * inbox-meeting-proposals: every Simple proposal waiting on me (the API's `simple_proposals`):
  * one a meeting asked for on an item it does not review, one asked through Ask Oracle, one a
@@ -153,12 +173,17 @@ export function proposalRows(
       // The item cell keeps its room (it wraps): what was asked, by whom or what and when, under the name.
       item: (
         <>
-          <FeatureName name={name} itemId={p.item_id} documentId={p.document_id} />
+          <FeatureName
+            name={name}
+            itemId={p.item_id}
+            documentId={p.document_id}
+            code={p.item_code}
+          />
           <span
             className="block basis-full text-sm break-words whitespace-normal text-text2"
             data-testid="meeting-proposal-context"
           >
-            {askedBy(p)} · {formatDateTime(p.at)}
+            {withCode(askedBy(p), p)} · {formatDateTime(p.at)}
           </span>
         </>
       ),

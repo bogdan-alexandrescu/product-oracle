@@ -108,7 +108,7 @@ test('an owner change the Inbox counts for the Owner waits on Decisions too', as
     .click();
   const mine = page.getByTestId('questions-mine');
   await expect(
-    mine.getByRole('listitem').filter({ hasText: 'Trusted seller badge' }),
+    mine.locator('li[data-kind=proposal]').filter({ hasText: 'Trusted seller badge' }),
   ).toBeVisible();
   await expect(mine).not.toContainText('Nothing waits on you');
 });

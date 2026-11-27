@@ -1057,6 +1057,9 @@ class InboxSimpleChange(BaseModel):
     reason: str | None
     decision_reason: str | None
     state: Literal["new", "open", "done"]
+    # inbox-codes (#1786): the item's code (codes.code_of: its title's, its feature's or its
+    # PRD section's), so its row names it with its code; None for an item with none.
+    item_code: str | None = None
     # meeting-changes-only-its-agenda: the meeting that asked for it.
     from_meeting: SimpleChangeMeeting | None = None
     # inbox-meeting-proposals: what was asked, in plain words, the item by its name

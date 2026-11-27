@@ -18,6 +18,7 @@ import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from 
 import { readableRefusal } from './refusal';
 import { mockNowMs } from './clock';
 import { MOCK_SCENARIO_KEY } from './ids';
+import { shownCode } from './item-code';
 import {
   answerCode,
   applySuggestion,
@@ -7863,6 +7864,8 @@ function inboxSummary(
       child: {
         item: it.key,
         title: it.title ?? null,
+        // #1786: the code the item reads with (its title's, else its PRD section's).
+        code: shownCode({ title: it.title ?? '', section: it.prd_section }, () => null),
         reason: {
           code: shown.code,
           severity: shown.severity,
