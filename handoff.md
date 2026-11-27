@@ -592,3 +592,13 @@ eslint-suppressions.json: import-x/order 32 -> 10 (lower, from lane 4). module_s
 - Playwright `--retries=0 --workers=2` on prose-guard + the 14 specs the lanes touched: **150 passed, 1 failed, 7 skipped**. The failure,
   `e2e/roadmap-decide.spec.ts:373` (ms-asked label hidden right after the ask), passed 3/3 when rerun alone (`--repeat-each=3`):
   timing under load, not a merge defect seen. Not yet measured 5x on a main worktree.
+- Whole mock suite, CI's command (`E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=N/8`, CI retries=1 from e2e/ci.env):
+  - shard 1/8: **1016 passed, 0 failed, 1 flaky** (16.0 m). Flaky: `e2e/de-r1-delete.spec.ts:33` (timed out waiting for
+    `add-row-title` after "Add to Guided setup track", passed on retry). It touches main's add-row and focus area: check it on main.
+  - shards 2–8: **NOT RUN**. Each shard is about 1,017 tests and 16 minutes here, and the 119-minute step ran out.
+
+## Left for the next session / owner
+- Run mock shards 2–8. Run `pytest -m timing tests` detached (it needs more than 500 s). Run the pyright baseline check as ci.yml does.
+- Run `roadmap-decide.spec.ts:373` and `de-r1-delete.spec.ts:33` 5 times each on a main worktree to compare flake rates.
+- Rerun `npm run lint` in the foreground to capture its exit code (it takes about 40 min alongside other load).
+- Not pushed from here: the worker publishes the branch.
