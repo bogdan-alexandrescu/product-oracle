@@ -96,6 +96,44 @@ test('a see-through layer is looked past to the background under it', async () =
 });
 
 /*
+ * protects=the colour the eye sees when a layer has both: its background image paints above its
+ * background colour;
+ * fails_when=the colour under an opaque gradient is reported instead of the gradient;
+ * no_claim=a gradient that fades to see-through further down.
+ */
+test('an opaque gradient over a dark colour reports the gradient', async () => {
+  const postMessage = vi.fn();
+  frameIn({ postMessage });
+  const both = layer({
+    backgroundColor: 'rgb(0, 0, 0)',
+    backgroundImage: 'linear-gradient(rgb(255, 255, 255), rgb(255, 255, 255))',
+  });
+  atEdge(() => [both]);
+  stop = watchHubEdge(window);
+  await settle();
+  expect(posted(postMessage)[0]).toEqual([255, 255, 255]);
+});
+
+/*
+ * protects=the hub hearing the edge's colour on a page that never stops changing;
+ * fails_when=each change pushes the read back, so a node added every 100 ms keeps it from ever
+ * happening;
+ * no_claim=how long a read waits after a burst (the settle window).
+ */
+test('a page that keeps changing still posts its edge colour', async () => {
+  const postMessage = vi.fn();
+  frameIn({ postMessage });
+  const rail = layer({ backgroundColor: 'rgb(12, 26, 46)' });
+  atEdge(() => [rail]);
+  stop = watchHubEdge(window);
+  for (let i = 0; i < 5; i += 1) {
+    document.body.append(document.createElement('span'));
+    await vi.advanceTimersByTimeAsync(100);
+  }
+  expect(posted(postMessage)[0]).toEqual([12, 26, 46]);
+});
+
+/*
  * protects=a gradient background counting as the edge's colour;
  * fails_when=a layer with only a gradient is skipped or reported as another colour;
  * no_claim=colours the browser serialises other than rgb() (those go through a canvas).
