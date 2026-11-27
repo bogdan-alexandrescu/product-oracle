@@ -47,9 +47,12 @@ const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 const REMOVE =
   'relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11';
 /** #1905: a value that opens its editor: the text as it reads, a pointer and a pencil on hover or focus. */
-// An inline span (role button), so a value that wraps keeps its (i) tip on its last line as before.
+// An inline span (role button), so a value that wraps keeps its (i) tip on its last line as before;
+// on a phone its tap area is 44 px high (its ::before), with no change to the layout.
 const VALUE =
-  'group cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent max-sm:inline-flex max-sm:min-h-11 max-sm:items-center';
+  "group relative cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:-inset-y-3.5 max-sm:before:min-w-11 max-sm:before:content-['']";
+/** On a phone the row stays 44 px high, as it was with its Change link; the value's tap area is its ::before. */
+const VALUE_ROW = 'max-sm:min-h-11 max-sm:items-center';
 const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-base';
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
@@ -106,7 +109,7 @@ function Field({
             {editor(close)}
           </div>
         ) : (
-          <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className={`flex flex-wrap items-baseline gap-x-2 ${canChange ? VALUE_ROW : ''}`}>
             <span data-testid={testId} className="min-w-0">
               {canChange ? (
                 <span
