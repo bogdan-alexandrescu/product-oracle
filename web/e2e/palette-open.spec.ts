@@ -29,8 +29,15 @@ for (const dark of [false, true]) {
     await expect(page.getByText('more for a feature')).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(palette(page)).toBeHidden();
+    // The one feature panel, over Home: its link (#1796) is on the address; Esc or Back closes it.
+    const panel = page.getByTestId('item-panel').first();
+    await expect(panel).toContainText('Weekly alert digest');
+    await expect(page).toHaveURL(/\/simple\?feature=F-79$/);
+    if (dark) await page.goBack();
+    else await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
     await expect(page).toHaveURL(/\/simple$/);
-    await expect(page.getByTestId('item-panel').first()).toContainText('Weekly alert digest');
+    await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
   });
 }
 
