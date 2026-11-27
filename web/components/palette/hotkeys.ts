@@ -53,12 +53,14 @@ function nameOf(e: KeyboardEvent): string {
 
 function onKey(e: KeyboardEvent) {
   // A key a script sends (Shift J's arrow to a row's grip) is the grip's alone.
-  if (!e.isTrusted || e.defaultPrevented || e.isComposing) return;
+  if (!e.isTrusted || e.isComposing) return;
+  // Ctrl or ⌘ K opens the palette even when another handler has already prevented its default.
   if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k' && palette) {
     e.preventDefault();
     palette.toggle();
     return;
   }
+  if (e.defaultPrevented) return;
   if (palette?.open) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (isTyping(e.target)) return;
