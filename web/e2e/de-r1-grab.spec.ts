@@ -35,8 +35,12 @@ async function addOn(page: Page, track: string, title: string) {
   await page.getByTestId('add-row-title').press('Enter');
   await expect(rowOf(page, title)).toHaveCount(1);
   // The added item's panel opens; close it so the chart is full width, and let its row's
-  // scroll into sight and mark settle before a drag measures it.
-  await page.keyboard.press('Escape');
+  // scroll into sight and mark settle before a drag measures it. Close, not Escape: the field
+  // for the next add may hold the focus, and Escape there closes that field instead.
+  const panel = page.getByTestId('item-panel');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await expect(page.locator('[data-just-added]')).toHaveCount(0);
 }
 
