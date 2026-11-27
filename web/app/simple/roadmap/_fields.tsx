@@ -47,7 +47,9 @@ const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 const REMOVE =
   'relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11';
 /** #1905: a value that opens its editor: the text as it reads, a pointer and a pencil on hover or focus. */
-const VALUE = `group inline-flex max-w-full cursor-pointer items-baseline gap-1 rounded text-left focus-visible:outline-2 focus-visible:outline-accent max-sm:min-h-11 max-sm:items-center`;
+// An inline span (role button), so a value that wraps keeps its (i) tip on its last line as before.
+const VALUE =
+  'group cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent max-sm:inline-flex max-sm:min-h-11 max-sm:items-center';
 const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-base';
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
@@ -81,7 +83,7 @@ function Field({
   // 'back': closed by Esc, Cancel or a save, so focus goes back to the value it opened from.
   const [state, setState] = useState<'shut' | 'open' | 'back'>('shut');
   const open = state === 'open';
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLSpanElement>(null);
   const valueId = useId();
   useEffect(() => {
     if (state === 'back') button.current?.focus();
@@ -107,23 +109,27 @@ function Field({
           <span className="flex flex-wrap items-baseline gap-x-2">
             <span data-testid={testId} className="min-w-0">
               {canChange ? (
-                <button
+                <span
                   ref={button}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={VALUE}
                   aria-label={`Change the ${label.toLowerCase()}`}
                   aria-describedby={valueId}
                   onClick={() => setState('open')}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    setState('open');
+                  }}
                 >
-                  <span id={valueId} className="min-w-0">
-                    {value}
-                  </span>
+                  <span id={valueId}>{value}</span>{' '}
                   <Icon
                     name="pencil"
                     size={16}
-                    className="invisible flex-none self-center text-text2 group-hover:visible group-focus-visible:visible"
+                    className="invisible inline align-[-3px] text-text2 group-hover:visible group-focus-visible:visible"
                   />
-                </button>
+                </span>
               ) : (
                 value
               )}
