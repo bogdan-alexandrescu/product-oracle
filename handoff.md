@@ -564,3 +564,28 @@ after each merge.
   re-run: no API file changed in this round.
 - Minors from the verdict left as they were (brief: blocker and major only). Note: the earlier
   "d0b30e6e6" sha above is wrong; the gates there ran on ca00d08's tree.
+
+## build-shortcuts (#1790/#1795), PR #1933: re-review round (verdict NOT_YET, one major)
+
+- Merged the night-m train (origin/swarm/task_f89b44cdd78343dc8bfa at f2308a78a) into the branch
+  (7260477f, no conflicts). It brings the train's fixed specs: palette-open (panel at
+  /simple?feature=F-79, then Esc or Back closes it), prio-twin-propose (request wording), and
+  inbox-for-wrap with `web/app/inbox/_needs.tsx`.
+- Major (palette-open.spec.ts line 32 flaky): closed by the train's version of the spec, which
+  waits for ?feature=F-79 first and checks /simple only after the panel closes. No second fix.
+  Proof: palette-open.spec.ts --repeat-each=4 --retries=0, 32 passed.
+- Minor fixed: `web/components/palette/hotkeys.ts` onKey now checks Ctrl or Cmd K before
+  e.defaultPrevented, as the palette's old listener did. Red spec first (cdd42cb7,
+  build-shortcuts.spec.ts 'Ctrl+K opens the palette even when another handler ... prevented it',
+  failed: dialog Find not found), then the fix.
+- Gates: build-shortcuts + palette-keys + prio-twin-propose + inbox-for-wrap specs 36 passed
+  (--retries=0); `npx tsc --noEmit` exit 0; `npm run lint` exit 0; prettier --check on the
+  touched files clean. Prose guard not run: no visible word changed. No API file changed, so no
+  pytest.
+- Frame differences kept on purpose (the keep-list): the folded 'Goal map' group lists
+  '/ Search the roadmap' though the Goal map has no search box (keys.ts:80-83); Everywhere lists
+  'c Add on this page' and '/ Search or filter' on Priorities, which has neither box (the picked
+  frame shows the same); build-shortcuts.spec.ts has no approver case (the frames show viewer and
+  commenter only). Each is the sheet's words for another page or a later pass, left for the owner.
+- The push tool refuses commits whose message carries the Co-Authored-By line; the merge was
+  pushed, the two commits after it are left for the worker to publish.
