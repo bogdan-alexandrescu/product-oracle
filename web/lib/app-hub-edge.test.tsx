@@ -138,6 +138,41 @@ test('switching to Simple posts the new edge colour, once; an unchanged edge pos
 });
 
 /*
+ * protects=the hub's dock following Oracle's light and dark themes, picked in the user menu (it
+ * sets or clears data-theme on <html>) or followed from the system's colour scheme;
+ * fails_when=either switch goes unheard;
+ * no_claim=the real light and dark colours (the stub picks them).
+ */
+test('a theme switch, picked or from the system, posts the new edge colour', async () => {
+  const postMessage = vi.fn();
+  frameIn({ postMessage });
+  let systemDark = false;
+  const scheme = new EventTarget();
+  vi.spyOn(window, 'matchMedia').mockReturnValue(scheme as MediaQueryList);
+  const light = layer({ backgroundColor: 'rgb(255, 255, 255)' });
+  const dark = layer({ backgroundColor: 'rgb(16, 16, 16)' });
+  const picked = () => document.documentElement.dataset.theme;
+  atEdge(() => [(picked() ?? (systemDark ? 'dark' : 'light')) === 'dark' ? dark : light]);
+  stop = watchHubEdge(window);
+  await settle();
+
+  document.documentElement.dataset.theme = 'dark';
+  await settle();
+  delete document.documentElement.dataset.theme;
+  await settle();
+  systemDark = true;
+  scheme.dispatchEvent(new Event('change'));
+  await settle();
+  const each = (rgb: number[]) => APP_HUB_ORIGINS.map(() => rgb);
+  expect(posted(postMessage)).toEqual([
+    ...each([255, 255, 255]),
+    ...each([16, 16, 16]),
+    ...each([255, 255, 255]),
+    ...each([16, 16, 16]),
+  ]);
+});
+
+/*
  * protects=nothing posted after the watcher is stopped;
  * fails_when=the disposer leaves the observer or the pending read running;
  * no_claim=the resize and colour-scheme listeners (the same disposer removes them).
