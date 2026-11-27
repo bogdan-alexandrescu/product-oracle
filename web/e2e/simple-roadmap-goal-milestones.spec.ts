@@ -355,8 +355,12 @@ test.describe("a PRD's own milestones", () => {
     // fails_when: the key text differs, M4 is not marked as a PRD milestone, the owner is not named, the ask toast or "Asked the PRD" line is wrong, the diamond vanishes, or the asked line does not span the chart
     // no_claim: that the owner answers the ask, the real API, or hollow and dashed colours and shapes
     await open(page, 'simple-prd-milestones');
-    await expect(page.getByTestId('ms3-key')).toHaveText(
-      'Hollow, dashed: from the PRD Usage alerts · a change asks its owner · 1 with no date yet',
+    // #1901: the key row's entry, its PRD and what a change does in its tip.
+    const key = page.getByTestId('timeline-key').locator('[data-key="prd"]');
+    await expect(key).toHaveText('From a PRD · 1 with no date yet');
+    await expect(key).toHaveAttribute(
+      'title',
+      'From the PRD Usage alerts · a change asks its owner',
     );
     const m2 = page.getByTestId('ms-prd-label').filter({ hasText: 'M4 Digest for all teams' });
     // One band for every milestone: a PRD's is marked as one (its diamond is hollow, its tip names the PRD).

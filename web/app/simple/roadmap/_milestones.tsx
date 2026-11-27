@@ -1214,6 +1214,8 @@ export function MsLayer(props: MsLayerProps) {
           const low = found == null ? [mx + 11, mx - 11 - w].find((c) => free(c, row)) : undefined;
           if (found != null) l = found;
           else if (low != null) [l, t] = [low, row];
+          // #1903: no clear place near it: next to the count before it, never on it ("2 4").
+          else l = Math.max(l, ...taken.filter((k) => k.t < t + h && t < k.b).map((k) => k.r + 2));
         }
         el.style.left = `${l - lx}px`;
         if (t !== at.t) el.style.top = `${Number(el.dataset.top) + t - at.t}px`;
@@ -1860,6 +1862,11 @@ export function MsLayer(props: MsLayerProps) {
         line.splice(n, 1);
       }
     }
+    // #1903: a label across the names column's edge starts at the track's edge (its end stays put).
+    const edge0 = props.span ? props.span[0] + 4 : -Infinity;
+    for (const p of placed)
+      if (p.left < edge0 && p.left + p.w - edge0 >= LABEL_MIN)
+        [p.w, p.left] = [p.left + p.w - edge0, edge0];
     out.push(
       <div
         key="band"

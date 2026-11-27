@@ -152,6 +152,6 @@ test.describe('de-r1 grab the bar', () => {
     const name = (await pick.locator('option').nth(1).textContent())!;
     await pick.selectOption({ label: name });
     await expect(page.getByTestId('card-owner')).toContainText(name);
-    await expect(row.getByTestId('bar-owner')).toHaveAttribute('title', name);
+    await expect(row.getByTestId('bar-owner')).toHaveAttribute('title', `Owner: ${name}`);
   });
 });

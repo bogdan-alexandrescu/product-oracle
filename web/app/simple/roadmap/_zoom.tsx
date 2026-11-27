@@ -175,8 +175,10 @@ function lookOf(i: Item): Look {
   return { bar: base };
 }
 
-/** QR2 A's key: a swatch drawn as the mark is, then short words; only the looks on the chart. */
-function Key({ data }: { data: Roadmap }) {
+/** QR2 A's key: a swatch drawn as the mark is, then short words; only the looks on the chart.
+ * #1901: it sits in the filter row on a desktop; #1902: the milestones' lines have their entries. */
+export function Key({ data }: { data: Roadmap }) {
+  const ms = useMsCtl();
   const has = (f: (i: Item) => boolean) => data.items.some(f);
   const sw = (s: CSSProperties) => (
     <i aria-hidden className="inline-block h-3 w-7 flex-none rounded-sm" style={s} />
@@ -200,6 +202,46 @@ function Key({ data }: { data: Roadmap }) {
       <i key="k" aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />,
       'Key date',
     ]);
+  const dated = (ms?.list ?? []).filter((m) => m.date);
+  // The roadmap's own milestones draw a grey dashed line (timeline-milestone-line): its swatch too.
+  const own = (data.milestones ?? []).some((m) => m.date && m.status !== 'dropped');
+  if (dated.length || own)
+    e.push([
+      'ms',
+      <span key="m" aria-hidden className="flex h-3.5 flex-none gap-1">
+        {own && <i data-testid="key-ms-own" className="border-l-2 border-dashed border-text2" />}
+        {dated.length > 0 &&
+          ['M1', 'M2', 'M3'].map((c) => (
+            <i key={c} className="w-0.5" style={{ background: msEdge(c) }} />
+          ))}
+      </span>,
+      'Milestone',
+    ]);
+  if (dated.some((m) => !m.prd && m.item_ids.length))
+    e.push([
+      'tie',
+      <i
+        key="d"
+        aria-hidden
+        className="inline-block w-7 flex-none border-t-2 border-dotted"
+        style={{ borderColor: msEdge('M1') }}
+      />,
+      'Due by a milestone',
+    ]);
+  // #1901: a PRD's milestones read here, not in a row of their own; its names in the tip.
+  const prds = [...new Set((ms?.list ?? []).flatMap((m) => (m.prd ? [m.prd.title] : [])))];
+  const undated = (ms?.list ?? []).filter((m) => m.prd && !m.date).length;
+  if (prds.length)
+    e.push([
+      'prd',
+      <i
+        key="p"
+        aria-hidden
+        className="inline-block h-2.5 w-2.5 flex-none rotate-45 border-[1.5px] border-dashed"
+        style={{ borderColor: msEdge('M1') }}
+      />,
+      undated ? `From a PRD · ${undated} with no date yet` : 'From a PRD',
+    ]);
   e.push([
     'today',
     <i
@@ -216,7 +258,14 @@ function Key({ data }: { data: Roadmap }) {
       className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-text2"
     >
       {e.map(([k, s, w]) => (
-        <li key={k} data-key={k} className="flex items-center gap-2">
+        <li
+          key={k}
+          data-key={k}
+          className="flex items-center gap-2"
+          title={
+            k === 'prd' ? `From the PRD ${prds.join(', ')} · a change asks its owner` : undefined
+          }
+        >
           {s}
           {w}
         </li>
@@ -317,9 +366,11 @@ export function ZoomTimeline(props: TimelineProps) {
     // The page reads its chart (and its format) by simple-chart, as the other formats give it.
     <div data-testid="simple-chart" data-format="timeline" data-view="zoom">
       <div data-testid="zoom-timeline" className="mt-2">
-        <div className="mb-2 rounded-lg border border-line bg-surface px-3 py-2">
-          <Key data={data} />
-        </div>
+        {phone && (
+          <div className="mb-2 rounded-lg border border-line bg-surface px-3 py-2">
+            <Key data={data} />
+          </div>
+        )}
         <ConflictPanel {...props} onShow={onOpen} />
         <div ref={row} className={`scroll-mt-3 ${side ? 'flex items-start gap-3' : ''}`}>
           {/* The chart's bars, date words and today line stack inside its own context (isolate),
@@ -469,13 +520,15 @@ export function ConflictPanel({
       </button>
     </span>
   ) : null;
+  // #1901: no row at all when the roadmap has no broken link; under filters, where the others are.
+  if (!list.length && !elsewhere) return null;
   if (!list.length)
     return (
       <div
         data-testid="conflicts"
         className="mb-2 flex flex-wrap items-center gap-x-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
       >
-        {elsewhere ? 'No broken links here,' : 'No broken links'}
+        No broken links here,
         {showAll}
       </div>
     );
@@ -678,7 +731,19 @@ function DayChart(props: TimelineProps) {
   // QA Nov 14 #9: the Today pill (about 58 px from its left) is kept off as a diamond is, so a
   // label never runs into it ("Today M1 Beta").
   const todayIn = fit || (xt >= sl && xt <= sl + visible);
-  const pillL = Math.max(sl + 2, Math.min(xt - 22, trackW - 56));
+  // #1903: the pill sits across its line, else just right or left of it, wherever no diamond lies under it.
+  const pillAt = (l: number) => Math.max(sl + 2, Math.min(l, trackW - 56));
+  // A diamond's box is 20 px wide (its grab pad), the pill's about 58; it keeps within 120 px of its line.
+  // With no such place (a crowded 1 year), it sits across its line under the diamonds.
+  const pillFree = [
+    xt - 22,
+    ...gems.filter((g) => Math.abs(g - xt) < 130).flatMap((g) => [g + 11, g - 71]),
+  ]
+    .filter((l) => Math.abs(l + 29 - xt) <= 120)
+    .sort((a, b) => Math.abs(a - xt + 22) - Math.abs(b - xt + 22))
+    .map(pillAt)
+    .find((l) => !gems.some((g) => g + 10 > l && g - 10 < l + 58));
+  const pillL = pillFree ?? pillAt(xt - 22);
   const pill: [number, number] | null = todayIn ? [pillL, pillL + 60] : null;
   const clear = (left: number, need = 56) => {
     let l = left;
@@ -1189,9 +1254,9 @@ function DayChart(props: TimelineProps) {
             <span
               data-testid="today-pill"
               data-keep-clear
-              className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
+              className={`absolute top-[21px] ${pillFree == null ? 'z-[24]' : 'z-30'} rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white`}
               style={{
-                left: Math.max(labelW + sl + 2, Math.min(labelW + xt - 22, labelW + trackW - 56)),
+                left: labelW + pillL,
                 background: TODAY,
               }}
             >
@@ -1539,7 +1604,6 @@ function DayChart(props: TimelineProps) {
                   labelW={labelW}
                   trackW={trackW}
                   sl={sl}
-                  fit={fit}
                   today={data.today}
                   canChange={canChange}
                   still={fixed(i)}
@@ -1746,7 +1810,6 @@ const TimelineRow = memo(function TimelineRow({
   labelW,
   trackW,
   sl,
-  fit,
   today,
   canChange,
   still,
@@ -1769,7 +1832,6 @@ const TimelineRow = memo(function TimelineRow({
   labelW: number;
   trackW: number;
   sl: number;
-  fit: boolean;
   today: string;
   canChange: boolean;
   still: boolean;
@@ -1812,8 +1874,11 @@ const TimelineRow = memo(function TimelineRow({
   const guess = !live && estimateOnly(i);
   const words = guess ? estimateWords(ds, de, today) : spanWords(ds, de, today);
   const room = bx + bw - Math.max(bx, sl);
-  const onBar = !fit && room > (guess ? words.length * 6.5 + 16 : 120);
+  // #1904: dates sit on the bar only where they fit whole; a shorter bar has them beside it.
+  const onBar = room > words.length * 6.5 + 16;
   const besideW = words.length * 6.5 + 8;
+  // Beside the bar, after its pending mark and the open bar's owner pick.
+  const gap = 4 + (waiting ? 10 : 0) + (sel && renamable && !still && people ? 28 : 0);
   return (
     <div
       data-testid="timeline-row"
@@ -1936,6 +2001,7 @@ const TimelineRow = memo(function TimelineRow({
               } else if (e.key === 'Escape') on.keyCancel(i);
             }}
             onBlur={() => on.keyEnd(i)}
+            title={words}
             className={`pointer-events-auto absolute rounded-full ${still ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
             style={{
               touchAction: still ? 'auto' : 'none',
@@ -1977,13 +2043,13 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {/* roadmap-decide: an item with no dates of its own (Oracle's estimate on both ends) whose
            * bar has no room for its dates says so beside it, never a bare unlabeled pill. */}
-          {guess && !onBar && (
+          {!onBar && (
             <span
-              data-testid="bar-no-dates"
+              data-testid={guess ? 'bar-no-dates' : 'bar-dates-beside'}
               className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
               style={
-                bx + bw + besideW <= trackW
-                  ? { left: bx + bw + 4 }
+                bx + bw + gap + besideW <= trackW
+                  ? { left: bx + bw + gap }
                   : bx >= besideW
                     ? { right: trackW - bx + 4 }
                     : { left: Math.max(bx, 0) + 4 }

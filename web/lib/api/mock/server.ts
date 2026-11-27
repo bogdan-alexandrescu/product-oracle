@@ -632,6 +632,8 @@ import {
   PICKED_MILESTONE,
   PRIORITIES_PLAN_MILESTONES_SCENARIO,
   seedOldMilestones,
+  BAND_CROWD_SCENARIO,
+  seedCrowdedMilestones,
   seedOwnMilestones,
   seedPlanPrdMilestones,
   seedPrdMilestones,
@@ -7387,6 +7389,8 @@ function load(): Db {
                                                                                                                                                                       : scenario ===
                                                                                                                                                                             'simple-milestones' ||
                                                                                                                                                                           scenario ===
+                                                                                                                                                                            BAND_CROWD_SCENARIO ||
+                                                                                                                                                                          scenario ===
                                                                                                                                                                             'simple-prd-milestones' ||
                                                                                                                                                                           scenario ===
                                                                                                                                                                             'simple-milestones-track-owner'
@@ -7401,10 +7405,15 @@ function load(): Db {
                                                                                                                                                                               scenario ===
                                                                                                                                                                               'simple-prd-milestones'
                                                                                                                                                                                 ? seedPrdMilestones()
-                                                                                                                                                                                : seedOwnMilestones();
+                                                                                                                                                                                : scenario ===
+                                                                                                                                                                                    BAND_CROWD_SCENARIO
+                                                                                                                                                                                  ? seedCrowdedMilestones()
+                                                                                                                                                                                  : seedOwnMilestones();
                                                                                                                                                                             if (
                                                                                                                                                                               scenario !==
-                                                                                                                                                                              'simple-milestones'
+                                                                                                                                                                                'simple-milestones' &&
+                                                                                                                                                                              scenario !==
+                                                                                                                                                                                BAND_CROWD_SCENARIO
                                                                                                                                                                             ) {
                                                                                                                                                                               // Usage alerts' owner (drafts.who: its track's owner) is Nora Vance, an invented approver.
                                                                                                                                                                               const nora =
