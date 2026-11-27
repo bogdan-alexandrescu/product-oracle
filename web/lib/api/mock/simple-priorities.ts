@@ -1337,10 +1337,7 @@ export function prioritiesOut(
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,
   };
-  return typeof localStorage !== 'undefined' &&
-    localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_LIVE_SHAPE_SCENARIO
-    ? liveShape(out)
-    : out;
+  return liveShape(out);
 }
 
 /** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */

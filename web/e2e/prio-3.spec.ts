@@ -81,22 +81,29 @@ for (const scenario of ['simple-plan', PRIORITIES_LIVE_SHAPE_SCENARIO])
     expect(above.map(Number)).toEqual(above.map((_, i) => i + 1));
   });
 
-test('#1894 Priorities never prints a PRD-own milestone number', async ({ page }) => {
+test('#1894 Priorities shows the roadmap-wide milestone code, never the PRD-own number', async ({
+  page,
+}) => {
   await open(page, PRIORITIES_LIVE_SHAPE_SCENARIO);
-  // A row whose milestone carries the PRD's own "M2" reads the PRD milestone's name.
+  // A row whose milestone carries the PRD's own "M2" reads that milestone by the roadmap's code.
   const row = page.locator('[data-testid="prio-row"][data-code="alert-rules"]');
   await expect(row.getByTestId('prio-milestone')).toHaveText(
-    'Milestone Scale volume (99.7% setup success)',
+    'M17 Scale volume (99.7% setup success)',
   );
   await page.getByRole('tab', { name: 'Goal buckets' }).click();
-  // The plan's milestones have no roadmap-wide code (the roadmap's M1 is Beta): their names, no number.
+  // The plan's M1, M2, M3 are the roadmap's M16, M17, M23.
   const legend = page.getByTestId('milestone-chip');
   await expect(legend).toHaveCount(3);
-  await expect(legend.nth(0)).toContainText(/^Prove it /);
-  await expect(legend.nth(1)).toContainText(/^Scale volume /);
-  await expect(legend.nth(2)).toContainText(/^Open to all /);
-  for (const t of await legend.allInnerTexts()) expect(t).not.toMatch(/\bM\d/);
+  await expect(legend.nth(0)).toContainText(/^M16 /);
+  await expect(legend.nth(1)).toContainText(/^M17 /);
+  await expect(legend.nth(2)).toContainText(/^M23 /);
+  await expect(legend.nth(0)).toHaveAttribute('title', 'M16 Prove it');
   const chips = page.getByTestId('plan-chip');
   await expect(chips.first()).toBeVisible();
-  for (const t of await chips.allInnerTexts()) expect(t).not.toMatch(/\bM\d/);
+  for (const t of [
+    ...(await chips.allInnerTexts()),
+    ...(await page.getByTestId('goal-bar-label').allInnerTexts()),
+  ])
+    expect(t).not.toMatch(/\bM[123]\b/);
+  await expect(chips.first()).toContainText(/^M(16|17|23) /);
 });

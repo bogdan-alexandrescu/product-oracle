@@ -84,6 +84,9 @@ export function codedMilestone(
   ];
   if (codes.length === 1) return own ? `${codes[0]} ${rest}` : `${codes[0]} ${name}`;
   if (!own) return name;
+  // The roadmap shows it by the number its own name carries ("M1 · Prove it", no roadmap-wide code): as it is.
+  if (named.some((m) => OWN.exec(m.name.trim())?.[1]?.toUpperCase() === own[1].toUpperCase()))
+    return name;
   // #1894: a PRD's own number the roadmap does not give is never shown: the PRD milestone's name ("M2 (60% by Dec)"
   // reads "Scale volume (60% by Dec)", by its roadmap code when it has one), else the words after the number.
   const tail = own[2].trim();
@@ -145,7 +148,7 @@ export function planMilestone(
   const m = plan.milestones.find((x) => x.code === code);
   const words = coded(`${code} · ${m?.name || code}`, { prd: plan.prd });
   const own = OWN.exec(words);
-  return own && words !== `${code} · ${m?.name || code}`
-    ? { code: own[1], name: own[2] }
+  return own
+    ? { code: own[1].toUpperCase(), name: own[2] || m?.name || '' }
     : { code: null, name: m?.name || words };
 }

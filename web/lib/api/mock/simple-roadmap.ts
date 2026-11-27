@@ -8,6 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
+import { liveShapeRoadmap } from './simple-priorities-live';
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -2996,6 +2997,16 @@ export function pickedName(
 }
 
 export function roadmapOut(
+  db: SimpleDb,
+  role: Role,
+  q: URLSearchParams,
+  me?: Who,
+): Schemas['SimpleRoadmapOut'] | null {
+  const out = roadmapRead(db, role, q, me);
+  return out && liveShapeRoadmap(out);
+}
+
+function roadmapRead(
   db: SimpleDb,
   role: Role,
   q: URLSearchParams,

@@ -33,19 +33,20 @@ const chip = (page: Page, code: string) =>
 // A PRD's milestone opens the Roadmap's PRD milestone card.
 const card = (page: Page) => page.getByTestId('ms-prd-card');
 
+// #1894: the PRD's M2 is the roadmap's M3, and its M3 the roadmap's M7: Goal buckets shows the roadmap's codes.
 test("the PRD's owner renames M2 from Goal buckets; it goes straight in; Undo puts it back", async ({
   page,
 }) => {
   await open(page);
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Scale volume');
-  await chip(page, 'M2').getByRole('button', { name: 'M2 Scale volume' }).click();
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Scale volume');
+  await chip(page, 'M3').getByRole('button', { name: 'M3 Scale volume' }).click();
   await expect(card(page).getByRole('heading')).toContainText('Scale volume');
   await card(page).getByLabel('Name', { exact: true }).fill('Grow volume');
   await card(page).getByRole('button', { name: 'Ask to change it' }).click();
   await expect(page.getByTestId('ms-toast')).toContainText('Grow volume saved');
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Grow volume');
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Grow volume');
   await page.getByTestId('ms-toast').getByRole('button', { name: 'Undo' }).click();
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Scale volume');
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Scale volume');
 });
 
 test('an approver who does not own the PRD asks its owner for a new name; the toast says so and the name waits', async ({
@@ -64,7 +65,7 @@ test("a viewer reads a milestone's card from Goal buckets, its name not a field 
   page,
 }) => {
   await open(page, 'viewer@example.com');
-  await chip(page, 'M3').getByRole('button', { name: 'M3 Open to all' }).click();
+  await chip(page, 'M7').getByRole('button', { name: 'M7 Open to all' }).click();
   await expect(card(page).getByRole('heading')).toContainText('Open to all');
   await expect(card(page).getByLabel('Name', { exact: true })).not.toBeEditable();
 });

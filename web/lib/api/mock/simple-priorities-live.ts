@@ -1,6 +1,32 @@
 import type { Schemas } from '@/lib/api/client';
 
+import { MOCK_SCENARIO_KEY } from './ids';
+
 type Out = Schemas['SimplePrioritiesOut'];
+
+const live = () =>
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_LIVE_SHAPE_SCENARIO;
+
+/** The roadmap-wide codes of the plan's milestones in the scenario, by their PRD's own codes (invented numbers). */
+const ROADMAP_CODES: Record<string, string> = { M1: 'M16', M2: 'M17', M3: 'M23' };
+
+/**
+ * The scenario's roadmap read: the plan's milestones ("M1 · Prove it") carry roadmap-wide codes of their own (M16,
+ * M17, M23), as live, so the PRD's M1, M2, M3 are other numbers than the roadmap's.
+ */
+export function liveShapeRoadmap(out: Schemas['SimpleRoadmapOut']): Schemas['SimpleRoadmapOut'] {
+  if (!live()) return out;
+  return {
+    ...out,
+    milestones: out.milestones.map((m) => {
+      const code = /^(M\d+) · /.exec(m.name)?.[1];
+      return code && ROADMAP_CODES[code] && !m.roadmap_code
+        ? { ...m, roadmap_code: ROADMAP_CODES[code] }
+        : m;
+    }),
+  };
+}
 
 /**
  * prio-3 (#1739, #1898, #1894), the "priorities-live-shape" scenario: "priorities-plan-goal-outside" read with the
@@ -14,7 +40,7 @@ export const PRIORITIES_LIVE_SHAPE_SCENARIO = 'priorities-live-shape';
 
 export function liveShape(out: Out): Out {
   const plan = out.plan;
-  if (!plan) return out;
+  if (!plan || !live()) return out;
   const slices = plan.slices.slice(0, 6).map((s) => ({ ...s, effort_weeks: null }));
   const inPlan = new Set(slices.map((s) => s.feature_code));
   const target = plan.goals.flatMap((g) => g.targets).find((t) => t.milestone === 'M2');

@@ -49,18 +49,18 @@ test('a milestone renamed from Goal buckets reads the roadmap once, and its Undo
   );
   await login(page);
   await page.goto('/simple/priorities?tab=buckets');
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Scale volume');
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Scale volume');
   const first = await roadmapReads(page);
 
-  await chip(page, 'M2').getByRole('button', { name: 'M2 Scale volume' }).click();
+  await chip(page, 'M3').getByRole('button', { name: 'M3 Scale volume' }).click();
   await card(page).getByLabel('Name', { exact: true }).fill('Grow volume');
   await card(page).getByRole('button', { name: 'Ask to change it' }).click();
   await expect(page.getByTestId('ms-toast')).toContainText('Grow volume saved');
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Grow volume');
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Grow volume');
   const renamed = await roadmapReads(page);
   expect(renamed - first, 'roadmap reads for one rename').toBe(1);
 
   await page.getByTestId('ms-toast').getByRole('button', { name: 'Undo' }).click();
-  await expect(chip(page, 'M2')).toHaveAttribute('title', 'M2 Scale volume');
+  await expect(chip(page, 'M3')).toHaveAttribute('title', 'M3 Scale volume');
   expect((await roadmapReads(page)) - renamed, 'roadmap reads for its Undo').toBe(1);
 });
