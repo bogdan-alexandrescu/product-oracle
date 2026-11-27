@@ -2089,6 +2089,14 @@ class _View:
         self.agendas: dict[uuid.UUID, Any] = {}
         # trash-features-goals: the items in Trash its changes are on, "<name> (deleted)".
         self.deleted: dict[str, str] = {}
+        # home-3 (#1900): an item id of an older version of its roadmap (each approved version
+        # copies its items under new ids): the item as it is now, else its last known name.
+        self.past: dict[str, tuple[service.Entry | None, str]] = {}
+
+    def now_of(self, c: SimpleChange) -> service.Entry | None:
+        """The change's item as this read has it: by its id, else by its older version's."""
+        e = self.entry(c) if c.target.get("item_id") else None
+        return e or self.past.get(str(c.target.get("item_id")), (None, ""))[0]
 
     def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool | None]:
         """(the meeting it was made in, whether its item is off that meeting's agenda)."""
@@ -2197,6 +2205,10 @@ class _View:
 def _target(c: SimpleChange, v: _View) -> dict:
     """edit-decisions: a sheet suggestion still waiting names its decision as it is now (its
     code and title), not as it was when it was sent (Home's and Waiting for you's rows)."""
+    e = v.past.get(str((c.target or {}).get("item_id")), (None, ""))[0]
+    if e is not None:
+        # home-3 (#1900): the item as it is now, so the reader opens it.
+        return {**c.target, "item_id": str(e.row.id)}
     d = v.questions.get(str((c.target or {}).get("decision_id")))
     if c.status != "proposed" or c.op not in SHEET_OPS or c.op == "add_question" or d is None:
         return c.target
@@ -2225,10 +2237,11 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict)
     and name as this reader reads it, "· undone" once undone."""
     from oracle.simple import change_words
 
-    e = v.entry(c) if c.target.get("item_id") else None
+    e = v.now_of(c)
     item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
     if item is None and c.target.get("item_id"):
-        item = v.deleted.get(str(c.target["item_id"]))
+        ref = str(c.target["item_id"])
+        item = v.deleted.get(ref) or v.past.get(ref, (None, ""))[1] or None
     if c.op == "delete_goal":
         item = v.deleted.get(str(c.target.get("goal_id")))
     return change_words.sentence(c.op, target, c.before, c.after,
@@ -2276,7 +2289,30 @@ async def _view(
     v.questions = await _questions(db, changes)
     v.agendas = await _agendas(db, sids)
     v.deleted = await _deleted(db, changes, v)
+    v.past = await _past(db, changes, v)
     return v
+
+
+async def _past(db: AsyncSession, changes: list[SimpleChange], v: _View) -> dict:
+    """home-3 (#1900): the items its changes name by an id this read does not have (an older
+    version's copy), by that id: the item as it is now (same roadmap, same key), else None,
+    with its last known name. One query for the whole list."""
+    ids = set()
+    for c in changes:
+        try:
+            item = uuid.UUID(str(c.target.get("item_id")))
+        except ValueError:
+            continue
+        if item not in v.by_id and str(item) not in v.deleted:
+            ids.add(item)
+    if not ids:
+        return {}
+    now = {(e.roadmap.id, e.row.item_key): e for e in v.by_id.values()}
+    rows = await db.execute(
+        select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key,
+               RoadmapItem.title).where(RoadmapItem.id.in_(ids))
+    )  # fmt: skip
+    return {str(i): (now.get((doc, key)), title) for i, doc, key, title in rows.all()}
 
 
 async def _deleted(db: AsyncSession, changes: list[SimpleChange], v: _View) -> dict[str, str]:
