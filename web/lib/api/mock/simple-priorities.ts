@@ -10,7 +10,13 @@
  * dependency. `estimate_feature` writes a person's goal value or effort, which the score uses.
  */
 import type { Schemas } from '@/lib/api/client';
+
+import { bucketGoalIds, lazyGoalBuckets, seedGoalBuckets } from './goal-buckets';
+import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
+import { madeOrder } from './made-order';
+import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
 import { PLAN_PRD_SLUG, planOut, planSlices } from './simple-plan';
+import { PRIORITIES_LIVE_SHAPE_SCENARIO, liveShape } from './simple-priorities-live';
 import {
   canDecideItem,
   closed,
@@ -27,11 +33,6 @@ import {
   type SimpleDb,
 } from './simple-roadmap';
 import { flowFor } from './simple-visuals';
-import { PRIORITIES_LIVE_SHAPE_SCENARIO, liveShape } from './simple-priorities-live';
-import { madeOrder } from './made-order';
-import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
-import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
-import { bucketGoalIds, lazyGoalBuckets, seedGoalBuckets } from './goal-buckets';
 
 type Row = Schemas['SimplePriorityRow'];
 type Item = Schemas['SimpleRoadmapItem'];

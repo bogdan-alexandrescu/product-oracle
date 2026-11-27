@@ -8,7 +8,6 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
-import { liveShapeRoadmap } from './simple-priorities-live';
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -30,8 +29,9 @@ import {
 import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
 import { codedTitle, inheritedCode, prdCode, shownCode } from './item-code';
+import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
+import { byPrdRank, prdRanker } from './prd-rank';
 import { withRoadmapCodes } from './roadmap-codes';
-import { plainFlow } from './simple-visuals';
 import {
   calendarDay,
   milestoneOut,
@@ -41,11 +41,6 @@ import {
   type MockMilestone,
   type OldCtx,
 } from './simple-milestones';
-import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
-import { reply } from './typed';
-
-import type { OnePagerDb } from './simple-one-pager';
-
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -54,9 +49,12 @@ import {
   planSpan,
   type PlanDb,
 } from './simple-plan';
-import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
-import { byPrdRank, prdRanker } from './prd-rank';
+import { liveShapeRoadmap } from './simple-priorities-live';
+import { plainFlow, bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
+import { reply } from './typed';
+
+import type { OnePagerDb } from './simple-one-pager';
 
 export { codedTitle, prdCode, shownCode, shownName, takenFrom } from './item-code';
 

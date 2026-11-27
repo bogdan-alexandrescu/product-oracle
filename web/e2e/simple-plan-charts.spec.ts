@@ -259,7 +259,9 @@ for (const v of VIEWS) {
       // a chip per milestone, its weeks or PM-owned).
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
       await expect(growth.getByRole('heading', { name: 'Growth' })).toBeVisible();
-      await expect(growth.getByTestId('plan-goal-count')).toHaveText('5 features in the Guided setup plan');
+      await expect(growth.getByTestId('plan-goal-count')).toHaveText(
+        '5 features in the Guided setup plan',
+      );
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
       await expect(invites).toContainText('F-05 Team invites');
       await expect(invites.getByTestId('plan-chip')).toHaveText(['M1 Prove it', 'M2 Scale volume']);
