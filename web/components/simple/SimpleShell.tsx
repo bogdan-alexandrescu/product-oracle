@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 
 import { Mark } from '@/components/ds/Brand';
 import { Icon, type IconName } from '@/components/ds/Icon';
+import { KeysLine } from '@/components/ds/KeysLine';
 import { ModeSwitch, SEGMENTED } from '@/components/ds/ModeSwitch';
 import { PaletteEntry } from '@/components/ds/PaletteEntry';
 import { TAB_BAR } from '@/components/ds/rail';
@@ -547,6 +548,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           );
         })}
         <span className="flex-1" />
+        <KeysLine where="simple-rail" />
         {/* qa-simple-home-24: says whether the Ask panel is open, which it controls, and looks pressed while it is. */}
         <button
           type="button"

@@ -1832,3 +1832,34 @@ code .date-mark {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* #1790: the Detailed rail's scrolling top shows a narrow scrollbar when the window is short. Its
+   4 px gutter is kept at every height (matched by 4 px padding on the left), so the items never
+   move sideways and the selected item's bar is never clipped. */
+.rail-scroll {
+  scrollbar-gutter: stable;
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--rail-text) 45%, transparent);
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+@supports not selector(::-webkit-scrollbar) {
+  .rail-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--rail-text) 45%, transparent) transparent;
+  }
+}
+/* build-shortcuts (#1795), KS2 A: the row j and k focus, one at a time: a blue bar on its left and a
+   light blue fill (Priorities in Simple and Detailed, the Roadmap timeline's rows). */
+[data-kfocus] {
+  box-shadow: inset 4px 0 0 var(--accent);
+  background: var(--accent-soft) !important;
+}
+tr[data-kfocus] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent);
+}

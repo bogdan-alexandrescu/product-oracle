@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -20,6 +21,7 @@ import {
   useAskDraft,
   usePanelOpen,
 } from '@/components/hop/open-state';
+import { KeysHost } from '@/components/keys/KeysHost';
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
 import { ZoneNotice } from '@/components/ZoneNotice';
 import { api, MOCK_MODE } from '@/lib/api/client';
@@ -47,6 +49,7 @@ import { Button } from './Button';
 import { ConfirmHost, confirmInPage } from './ConfirmDialog';
 import { initialsOf } from './Figures';
 import { Icon, type IconName } from './Icon';
+import { KeysLine } from './KeysLine';
 import { Notice } from './Layout';
 import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
 import { usePageInfo } from './page-info';
@@ -758,27 +761,35 @@ function Navs() {
         data-testid="app-nav"
         className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
-        <Link
-          href="/home"
-          aria-label="Product Oracle"
-          data-testid="nav-brand"
-          className="mb-3 flex-none rounded-xl"
+        {/* #1790: a short window scrolls the rail's top, with a scrollbar you can see; Company,
+            Settings and the account menu stay pinned below it. */}
+        <div
+          data-testid="app-nav-scroll"
+          className="rail-scroll flex min-h-0 w-full flex-[0_1_auto] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain pl-1"
         >
-          <Mark size={44} tone="sky" className="block" />
-        </Link>
-        <ModeSwitch placement="rail" documentHome={home} />
-        <PaletteEntry where="detailed-rail" />
-        {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
-        {DESTINATIONS.map((d) => (
-          <RailLink
-            key={d.href}
-            d={d}
-            pathname={pathname}
-            home={home}
-            badge={d.label === 'Inbox' ? inbox : undefined}
-          />
-        ))}
+          <Link
+            href="/home"
+            aria-label="Product Oracle"
+            data-testid="nav-brand"
+            className="mb-3 flex-none rounded-xl"
+          >
+            <Mark size={44} tone="sky" className="block" />
+          </Link>
+          <ModeSwitch placement="rail" documentHome={home} />
+          <PaletteEntry where="detailed-rail" />
+          {DESTINATIONS.slice(0, -1).map((d) => (
+            <RailLink
+              key={d.href}
+              d={d}
+              pathname={pathname}
+              home={home}
+              badge={d.label === 'Inbox' ? inbox : undefined}
+            />
+          ))}
+        </div>
+        <RailLink d={DESTINATIONS[DESTINATIONS.length - 1]} pathname={pathname} home={home} />
         <span className="flex-1" />
+        <KeysLine where="detailed-rail" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
         {settings && <RailLink d={settings} pathname={pathname} home={home} />}
         <UserMenu placement="rail" />
@@ -1289,6 +1300,19 @@ export function CapsError() {
   );
 }
 
+/** #1795: the app's keys and the ? sheet, for a signed-in person; g then a letter reaches the rail's pages. */
+function AppKeys() {
+  const pathname = usePathname();
+  const { me } = useMe();
+  const simple = modeOf(pathname) === 'simple';
+  const pages = useMemo(
+    () => (simple ? SIMPLE_DESTINATIONS : [...DESTINATIONS, SETTINGS]),
+    [simple],
+  );
+  if (!me) return null;
+  return <KeysHost pages={pages} detailed={!simple} />;
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ScreenSubjectProvider>
@@ -1326,6 +1350,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <ConfirmHost />
         <ToastHost />
+        <Suspense fallback={null}>
+          <AppKeys />
+        </Suspense>
       </div>
     </ScreenSubjectProvider>
   );
