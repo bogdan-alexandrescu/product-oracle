@@ -11,6 +11,12 @@ import { ADMIN } from './helpers';
  * In the "simple-waits" mock scenario three runs wait on the owner: a feature set (Saved
  * addresses), an engineering review (Offline sync) and engineering dates (Usage alerts). Each
  * test runs on desktop and on a phone (390 px).
+ *
+ * Card: protects=Simple's Home draws one card per run stop that waits on me, with its one action
+ * opening the run at that stop, the greeting counting runs, no stale card after confirming, and
+ * none for a stop I may not decide; fails_when=a waiting stop has no card, Home says Nothing
+ * waits on you while a run waits, a confirmed card stays, or a card shows for a stop I cannot
+ * decide; no_claim=the real run engine.
  */
 
 async function signIn(page: Page, email: string, scenario?: string) {

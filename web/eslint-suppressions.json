@@ -2096,7 +2096,7 @@
       "count": 3
     },
     "design-system/no-raw-button": {
-      "count": 22
+      "count": 21
     },
     "import-x/order": {
       "count": 29
@@ -3594,7 +3594,7 @@
   },
   "components/simple/PlanByMonth.tsx": {
     "design-system/no-raw-button": {
-      "count": 5
+      "count": 4
     },
     "import-x/order": {
       "count": 3
@@ -3657,9 +3657,6 @@
     },
     "design-system/no-raw-button": {
       "count": 2
-    },
-    "import-x/order": {
-      "count": 5
     },
     "max-lines": {
       "count": 1

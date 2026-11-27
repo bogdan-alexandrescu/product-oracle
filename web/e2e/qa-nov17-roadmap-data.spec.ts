@@ -39,7 +39,7 @@ async function setDates(page: Page, start: string, end: string) {
   await panel(page).getByLabel('Start', { exact: true }).fill(start);
   await panel(page).getByLabel('End', { exact: true }).fill(end);
   await tap(panel(page).getByRole('button', { name: 'Save' }));
-  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set here');
+  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set by a person');
 }
 
 async function openTray(page: Page) {
@@ -88,7 +88,7 @@ test("1: dates set here close Oracle's old date suggestion: panel, Needs a decis
   await page.reload();
   await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await openItem(page, 'alert-sso');
-  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set here');
+  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set by a person');
   await expect(panel(page).getByTestId('card-suggestion')).toHaveCount(0);
 });
 

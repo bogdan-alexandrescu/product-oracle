@@ -3,6 +3,7 @@ import { Suspense, useEffect } from 'react';
 
 import { AppShell } from '@/components/ds/AppShell';
 import { ScrollbarRoom } from '@/components/ds/ScrollbarRoom';
+import { CommandPalette } from '@/components/palette/Palette';
 import { tellHubReady } from '@/lib/app-hub';
 import { MeProvider, MeSync } from '@/lib/me';
 import { resolveRedirect } from '@/lib/redirects';
@@ -23,6 +24,7 @@ function RootLayout() {
         </Suspense>
         <AppShell>
           <Outlet />
+          <CommandPalette />
         </AppShell>
       </MeProvider>
     </>

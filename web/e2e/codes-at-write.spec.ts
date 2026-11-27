@@ -36,9 +36,7 @@ test('a feature added from Priorities while its code is shown on the roadmap get
 }) => {
   await setUp(page);
   const badge = rowByTitle(page, OLD_ITEM);
-  await expect(badge.getByTestId('prio-adds')).toHaveText(
-    `Not on ${COMPANY_TITLE} yet: moving it adds it there, under Later.`,
-  );
+  await expect(badge.getByTestId('prio-adds')).toHaveText(`Not on ${COMPANY_TITLE}`);
   await badge.getByRole('button', { name: /^Drag .* to reorder$/ }).focus();
   await page.keyboard.press('ArrowUp');
   const dialog = page.getByRole('dialog', { name: /^Why move / });

@@ -9,6 +9,14 @@ import { expect, test, type Locator, type Page } from './test';
  * and the toast's global position). Each test drives the UI as a person would against the
  * mock's default scenario (web/lib/api/mock/simple-roadmap.ts: alert-rules, alert-digest and
  * alert-mobile on the alerts roadmap), on desktop (1440x900) and a phone (390x844).
+ *
+ * Card: protects=The Simple roadmap page: Start review shows only to who may start one, a broken
+ * link reads inside the panel, Move the dependents fixes every sibling, legends use plain words,
+ * Needs a decision says what it counts, the item card sits in the side panel, and the draft toast
+ * sits in a corner; fails_when=Start review shows to a viewer or commenter or is off for a
+ * decider, a broken link is cut off, a dependent stays broken, PM-owned or validation gate shows,
+ * tray tiles differ in height, or the toast sits mid-chart; no_claim=how a review runs once
+ * started.
  */
 
 const URL = '/simple/roadmap';

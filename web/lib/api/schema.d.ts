@@ -13358,6 +13358,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/palette": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Palette */
+        get: operations["get_palette"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/fit-date": {
         parameters: {
             query?: never;
@@ -34252,6 +34269,88 @@ export interface components {
             label?: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
             /** Status */
             status?: ("active" | "paused") | null;
+        };
+        /** PaletteFeature */
+        PaletteFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
+        /** PaletteGoal */
+        PaletteGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Measure */
+            measure: string;
+        };
+        /** PaletteKeyResult */
+        PaletteKeyResult: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Goal */
+            goal: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+        };
+        /** PaletteMilestone */
+        PaletteMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date: string;
+        };
+        /** PaletteOut */
+        PaletteOut: {
+            /** Prds */
+            prds: components["schemas"]["PalettePrd"][];
+            /** Goals */
+            goals: components["schemas"]["PaletteGoal"][];
+            /** Key Results */
+            key_results: components["schemas"]["PaletteKeyResult"][];
+            /** Milestones */
+            milestones: components["schemas"]["PaletteMilestone"][];
+            /** Features */
+            features: components["schemas"]["PaletteFeature"][];
+        };
+        /** PalettePrd */
+        PalettePrd: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
         };
         /** PasscodeIn */
         PasscodeIn: {
@@ -76918,6 +77017,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_palette: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaletteOut"];
                 };
             };
         };

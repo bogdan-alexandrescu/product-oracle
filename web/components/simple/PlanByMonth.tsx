@@ -3,7 +3,7 @@
 import { Link } from '@/lib/nav';
 import { useEffect, useRef, useState } from 'react';
 
-import { Icon, InfoTip } from '@/components/ds';
+import { Button, Icon, InfoTip } from '@/components/ds';
 import { MarkFor } from '@/components/current-state/CurrentState';
 import { useOpenFeature } from '@/components/simple/OpenFeature';
 import { calendarDay } from '@/lib/dates';
@@ -506,16 +506,16 @@ export function PlanByMonth({
               {`${rowName(r, named)}: ${late.length} ${late.length === 1 ? 'ends' : 'end'} after ${calendarDay(r.date, { month: 'short', day: 'numeric' })}:`}
               {late.map((id, j) => (
                 <span key={id}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     data-testid={`${testId}-late-item`}
                     onClick={() =>
                       open?.({ id, code: codes?.get(id) ?? '', name: names.get(id) ?? '' })
                     }
-                    className="underline hover:no-underline"
+                    className="!inline !h-auto !rounded-none !p-0 ![font-size:inherit] ![font-weight:inherit] ![line-height:inherit] !whitespace-normal ![color:inherit] underline hover:!bg-transparent hover:no-underline"
                   >
                     {codes?.get(id) ? `${codes.get(id)} ${names.get(id)}` : names.get(id)}
-                  </button>
+                  </Button>
                   {j < late.length - 1 ? ',' : ''}
                 </span>
               ))}

@@ -6,6 +6,11 @@ import { expect, test, type Page } from './test';
 /*
  * Visual QA of the Simple roadmap as picked (QR1 A, "Zoom around today"): the Timeline's
  * month labels never peek out from under the names column, as the picked frames show.
+ *
+ * Card: protects=the Simple roadmap Timeline's month labels are not cut off by the names column,
+ * at rest or scrolled, and a month just scrolled past keeps its label at the view's left;
+ * fails_when=a month label peeks out from under the names column or the scrolled month loses its
+ * label; no_claim=other roadmap views.
  */
 
 async function open(page: Page) {

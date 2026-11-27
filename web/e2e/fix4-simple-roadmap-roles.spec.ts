@@ -9,6 +9,15 @@ import { expect, test, type Locator, type Page } from './test';
  * full-screen flow's scrollbar in dark mode) and 53 (storyboard cards as tall as their words).
  * Driven against the mock's default scenario (Weekly alert digest starts before Alert rules
  * engine, which it depends on, ends; Alert history export's first drawing fails, Retry draws it).
+ *
+ * Card: protects=Roles and frame of the Simple roadmap: an owner's fix is final and seen by
+ * readers, a commenter's fix stays a proposal, the rail runs the page's height and a Gantt card
+ * leaves it undimmed, a viewer's email wraps before the @, storyboard cards are as tall as their
+ * words, Comment opens in the opened flow, and the dark full-screen flow has a dark scrollbar and
+ * readable steps; fails_when=a fix button remains after the owner fixed it, a commenter's fix is
+ * applied or says Changed since you saw it, the rail is short or dimmed, the email breaks
+ * mid-word, a card has slack under its words, Comment is missing, or step text contrast is under
+ * 4.5:1; no_claim=how Oracle draws the flow.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };

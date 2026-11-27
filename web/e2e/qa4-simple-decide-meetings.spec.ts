@@ -12,6 +12,12 @@ import { expect, test, type Locator, type Page } from './test';
  * "Mon Nov 2, 9:00 AM PDT", the short zone as Home writes it (simple-home-13). -21: a past meeting says its count once. -34: on a
  * phone the times and "Pre-read" never break across lines. -39: each row's Start review is named
  * for its review.
+ *
+ * Card: protects=the Meetings page and its start sheet use plain words: who applies and who
+ * proposes, what a greyed-out Start lacks, month-first times with the short zone, and one-line
+ * times; fails_when=a role name or ISO time shows, Start is greyed with no reason, a time or
+ * Pre-read breaks across lines, or a Start review is not named for its review; no_claim=starting
+ * a real review.
  */
 
 const sheet = (page: Page) => page.getByRole('dialog', { name: 'Start a review' });

@@ -122,7 +122,7 @@ function ageOf(at: string | null | undefined): string {
 /** A cost in dollars ("$53.00"), or that there is none yet. */
 const money = (v: number | null | undefined) => (v == null ? 'no estimate' : formatMoney(v));
 
-// Below 1100 px the side columns shrink with the table (the var()s are set on NeedTable's section) so the item keeps its room.
+// The side columns are shares of the table (the var()s are set on NeedTable's section), so the item takes the free width (#1912).
 const SIDE_WRAP =
   'max-[1099px]:overflow-visible max-[1099px]:whitespace-normal max-[1099px]:break-words max-[1099px]:[&_.truncate]:overflow-visible max-[1099px]:[&_.truncate]:whitespace-normal max-[1099px]:[&_.truncate]:break-words';
 
@@ -172,7 +172,7 @@ const BASE_COLUMNS: Column<Need>[] = [
   {
     key: 'context',
     header: 'For',
-    width: 'var(--need-ctx-w, 24%)',
+    width: 'var(--need-ctx-w, 16%)',
     phone: 'meta',
     narrow: 'hide',
     cell: (n) => n.context,
@@ -210,8 +210,8 @@ const BASE_COLUMNS: Column<Need>[] = [
   {
     key: 'act',
     header: <span className="sr-only">Action</span>,
-    // Wide enough for a row's actions on one line (qa-company-9): the primary, then the rest.
-    width: 'var(--need-act-w, 340px)',
+    // #1912: a share of the row, its actions wrapping to a second line rather than squeezing the item.
+    width: 'var(--need-act-w, 26%)',
     align: 'right',
     phone: 'action',
     wrap: true,
@@ -222,7 +222,7 @@ const BASE_COLUMNS: Column<Need>[] = [
     cell: (n) => (
       <span
         data-row-actions
-        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[1100px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
+        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
       >
         {n.action}
       </span>
@@ -230,13 +230,17 @@ const BASE_COLUMNS: Column<Need>[] = [
   },
 ];
 
-// qa-leftovers: the "For" cell (a proposal's item, an access request's quote) wraps to two lines at
-// every width rather than being cut on one; below 1100 px it wraps in full, as before.
+/** A cell's text wraps in full at every width, never cut. */
+const FULL_WRAP =
+  'overflow-visible whitespace-normal break-words [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words';
+
+// qa-leftovers: the "For" cell (a proposal's item, an access request's quote) wraps rather than
+// being cut, at every width: with Item taking the free width (#1912) it may need three lines.
 export const NEED_COLUMNS: Column<Need>[] = BASE_COLUMNS.map((c) =>
   c.key === 'kind'
     ? { ...c, className: `${c.className ?? ''} ${SIDE_WRAP}` }
     : c.key === 'context'
-      ? { ...c, wrap: true, className: `${c.className ?? ''} ${SIDE_WRAP} ${WRAP_TWO}` }
+      ? { ...c, wrap: true, className: `${c.className ?? ''} ${FULL_WRAP}` }
       : c,
 );
 
@@ -365,7 +369,7 @@ export function NeedTable({
       aria-label={heading ? undefined : title}
       aria-labelledby={heading ? headingId : undefined}
       data-testid={testId}
-      className="[--need-ctx-w:24%] [--need-act-w:340px] [--need-kind-w:170px] max-[1099px]:[--need-act-w:26%] max-[1099px]:[--need-ctx-w:20%] max-[1099px]:[--need-kind-w:15%]"
+      className="[--need-ctx-w:16%] [--need-act-w:26%] [--need-kind-w:170px] max-[1099px]:[--need-ctx-w:20%] max-[1099px]:[--need-kind-w:15%]"
     >
       {heading && (
         <h3
@@ -2818,6 +2822,8 @@ export function allNeeds(
   accessRequests: Need[] = [],
   /** What the signed-in person may do (usePerms): rows draw only those actions. */
   perms: Perms = ALL,
+  /** #1818: shown in Simple, a decision opens in Simple's decision sheet. */
+  simple = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed, seenBefore);
   // A row may carry its own state and count (a question answered in place: ./_questions).
@@ -2856,7 +2862,7 @@ export function allNeeds(
     ...stated(outcomes.counted, 'outcomes'),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact, perms),
-    ...decisionNeeds(inbox, busy, act, seenBefore),
+    ...decisionNeeds(inbox, busy, act, seenBefore, simple),
     ...stated(accessRequests, 'access-requests'),
     ...stated(asked, 'questions'),
     // Shown only, under Open: nothing to decide, not an item.
@@ -2886,9 +2892,13 @@ export function decisionNeeds(
   busy: string | null,
   act: Act,
   seenBefore: string | null | undefined,
+  simple = false,
 ): StatedNeed[] {
   return (inbox.decisions ?? []).map((d) => {
-    const href = `/company/decisions?d=${d.number}`;
+    // #1818: in Simple, Simple's decision sheet (as Home's rows); else Company › Decisions.
+    const href = simple
+      ? `/simple/decisions?decision=${d.number}`
+      : `/company/decisions?d=${d.number}`;
     const live = d.state !== 'done';
     // qa-onboarding-27: the decision by its title, never its bare code ("D-5").
     const label = `${DECISION_KIND[d.reason]} · ${d.title}`;

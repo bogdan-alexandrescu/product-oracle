@@ -135,14 +135,17 @@ async def _proposals(db: AsyncSession, principal: Any, read_: Any) -> list[Simpl
     from oracle.simple import waiting_reads
 
     out = []
-    for c, words, by_name in await waiting_reads.proposals(db, principal, read_):
+    for c, words, by_name, decides in await waiting_reads.proposals(db, principal, read_):
         item = (c.target or {}).get("item_id")
         date = c.op == "accept_date_suggestion"
+        # inbox-2 (#1893): one the Inbox counts that I may not decide now opens in the Inbox.
         out.append(SimpleWaitingItem(
-            kind="date" if date else "proposal", key=f"proposal:{c.id}", ref_id=str(c.id),
+            kind=("date" if date else "proposal") if decides else "inbox",
+            key=f"proposal:{c.id}", ref_id=str(c.id),
             title=words or ("New dates proposed" if date else "A proposed change"),
-            detail=f"Proposed by {by_name}", action="Accept",
-            href=f"/simple/roadmap?item={item}" if item else "/simple/roadmap",
+            detail=f"Proposed by {by_name}", action="Accept" if decides else "Open",
+            href=(f"/simple/roadmap?item={item}" if item else "/simple/roadmap") if decides
+            else "/simple/inbox",
             at=c.at, op=c.op,
         ))  # fmt: skip
     return out

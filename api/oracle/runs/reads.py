@@ -265,14 +265,36 @@ async def _refs(
 
 
 async def _repos(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
-    """#1789: by run id, the repo each code map run maps (its Runs row's name)."""
-    from oracle.engineering.models import CodeMap
+    """#1789: by run id, the repo each code map run maps (its Runs row's name), from the
+    run's own ``repo`` knob; a run made before it kept one, from its map's request event
+    (the map's row may be gone: a later map of the same commit replaces it)."""
+    from oracle.models import AuditEvent
 
-    ids = [r.id for r in runs if r.flow == "code_map"]
-    if not ids:
-        return {}
-    rows = await db.execute(select(CodeMap.run_id, CodeMap.repo).where(CodeMap.run_id.in_(ids)))
-    return {run_id: repo for run_id, repo in rows.all() if run_id is not None}
+    repos: dict[uuid.UUID, str] = {}
+    wanted: dict[uuid.UUID, uuid.UUID] = {}
+    for r in runs:
+        if r.flow != "code_map":
+            continue
+        knobs = r.knobs or {}
+        if isinstance(knobs.get("repo"), str) and knobs["repo"]:
+            repos[r.id] = knobs["repo"]
+        elif is_uuid(str(knobs.get("code_map_id") or "")):
+            wanted[uuid.UUID(str(knobs["code_map_id"]))] = r.id
+    if wanted:
+        rows = await db.execute(
+            select(AuditEvent.entity_id, AuditEvent.data).where(
+                AuditEvent.action == "code_map.requested",
+                AuditEvent.entity_id.in_(wanted),
+            )
+        )
+        for map_id, data in rows.all():
+            if (
+                map_id is not None
+                and map_id in wanted
+                and isinstance((data or {}).get("repo"), str)
+            ):
+                repos[wanted[map_id]] = data["repo"]
+    return repos
 
 
 async def _pending_titles(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:

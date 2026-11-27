@@ -14,6 +14,12 @@ import { expect, test, type Locator, type Page } from './test';
  * pads once, so its text has room. -35: with Ask Oracle open at 1440 "Waiting for you" stays on
  * one line and the List/Board/By meeting switch stays beside the filters. -32: By meeting, a
  * meeting's card lists the comments its minutes list.
+ *
+ * Card: protects=the meeting screens left open by the first pass read right: a viewer is never
+ * offered, a move is undone from its toast, times and the published version move on, and the
+ * layout stays tidy; fails_when=a viewer is offered, undo does not remove the move, a zone
+ * shows, the margin or version stays stale, a heading wraps, or By meeting lists other comments;
+ * no_claim=the real meeting service.
  */
 
 const sheet = (page: Page) => page.getByRole('dialog', { name: 'Start a review' });

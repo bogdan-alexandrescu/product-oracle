@@ -11,6 +11,11 @@ import { expect, test, type Locator, type Page } from './test';
  * the mock's "simple-deciders" scenario (invented people: the alerts track's Avery Lane, the
  * onboarding track's Cory Hale, the welcome track's Vic Moss; "Price tiers" has no track, so no
  * owner); desktop (1366x820).
+ *
+ * Card: protects=the Simple roadmap's Owner filter sits after Track, lists each owner by name then
+ * No owner, narrows the Timeline and Now / Next / Later, combines with Track, clears, and
+ * survives a reload; fails_when=an option is missing or misplaced, an owner shows others' items,
+ * a reload forgets it, or Clear filters leaves it; no_claim=owners set in the real API.
  */
 
 const ROADMAP = '/simple/roadmap';

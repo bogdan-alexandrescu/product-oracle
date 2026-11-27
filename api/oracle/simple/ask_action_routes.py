@@ -282,6 +282,8 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "fit_date_live",
         "get_fit_date",
         "get_goal_map",
+        # The ⌘K palette's list: its records are read by their own offered reads.
+        "get_palette",
         "get_replaced_prd_carried",
         "get_simple_decision",
         "list_feature_states",

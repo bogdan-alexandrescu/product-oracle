@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, usePathname, useRouter } from '@/lib/nav';
 import {
   useCallback,
   useEffect,
@@ -14,15 +13,17 @@ import { createPortal } from 'react-dom';
 import { Mark } from '@/components/ds/Brand';
 import { Icon, type IconName } from '@/components/ds/Icon';
 import { ModeSwitch, SEGMENTED } from '@/components/ds/ModeSwitch';
+import { PaletteEntry } from '@/components/ds/PaletteEntry';
 import { TAB_BAR } from '@/components/ds/rail';
 import { Sheet } from '@/components/ds/Sheet';
 import { setPanelOpen, usePanelOpen } from '@/components/hop/open-state';
-import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
-import { useMe } from '@/lib/me';
-import { LINK_KINDS } from '@/lib/roadmap-links';
 import { api, unwrap } from '@/lib/api/client';
 import { onReadChanged, onReadFailed, STALE_OK } from '@/lib/api/shared-reads';
+import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
 import { inboxCounts } from '@/lib/inbox-counts';
+import { useMe } from '@/lib/me';
+import { Link, usePathname, useRouter } from '@/lib/nav';
+import { LINK_KINDS } from '@/lib/roadmap-links';
 import {
   onWaitingChanged,
   railInbox,
@@ -431,6 +432,12 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           <span className={`${SEGMENTED.option} animate-pulse bg-surface`} />
           <span className={SEGMENTED.option} />
         </span>
+        {/* build-palette: Find's place, as the switch's. */}
+        <span
+          aria-hidden
+          data-testid="simple-nav-skeleton-find"
+          className="mb-1 h-12 w-full flex-none animate-pulse rounded-xl border border-rail-sep"
+        />
         {SIMPLE_DESTINATIONS.map((d) => (
           <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
             <span className="size-5 flex-none animate-pulse rounded bg-rail-hover" />
@@ -504,6 +511,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           </span>
         </Link>
         <ModeSwitch placement="wide" />
+        <PaletteEntry where="simple-rail" />
         {SIMPLE_DESTINATIONS.map((d) => {
           const n = counts?.[d.label] ?? 0;
           const failed = failedOf(d.label);

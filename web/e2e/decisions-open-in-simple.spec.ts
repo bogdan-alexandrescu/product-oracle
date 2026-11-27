@@ -4,7 +4,7 @@ import { expect, test, type Page } from './test';
 /**
  * #1818: a decision opened from Simple lands in Simple's decision sheet, never in Detailed's
  * Company › Decisions. Card decisions-open-in-simple: protects = the feature panel's open
- * decisions, Home's Open on a decision and Decisions' ?decision= address open the sheet on
+ * decisions, Home's and Simple's Inbox's Open on a decision and Decisions' ?decision= address open the sheet on
  * /simple/decisions; fails_when = any of them leaves /simple or lands without the sheet;
  * no_claim = the walk (fix2-simple-home-review.spec.ts), the draft banner's decision notes
  * (decision-notes-banner.spec.ts) and the waiting list's link (tests/test_simple_waiting_list.py).
@@ -45,6 +45,11 @@ test("Home's Open on a decision opens it in Simple's decision sheet", async ({ p
   await page.goto('/simple');
   const row = page.getByTestId('home-decision').filter({ hasText: 'Keep the example beta open' });
   await row.getByRole('link', { name: 'Open' }).click();
+  await expect(page).toHaveURL(/\/simple\/decisions\?decision=\d+$/);
+  await expect(sheet(page)).toContainText('Keep the example beta open');
+  // And its row in Simple's Inbox opens it there too, never in Detailed.
+  await page.goto('/simple/inbox');
+  await page.getByRole('link', { name: 'Open Keep the example beta open' }).first().click();
   await expect(page).toHaveURL(/\/simple\/decisions\?decision=\d+$/);
   await expect(sheet(page)).toContainText('Keep the example beta open');
 });

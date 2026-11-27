@@ -104,8 +104,12 @@ for (const v of SIZES) {
         await expect(page.getByTestId('prio-part-count').nth(0)).toHaveText(
           `${makes} ${makes === 1 ? 'feature' : 'features'}, in rank order`,
         );
+        // prio-2 (#1739): Misses counts its folded Needs triage rows too, as Value / effort does.
+        const triage = page.getByTestId('prio-triage-count');
+        const folded = (await triage.count()) ? parseInt(await triage.innerText(), 10) : 0;
+        const below = misses + folded;
         await expect(page.getByTestId('prio-part-count').nth(1)).toHaveText(
-          `${misses} ${misses === 1 ? 'feature' : 'features'}, in rank order`,
+          `${below} ${below === 1 ? 'feature' : 'features'}, in rank order`,
         );
         const all = await ranks(page.getByTestId('prio-row'));
         expect(all.length).toBe(makes + misses);

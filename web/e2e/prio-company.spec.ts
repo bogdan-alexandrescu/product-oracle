@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { COMPANY_TITLE, OLD_ITEM } from '../lib/api/mock/one-roadmap';
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
-import { login } from './helpers';
+import { lineOptionsSettled, login } from './helpers';
 import { expect, test } from './test';
 import { dateIntoThisQuarter } from './this-quarter';
 
@@ -163,6 +163,7 @@ for (const scheme of ['light', 'dark'] as const) {
       }) => {
         await setUp(page, scheme, phone);
         const select = page.getByTestId('line-picker').getByLabel('Line', { exact: true });
+        await lineOptionsSettled(page);
         const options = await select.locator('option').allTextContents();
         const groups = select.locator('optgroup');
         expect(await groups.count(), options.join('\n')).toBeGreaterThan(0);
@@ -189,9 +190,7 @@ for (const scheme of ['light', 'dark'] as const) {
       }) => {
         await setUp(page, scheme, phone, 'one-roadmap');
         const badge = rowByTitle(page, OLD_ITEM);
-        await expect(badge.getByTestId('prio-adds')).toHaveText(
-          `Not on ${COMPANY_TITLE} yet: moving it adds it there, under Later.`,
-        );
+        await expect(badge.getByTestId('prio-adds')).toHaveText(`Not on ${COMPANY_TITLE}`);
         await badge.getByRole('button', { name: /^Drag .* to reorder$/ }).focus();
         await page.keyboard.press('ArrowUp');
         const dialog = page.getByRole('dialog', { name: /^Why move / });

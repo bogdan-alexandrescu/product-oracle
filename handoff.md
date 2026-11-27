@@ -1,3 +1,48 @@
+# inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
+
+Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
+Later commits are local only: git_push_branch refused them (code foreign_author, field "message":
+it rejects a message carrying Co-Authored-By/anthropic.com, which the brief requires). The worker
+publishes the branch.
+
+## Done (red first, each in its own commit)
+1. Blocker, pyright: `assert read_ is not None` before waiting_for in changes.inbox_rows (no new
+   line, changes.py stays at its size entry 2591); baseline updated. Verdict:
+   `pyright: 1265 errors, baseline 1265`, check exit 0. Red was CI's own run at 47e8c41.
+2. Major, Home double count: page.tsx counts kind "inbox" rows keyed `proposal:` under
+   drawnOnHome's proposals, not inboxRows. Mock case: scenario "inbox-replaced-proposal" now also
+   has a meeting's owner change on Block list routed to commenter@example.com (can_decide false).
+   Spec inbox-2-proposal-rows.spec.ts (last test): Decisions lists it with Open, Home shows no
+   "more in your Inbox" and the card count equals its rows. Red: home-inbox-more 1 != 0.
+3. Major, #1818: allNeeds/decisionNeeds take `simple`; _inbox.tsx passes path.startsWith('/simple');
+   decision rows link /simple/decisions?decision=N there, /company/decisions?d=N on /inbox.
+   Inbox step added to decisions-open-in-simple.spec.ts (red: landed on /company/decisions?d=11).
+Minors done: Open row href '/inbox' -> '/simple/inbox' (API waiting_list.py + mock), red pytest
+and spec assertion first; replaced-PRD pytest pins (kind, action) == ("inbox", "Open").
+
+## Gates
+- pytest tests/test_simple_waiting_inbox_proposals.py tests/test_simple_waiting_list.py: 15 passed.
+- ruff check/format on touched api files: clean.
+- Playwright (--retries=0, mock prebuilt): inbox-2-proposal-rows + decisions-open-in-simple 5 passed;
+  home-waiting-one-list 41 passed.
+- tsc exit 0; npm run lint exit 0; prettier --check on touched web files: clean.
+- Prose guard: not run, no visible word changed (hrefs, counts and comments only).
+- Alembic, make openapi, contracts check: not applicable (no migration, schema or YAML change).
+
+## Left (not one-line; other pages or a later pass)
+- Mock vs API on the replaced-PRD case: API gives the Owner kind "inbox"/Open (pinned now); the mock
+  still lets the admin decide it (Accept/Decline). Matching needs the mock's decides() to drop items
+  of replaced roadmaps, which touches many pages' specs: a later pass.
+- The mock titles a routed-but-unlisted proposal from the Inbox row's `asked` (present tense); the
+  API uses changes.words (past tense; for the replaced case it reads "commenter@example.com
+  proposed: changed the owner of an item"). Not a one-line change.
+- #1913's past tense on Decisions ("Changed the owner of …" while waiting): follow-up issue.
+- waiting_reads.proposals cost (no cap, routes all open proposals each read): noted, unchanged.
+- Round 1 minors carried: headers hidden so the header check is not red; For and Action still about
+  42% of the row; flake at inbox-question-one-pager.spec.ts:170.
+- The Inbox's Decide button on /simple now goes to /simple/decisions?decision=N&act=decide; the
+  sheet opens, `act` is ignored there.
+
 # inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
 
 ## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
@@ -453,3 +498,69 @@ fixed; the first round's "7 of 8" was wrong about #1753).
   run (-n 4, timed out at 64%) showed one F at 57% whose name the timeout did not print; a second run (-n 5, more
   Postgres locks) passed that range to 62% with no failure (a load flake likely, unproven). A -n 6 run hit Postgres
   "out of shared memory" on DROP SCHEMA (max_locks_per_transaction=256): use 1024. Next step: run the whole suite.
+
+## train night-m (merge train, from main e2ded48)
+
+Six lanes merged with `git merge --no-ff`, in order, each head checked against its named sha
+(all matched): 1922 Inbox and Decisions (ddad55f119), 1928 Priorities re-audit (f8824413ac),
+1926 One milestone number (30b9374f70), 1925 Feature panel wording (2ffcae97bb), 1927 Runs
+names, test care (f9aa3ffe92), 1888 Command palette (75f49b67a8). No lane was left out.
+
+Conflicts and how each was resolved:
+- `api/tests/module_sizes.json` (1922): took main's lower drafts.py 2120 and meetings.py 1548
+  (the real lengths); lane 1 moved the Inbox routing to `oracle/simple/inbox_route.py`, so
+  changes.py fell to 2572 and its entry was lowered to 2572 (the ratchet asks for the exact length).
+- `handoff.md` (1928, 1926, 1925): kept main's content; these notes are added at the end.
+- `web/lib/api/mock/server.ts` (1925): kept both imports (inbox-proposal-scenario, panel-words).
+- `web/lib/api/mock/server.ts` (1888): kept both imports and main's deferred-save harness
+  (take/ownTurn/answer/leave); the palette's route runs ahead of the queue as in the lane, and
+  its early answer now calls `leave()` so the burst's in-flight count drops and the deferred
+  save still happens at the burst's last call. Priorities files (1928 vs 1926) merged cleanly.
+
+Train duties:
+- Migrations: one head, `0139_task_tracker_push_error (head)`; no lane added a migration.
+- `python3 docs/contracts/check.py`: exit 0. `make openapi`: no change.
+- Pinned read digests: none changed; lane 1 edited `tests/test_simple_waiting_speed.py` (its own read, no digest), and the speed tests pass in the suite unchanged by the train.
+- Names (#1763): no added `name or email` / bare email in the merged diff.
+- Follow-up: the two raw `<button>`s from the Home fixes (`web/app/simple/page.tsx` others'
+  changes item, `web/components/simple/PlanByMonth.tsx` late item) are now the design system's
+  `Button` (ghost, styled as the inline link it was); no-raw-button counts back to 21 and 4.
+
+Gates (all run after the last commit with code changes, d0b30e6e6):
+- API suite `uv run pytest -q -n 4 -m "not timing"`, run in 5 file chunks (one run passes the
+  10-minute foreground limit): 2437 passed 1 skipped 1 xfailed; 2294 passed 2 skipped;
+  2218 passed 6 skipped; 2246 passed 6 skipped; 2682 passed 1 skipped. 0 failed.
+- `uv run pytest -m timing tests`: 417 passed, 2 failed, both roadmap read budgets:
+  test_simple_roadmap_api.py::test_500_items_answer_under_300_ms_and_grouped_by_goal_under_500_ms
+  (0.326 s vs 0.3) and test_simple_roadmap_speed.py::test_reads_answer_within_budget (0.478 s vs
+  0.36). Alone, the first passes and the second reads 0.398 s. The same test on unchanged main
+  e2ded48 in this container reads 0.413 s, so it fails there too: the container is slow, and the
+  train is not the cause (no lane touched the roadmap read). CI's timing job decides.
+- `tests/test_frozen_migrations.py`: 8 passed.
+- pyright as CI runs it: `pyright: 1263 errors, baseline 1263`, check exit 0.
+- web `npx tsc --noEmit`: exit 0. `npm run lint` (full): exit 0. `npm run format:check`:
+  All matched files use Prettier code style!
+- Playwright (`--retries=0 --workers=2`, prebuilt mock) on prose-guard.spec.ts, every spec
+  the lanes added or changed (64), and the four Home specs from the commit that added the two
+  buttons: 5 chunks, 135 + 115 + 99 + 197 (1 skipped) + 140 passed, 0 failed.
+
+Not done: pushing. This environment publishes the branch after the step, so no push ran
+after each merge.
+
+## Train night-m: review round 1 fix (verdict NOT_YET, one major)
+
+- Major fixed: the Home link buttons swapped to the design system's `Button` (ca00d08) forced
+  `!font-normal` and kept `text-sm`'s line height, so the Since-your-last-visit item
+  (`web/app/simple/page.tsx`, `home-since-item`) and the plan strip's late items
+  (`web/components/simple/PlanByMonth.tsx`, `home-strip-late-item`) read at 400 instead of their
+  semibold line. Now `![font-weight:inherit] ![line-height:inherit]`; suppression counts stay 21
+  and 4.
+- Red first (58973c6): `web/e2e/home-2.spec.ts` 1896 and 1900 assert the link's computed
+  font-weight, line-height and font-size equal its parent's; they failed on the old tree
+  (400/20px vs 600/28px). Fix 65d5969.
+- Gates on 65d5969: home-2 + home-fixes specs 18 passed; prose-guard 33 passed + its 2
+  merge-base tests passed with PROSE_BASE=e2ded48 (after `git fetch --deepen`); `npx tsc
+  --noEmit` exit 0; full `npm run lint` exit 0; `npm run format:check` clean. API suites not
+  re-run: no API file changed in this round.
+- Minors from the verdict left as they were (brief: blocker and major only). Note: the earlier
+  "d0b30e6e6" sha above is wrong; the gates there ran on ca00d08's tree.

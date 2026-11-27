@@ -9,6 +9,13 @@ import { expect, test, type Locator, type Page } from './test';
  * (nine features; Sample data import needs Setup checklist, Alert routing by team needs
  * Alert history export; the draft Team invite nudges) and its "simple-plan" scenario (a dated
  * plan, Nov 2 – Feb 12). Desktop 1440x900 and phone 390x844, light and dark.
+ *
+ * Card: protects=Simple Priorities reads plainly in the Ranked list, Value / effort and Goal
+ * buckets: a move names its feature and where it lands, the row numbers are labelled, the dated
+ * plan draws its line once, marks and labels do not collide, and the goal drawer and phone toast
+ * keep clear; fails_when=a slug shows in a move or draft, a refused move can still be sent, the
+ * numbers wrap, a part head or line is wrong, marks overlap, bucket shares do not total 100%, or
+ * a toast covers the sheet's buttons; no_claim=how Oracle scores features.
  */
 
 const PHONE = { width: 390, height: 844 };
@@ -183,6 +190,11 @@ test.describe('QA pass 2: simple-plan, the Ranked list', () => {
     // build-plan QP1: two headed parts, Makes and Misses, in place of the divider.
     await expect(page.getByTestId('prio-part-head')).toHaveCount(2);
     await expect(page.getByTestId('line-divider')).toHaveCount(0);
+    // prio-2 (#1910): the folded Needs triage rows miss the line too; open them to list every row.
+    await page
+      .getByTestId('prio-triage-head')
+      .getByRole('button', { name: /^. Needs triage$/ })
+      .click();
     const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-above')));
     const first = above.indexOf('false');
     expect(first).toBeGreaterThan(0);

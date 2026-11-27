@@ -84,7 +84,12 @@ async function checkLine(
     await expect(scope.getByTestId('prio-part-count').nth(0)).toHaveText(
       n(m.length - missing.length),
     );
-    await expect(scope.getByTestId('prio-part-count').nth(1)).toHaveText(n(missing.length));
+    // prio-2 (#1739): Misses counts its folded Needs triage rows too, as Value / effort does.
+    const triage = scope.getByTestId('prio-triage-count');
+    const folded = (await triage.count()) ? parseInt(await triage.innerText(), 10) : 0;
+    await expect(scope.getByTestId('prio-part-count').nth(1)).toHaveText(
+      n(missing.length + folded),
+    );
     await expect(scope.getByTestId('line-caption')).toHaveCount(0);
     await expect(scope.getByTestId('line-divider')).toHaveCount(0);
     return (

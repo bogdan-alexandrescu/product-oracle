@@ -6,6 +6,11 @@ import { expect, test, type Locator, type Page } from './test';
  * searching its code and name ("Or a feature from another PRD"), never by a raw key a person
  * cannot know. Opened from a one-pager's plan row and from the Goal map. Mock default scenario
  * (invented data): Setup checklist (Guided setup) picks F-79 Weekly alert digest (Usage alerts).
+ *
+ * Card: protects=Add a dependency finds a feature from another PRD by its code and name, from a
+ * one-pager's plan row and from the Goal map, on desktop and phone, and says so when nothing
+ * matches; fails_when=the feature is not found by name, a raw key is needed, the dependency is
+ * not added, or an empty search saves something; no_claim=the real search index.
  */
 
 const SIZES = [

@@ -8,6 +8,12 @@ import { expect, test, type Locator, type Page } from './test';
  * mock's invented data: the default scenario, "simple-plan-lanes" (Guided setup's plan on the
  * onboarding roadmap, its slices under the Reliability, Growth, ... goals) and "roadmap-talk"
  * (the item card's Talk to Oracle).
+ *
+ * Card: protects=the Simple roadmap reads plainly: Now / Next / Later cards by goal, a drawer that
+ * lists each flag once, empty links saying Nothing / None, years, counts and codes, in light and
+ * dark; fails_when=a group ignores its goal lane, Escape does not close the drawer, a count or
+ * code is missing, an empty link is blank, or the dark chart is below 3:1; no_claim=the real
+ * roadmap data.
  */
 
 const DESKTOP = { viewport: { width: 1512, height: 900 } };

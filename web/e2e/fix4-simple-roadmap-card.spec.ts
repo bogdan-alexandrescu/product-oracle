@@ -8,6 +8,14 @@ import { expect, test, type Locator, type Page } from './test';
  * through the UI on the mock: the default scenario (Weekly alert digest, F-79, depends on Alert
  * rules engine and starts before it ends; D-7 is open on it) and "roadmap-talk" (Adaptive
  * pacing, F-16). Desktop 1440x900, phone 390x844; light and dark where colours change.
+ *
+ * Card: protects=The Simple roadmap item card and its talk with Oracle: titles only with no stray
+ * code, a commenter's fixes say Propose, a waiting change shows under Proposals and applies as
+ * Applied by you, a cut keeps its dependents, the Ask panel's move card shows Before and After,
+ * the talk header and Send read well, and a phone sheet spans the screen; fails_when=a stray code
+ * shows, a commenter gets a plain fix or an owner a Propose, the buttons are on different rows, a
+ * cut offers dependency moves, the Send button is unreadable, or the phone sheet is not full
+ * width; no_claim=the real model's replies.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };

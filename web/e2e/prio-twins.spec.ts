@@ -260,20 +260,16 @@ for (const phone of [false, true]) {
       );
     });
 
-    test("the Show filter's All counts every feature listed, one with no mark yet too", async ({
+    test("the Show filter's All counts every ranked feature listed, one with no mark yet too", async ({
       page,
     }) => {
       await setUp(page, phone);
       await expect(page.getByTestId('cs-legend')).toBeVisible();
-      // Every line the list shows: each row, each same-name line folded into one, each item with no ranked feature.
+      // prio-2 (#1895): the ranked rows, as the list's parts count them; same-name lines stay on their row.
       const rows = await page.getByTestId('prio-row').count();
-      const n =
-        rows +
-        (await page.getByTestId('prio-twin').count()) +
-        (await page.getByTestId('prio-unranked-row').count());
-      expect(n).toBeGreaterThan(rows);
+      expect(await page.getByTestId('prio-twin').count()).toBeGreaterThan(0);
       await expect(page.getByTestId('cs-legend').getByRole('button', { name: /^All / })).toHaveText(
-        `All ${n}`,
+        `All ${rows}`,
       );
     });
   });

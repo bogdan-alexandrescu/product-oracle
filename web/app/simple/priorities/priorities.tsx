@@ -81,7 +81,7 @@ import {
   usePriorityKeyResults,
   type PriorityKeyResults,
 } from './key-results';
-import { useCodedMilestone } from './milestone-codes';
+import { codedLine, useCodedMilestone } from './milestone-codes';
 import { pinAt, placed } from './places';
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
@@ -175,22 +175,12 @@ const SUBTITLE: Record<Tab, string> = {
   buckets: 'Where the engineer-weeks go, goal by goal.',
 };
 
-/** prio-ux (#1739): why All counts more lines than the line's "N of M miss", which counts the ranked features. */
-function allWords(data: Out, all: number): string {
-  const twins = data.rows.reduce((n, r) => n + (r.twins?.length ?? 0), 0);
-  const parts = [`${data.rows.length} ranked features`];
-  if (twins) parts.push(`${twins} same-name ${twins === 1 ? 'line' : 'lines'}`);
-  const rest = all - data.rows.length - twins;
-  if (rest) parts.push(`${rest} ${rest === 1 ? 'item' : 'items'} not ranked yet`);
-  return `All ${all}: ${parts.join(', ')}. "Miss" counts the ranked features only.`;
-}
-
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
-const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
+const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean, line: string): string => {
   const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
   const tap = phone ? 'tap' : 'click';
   // PV-1 One count per spot: every mark opens the one feature panel; a count lists the marks it holds.
-  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? 'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change.' : 'Select a mark to open its feature.'} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
+  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data, line)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? 'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change.' : 'Select a mark to open its feature.'} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
 };
 
 /** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
@@ -259,6 +249,7 @@ export function Priorities() {
   const params = useSearchParams();
   const setParams = useSetParams();
   const phone = usePhone();
+  const lineWordsOf = useLineLabel();
   const { can, capsReady } = useMe();
   const urlTab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'ranked') as Tab;
   // qa-simple-plan-42: a tab picked shows at once, whatever else rewrites the URL meanwhile (the
@@ -335,12 +326,9 @@ export function Priorities() {
     }
     return c;
   }, [data, marks]);
-  // The All chip counts each line the full list shows: a row, each same-name line folded into it and each item with
-  // no ranked feature (a goal's list leaves those out), never only the rows they are grouped in.
-  const allCount = data
-    ? data.rows.reduce((n, r) => n + 1 + (r.twins?.length ?? 0), 0) +
-      (params.get('goal') ? 0 : data.unranked.length)
-    : 0;
+  // prio-2 (#1895): the All chip counts the ranked features, as the kind chips and the list's parts do (Makes + Misses
+  // + Needs triage); a feature's same-name lines are on its row and items with no ranked feature have their own list.
+  const allCount = data?.rows.length ?? 0;
   const shownData =
     data && show && marks
       ? {
@@ -464,7 +452,9 @@ export function Priorities() {
               {data && tab === 'ranked' && splitAtLine(data)
                 ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? '' : 's'} what makes the line, so what makes it is listed first, each part by rank.`
                 : ''}
-              {tab === 'value-effort' && data ? ` ${VE_WORDS(data, mayChange, phone)}` : ''}
+              {tab === 'value-effort' && data
+                ? ` ${VE_WORDS(data, mayChange, phone, lineWordsOf(data))}`
+                : ''}
               {tab === 'buckets' && data && !(data.plan?.milestones.length && data.plan.span) ? (
                 <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span>
               ) : (
@@ -574,11 +564,6 @@ export function Priorities() {
           <div className="mb-3" data-testid="cs-prio-bar">
             <div className="flex items-center gap-2">
               <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
-              {allCount !== data.rows.length && (
-                <InfoTip label="the All count" testId="prio-all-help" id="prio-all-text">
-                  {allWords(data, allCount)}
-                </InfoTip>
-              )}
             </div>
             {show && (
               <p className="mt-2 text-[length:var(--simple-small)] text-text2">
@@ -733,10 +718,14 @@ function landsUnder(rows: Row[], row: Row, position: number): string {
 
 // --------------------------------------------------------------------------- ranked list
 
+/** prio-2 (#1739): "1 feature", never "1 features". */
+const featureWord = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`;
+
 const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
-  new: (n) => `${n} new features: nothing built for these yet.`,
-  in_progress: (n) => `${n} features being built.`,
-  exists: (n) => `${n} features that run today.`,
+  new: (n) =>
+    `${n} new ${n === 1 ? 'feature' : 'features'}: nothing built for ${n === 1 ? 'it' : 'these'} yet.`,
+  in_progress: (n) => `${featureWord(n)} being built.`,
+  exists: (n) => `${featureWord(n)} that ${n === 1 ? 'runs' : 'run'} today.`,
 };
 
 function Ranked({
@@ -877,9 +866,22 @@ function YourList({
   const goal = params.get('goal');
   const goalName = params.get('name') ?? goal;
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
-  const rows = byLine(data).filter(
-    (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName),
-  );
+  const goalOf = goalOfRow(data);
+  // prio-2 (#1910): split at a dated line, the rows that miss it with no goal and no effort go last, folded under one
+  // "Needs triage" inside Misses (Misses counts it, as Value / effort does); (#1898) each part is numbered from 1, the
+  // rank in the number's title.
+  const triaged = (r: Row) => !r.above_line && !goalOf(r) && r.effort == null;
+  const rows = useMemo(() => {
+    const of = goalOfRow(data);
+    const late = (r: Row) => !r.above_line && !of(r) && r.effort == null;
+    const inGoal = byLine(data).filter(
+      (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : of(r) === goalName),
+    );
+    return splitAtLine(data) && !goal
+      ? [...inGoal.filter((r) => !late(r)), ...inGoal.filter(late)]
+      : inGoal;
+  }, [data, goal, goalName]);
+  const [triageOpen, setTriageOpen] = useState(false);
   const topValue = Math.max(0, ...data.rows.map((r) => r.goal_value ?? 0));
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
@@ -905,6 +907,12 @@ function YourList({
   // at most the last above-the-line rank (and one below it for at least the first below it).
   const split = lineSplit(rows);
   const apart = split >= 0 && splitAtLine(data);
+  const triageAt = apart && !goal ? rows.findIndex(triaged) : -1;
+  const placeOf = (r: Row, i: number): number =>
+    !apart ? r.rank : i < split ? i + 1 : i - split + 1;
+  const addsTo = (r: Row) =>
+    mayChange && r.can_reorder && !r.on_roadmap ? data.company_roadmap : null;
+  const adds = rows.map(addsTo).find(Boolean);
 
   // walkb-priorities: the row under the pointer (the nearest one in a gap, past either end the
   // first or last), not the last row whose middle the pointer passed.
@@ -953,7 +961,6 @@ function YourList({
     }
   }
 
-  const goalOf = goalOfRow(data);
   // qa-simple-plan-4: the override ends (after.clear) and the feature takes Oracle's rank again; Undo puts it back.
   async function backToOracle(r: Row) {
     const sent = await send({
@@ -981,7 +988,7 @@ function YourList({
           <span>
             Showing <b>{goalName}</b> only:{' '}
             {rows.length
-              ? `${rows.length} of ${data.rows.length} features`
+              ? `${rows.length} of ${featureWord(data.rows.length)}`
               : 'nothing for this goal is planned yet'}
           </span>
           <button
@@ -997,6 +1004,17 @@ function YourList({
       {goal
         ? rows.length > 0 && <LineCaption data={{ ...data, rows }} />
         : !apart && <LineCaption data={data} />}
+      {adds && (
+        <p
+          className="mb-2 flex items-center gap-1.5 text-[length:var(--simple-small)] text-text2"
+          data-testid="prio-adds-note"
+        >
+          <AddsTag title={adds.title} />
+          <InfoTip label={`Not on ${adds.title}`} align="start" id="prio-adds-text">
+            Not on {adds.title} yet: moving it adds it there, under Later.
+          </InfoTip>
+        </p>
+      )}
       <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
         {rows.flatMap((r, i) => {
           // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
@@ -1005,6 +1023,16 @@ function YourList({
                 ...(i === 0 ? [<PartHead key="makes" data={data} makes n={split} />] : []),
                 ...(i === split
                   ? [<PartHead key="misses" data={data} makes={false} n={rows.length - split} />]
+                  : []),
+                ...(i === triageAt
+                  ? [
+                      <TriageHead
+                        key="triage"
+                        n={rows.length - triageAt}
+                        open={triageOpen}
+                        onToggle={() => setTriageOpen(!triageOpen)}
+                      />,
+                    ]
                   : []),
               ]
             : i === split
@@ -1018,6 +1046,10 @@ function YourList({
           );
           const target = drag && drag.to === i && drag.from !== i;
           const words = movedWords(moved, r);
+          if (triageAt >= 0 && i >= triageAt && !triageOpen) {
+            refs.current[i] = null;
+            return divider;
+          }
           return [
             ...divider,
             <li
@@ -1073,8 +1105,9 @@ function YourList({
                 <span
                   className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums"
                   data-testid="prio-rank"
+                  title={apart ? `Rank ${r.rank}` : undefined}
                 >
-                  {r.rank}
+                  {placeOf(r, i)}
                 </span>
                 <span
                   aria-label={r.above_line ? 'Above the line' : 'Below the line'}
@@ -1188,12 +1221,10 @@ function YourList({
                   {words && <MovedTag words={words} />}
                 </p>
               )}
-              {mayChange && r.can_reorder && !r.on_roadmap && data.company_roadmap && (
-                <p
-                  className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
-                  data-testid="prio-adds"
-                >
-                  Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
+              {/* prio-2 (#1911): a small tag on the row; what a move does is said once, by the list's own tag. */}
+              {addsTo(r) && (
+                <p className="mt-1 sm:pl-12">
+                  <AddsTag title={addsTo(r)!.title} />
                 </p>
               )}
               {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
@@ -2922,8 +2953,8 @@ function ValueEffort({
         <h2 className="mb-2 flex items-center gap-1.5 text-xl font-[650] leading-7">
           Ranked
           <InfoTip label="the ranks" align="start" testId="side-ranks-help">
-            Each number is the feature&apos;s rank in the Ranked list. What makes the line is listed
-            first
+            Each number is the feature&apos;s rank, shown on hover over its number in the Ranked
+            list. What makes the line is listed first
             {quad === null ? '' : ', and only the picked corner'}, so the numbers can skip.
           </InfoTip>
         </h2>
@@ -3055,22 +3086,17 @@ function ValueEffort({
 // --------------------------------------------------------------------------- the line
 
 /** The line in words: "not this quarter" for Now, else "not done by <day>". */
-function lineWords(data: Out): string {
+function lineWords(data: Out, line = lineLabel(data)): string {
   const l = data.line;
-  return !l || l.kind === 'now'
-    ? 'not this quarter'
-    : `not planned to finish by ${l.label.replace(/^By /, '')}`;
+  return !l || l.kind === 'now' ? 'not this quarter' : `not planned to finish by ${line}`;
 }
 
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
   const coded = useCodedMilestone();
-  const msLine = (l: { key: string; label: string }) => {
-    const at = l.label.lastIndexOf(' · ');
-    if (at < 0) return l.label;
-    return `${coded(l.label.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${l.label.slice(at)}`;
-  };
+  // #1894: a PRD's key date ("M1 · Beta") by the roadmap's one code too, never the PRD's own number.
+  const msLine = (l: Line) => codedLine(coded, l, l.label);
   const current = data.line ?? {
     key: 'now',
     kind: 'now' as const,
@@ -3172,11 +3198,14 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
                     : undefined
                 }
               >
-                {l.kind === 'key_date'
-                  ? `${l.prd ? 'From the PRD' : 'Key date'}: ${l.label}`
-                  : l.kind === 'milestone'
-                    ? `Milestone: ${msLine(l)}`
-                    : l.label}
+                {/* #1882: a milestone is listed only once the roadmap read has given it its code. */}
+                {(l.kind === 'milestone' || (l.kind === 'key_date' && l.prd)) && !coded.ready
+                  ? 'Loading…'
+                  : l.kind === 'key_date'
+                    ? `${l.prd ? 'From the PRD' : 'Key date'}: ${l.prd ? msLine(l) : l.label}`
+                    : l.kind === 'milestone'
+                      ? `Milestone: ${msLine(l)}`
+                      : l.label}
               </option>
             ));
             // prio-company: each PRD's milestones listed under its name.
@@ -3231,14 +3260,7 @@ const lineLabel = (data: Out): string =>
 /** qa-nov17 G8: the line inside a sentence, a milestone's by its code and name as the Line picker reads it ("M6 Beta · Nov 30, 2026"). */
 function useLineLabel(): (data: Out) => string {
   const coded = useCodedMilestone();
-  return (data) => {
-    const words = lineLabel(data);
-    const l = data.line;
-    if (!l || l.kind !== 'milestone') return words;
-    const at = words.lastIndexOf(' · ');
-    if (at < 0) return words;
-    return `${coded(words.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${words.slice(at)}`;
-  };
+  return (data) => (data.line ? codedLine(coded, data.line, lineLabel(data)) : lineLabel(data));
 }
 
 /**
@@ -3421,6 +3443,41 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
         {n} {n === 1 ? 'feature' : 'features'}, in rank order
       </span>
       {makes && <ScoreTip id="prio-score-text-makes" />}
+    </li>
+  );
+}
+
+/** prio-2 (#1911): a feature not on the company roadmap yet, as a small tag (the list's (i) says what a move does). */
+function AddsTag({ title }: { title: string }) {
+  return (
+    <span
+      data-testid="prio-adds"
+      className="whitespace-nowrap rounded-full border border-line px-2 text-[length:var(--simple-small)] text-text2"
+    >
+      Not on {title}
+    </span>
+  );
+}
+
+/** prio-2 (#1910): the folded group, at the end of Misses, of rows that miss the line with no goal and no effort. */
+function TriageHead({ n, open, onToggle }: { n: number; open: boolean; onToggle: () => void }) {
+  return (
+    <li
+      data-testid="prio-triage-head"
+      className="mt-2 flex flex-wrap items-center gap-x-2 border-t-2 border-line pt-3"
+    >
+      <Button variant="ghost" aria-expanded={open} onClick={onToggle} className="-ml-2.5">
+        {open ? '▾' : '▸'} Needs triage
+      </Button>
+      <span
+        className="text-[length:var(--simple-small)] text-text2"
+        data-testid="prio-triage-count"
+      >
+        {featureWord(n)}
+      </span>
+      <InfoTip label="Needs triage" align="start">
+        No goal and no effort yet.
+      </InfoTip>
     </li>
   );
 }
@@ -4336,6 +4393,9 @@ function PlanBuckets({
       rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan),
     }))
     .filter((x) => x.rows.length > 0);
+  // prio-2 (#1739): a goal's card counts its plan features and leads to its features this quarter outside the plan.
+  const outsideOf = (g: string) =>
+    outside.find(({ b }) => !b.no_goal && (b.title === g || b.title === goalLabel(g).name));
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
   const acts = useGoalActs({
@@ -4462,6 +4522,20 @@ function PlanBuckets({
                       className={`mt-1 flex-none text-base text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? 'max-sm:pl-8' : ''}`}
                     >
                       {count(n)}
+                      {outsideOf(g) && (
+                        <Button
+                          variant="ghost"
+                          data-testid="plan-goal-outside"
+                          className="ml-1 underline"
+                          onClick={() =>
+                            document
+                              .getElementById(`plan-outside-${outsideOf(g)!.b.key}`)
+                              ?.scrollIntoView({ block: 'center' })
+                          }
+                        >
+                          + {outsideOf(g)!.rows.length} outside the plan
+                        </Button>
+                      )}
                     </span>
                     {rights.edit(rec) && (
                       <button
@@ -4641,6 +4715,7 @@ function PlanBuckets({
               {outside.map(({ b, rows }) => (
                 <li
                   key={b.key}
+                  id={`plan-outside-${b.key}`}
                   data-testid="plan-outside-goal"
                   data-key={b.key}
                   className="border-b border-line py-[5px] text-base leading-[22px]"

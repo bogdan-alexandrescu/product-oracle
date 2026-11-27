@@ -6,6 +6,13 @@ import { expect, test, type Page } from './test';
  * QA findings on /simple/roadmap, round 4 (qa-plan-54..56), driven through the UI on the mock
  * layer: the Timeline's goal lanes in the "simple-plan-lanes" scenario (Guided setup's plan,
  * M1 Prove it Nov 2 - Nov 27 ...), and the default scenario for who may start a review.
+ *
+ * Card: protects=The Simple roadmap writes days month first ('Oct 31', 'Nov 2 – Nov 13') in the
+ * Timeline key, Gantt legend, milestone ends and the phone list, Gantt pill labels fit their
+ * pills, and Start review shows on only for an owner; fails_when=a day-first date like 16 Nov
+ * shows, a label runs past its pill or under a milestone mark, an empty pill has no code beside
+ * it, a commenter sees Start review, or an owner's button is off or faded; no_claim=the
+ * Timeline's lane layout.
  */
 
 const LANES = '/simple/roadmap?roadmap=onboarding-roadmap';

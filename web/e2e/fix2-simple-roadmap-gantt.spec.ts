@@ -15,6 +15,13 @@ import { expect, test, type Locator, type Page } from './test';
  * quarter header keeps its year (finding 28); the dependency arrow sits beside a bar, not over
  * its edge (finding 40); a suggestion's outline clamps to the chart's width (finding 49); the
  * Gantt opens scrolled to the plan's dated work, not a blank window (finding 8/38).
+ *
+ * Card: protects=The Simple roadmap's Gantt and Waterfall read right: each row shows its code
+ * with its name once, axis labels and Today's line do not clash, a dependency arrow ends beside
+ * its bar, a suggestion marker names itself and stays in the chart, and a phone keeps names, bar
+ * widths and quarter years; fails_when=a bare or repeated code shows, a tick runs past the chart,
+ * Today's line crosses the axis, the arrow head lands on the bar, a bar is under 24px, a quarter
+ * loses its year, or the Gantt opens on an empty window; no_claim=the Timeline format.
  */
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };

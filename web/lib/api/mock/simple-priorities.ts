@@ -30,7 +30,7 @@ import { flowFor } from './simple-visuals';
 import { madeOrder } from './made-order';
 import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
 import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
-import { bucketGoalIds, seedGoalBuckets } from './goal-buckets';
+import { bucketGoalIds, lazyGoalBuckets, seedGoalBuckets } from './goal-buckets';
 
 type Row = Schemas['SimplePriorityRow'];
 type Item = Schemas['SimpleRoadmapItem'];
@@ -237,12 +237,36 @@ export function seedPlanOneWeek(db: SimpleDb): void {
  * owner's pick: one goal, one shape). Invented data.
  */
 export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = 'priorities-plan-goal-twins';
-export function seedPlanGoalTwins(db: SimpleDb): void {
-  if (!db.plan)
-    throw new Error(
-      `${PRIORITIES_PLAN_GOAL_TWINS_SCENARIO}: the seed has no plan to name Activation twice`,
-    );
-  db.plan.twin_goals = true;
+/**
+ * prio-2 (#1739), the "priorities-plan-goal-outside" scenario: "simple-plan" with a goal, Grow retention, that none of
+ * the plan's work serves (the alerts roadmap's items serve it, outside the plan). Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO = 'priorities-plan-goal-outside';
+/** prio-2 (#1739 review), "priorities-one-feature": "priorities-plan-goal-outside" with one feature left, Alert rules engine. */
+export const PRIORITIES_ONE_FEATURE_SCENARIO = 'priorities-one-feature';
+export function seedPlanGoalTwins(db: SimpleDb, scenario?: string | null): void {
+  if (!db.plan) throw new Error(`${scenario}: the seed has no plan to name its goals`);
+  if (scenario === PRIORITIES_ONE_FEATURE_SCENARIO) {
+    db.items = db.items.filter((i) => i.title === 'Alert rules engine');
+    seedPlanGoalTwins(db, PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO);
+    return;
+  }
+  if (scenario !== PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO) {
+    db.plan.twin_goals = true;
+    return;
+  }
+  const gb = (db.goal_buckets ??= lazyGoalBuckets());
+  gb.goals.push({
+    id: stableUuid('goal-bucket/Grow retention'),
+    key: 'grow-retention',
+    title: 'Grow retention',
+    order: gb.goals.filter((g) => !g.archived).length + 1,
+    measure: 'Teams active after 90 days',
+    target: '80%',
+    due: '2027-03-31',
+    archived: false,
+    owner_email: 'owner@example.com',
+  });
 }
 
 /**

@@ -55,6 +55,7 @@ import {
   codedFlag,
 } from './_lib';
 import { featureHref, useFeatureUrl, useOutsideClose } from './_link';
+import { featureTitle } from './_panel-words';
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
@@ -1190,7 +1191,8 @@ export function FloatingCard({
               </>
             )}
             <h2 className="inline">
-              {item.title}
+              {/* panel-2 #1907: the feature's name alone, no PRD name or priority tag. */}
+              {featureTitle(item.title, item.prd?.title)}
               {item.draft && item.status !== 'merged' && (
                 <span
                   className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"

@@ -8,6 +8,16 @@ import { expect, test, type Locator, type Page } from './test';
  * does against the mock's default scenario (web/lib/api/mock/simple-roadmap.ts: Team invite
  * nudges is a draft with no owner; Weekly alert digest depends on Alert rules engine and is
  * named by the alerts track's Beta milestone).
+ *
+ * Card: protects=The Simple roadmap page toolbar, filters, goal cards and Needs a decision tray:
+ * a draft with no owner is not a broken link, Group by Milestone, filters swap an inverted range
+ * and clear an empty result, goal cards follow the filter, a proposal and a stale move say what
+ * happened, Start review explains its choices, popovers open below their buttons, tray tiles are
+ * even, and a phone banner and actions are laid out; fails_when=the tray sum differs from the
+ * button count, the digest is under the wrong group, no swap or Clear filters shows, a commenter
+ * sees Start review, a stale move gives no Reload, tiles differ in size or a zero tile is not
+ * muted, or the phone banner words share a line with the buttons; no_claim=what Approve and
+ * publish does.
  */
 
 const URL = '/simple/roadmap';

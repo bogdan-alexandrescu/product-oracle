@@ -159,7 +159,8 @@ async def request_map(
         db,
         principal,
         RunCreate(flow=FLOW),
-        entry_knobs={"code_map_id": str(row.id)},
+        # #1789: the run keeps its repo; a later map of the same commit replaces this row.
+        entry_knobs={"code_map_id": str(row.id), "repo": name},
         commit=False,
     )
     row.run_id = run_id

@@ -13,6 +13,12 @@ import { expect, test, type Page } from './test';
  * PR7: the plan card's summary is a short line; the sentence and the footnote are behind its (i).
  * PR8: the New goal form says "Name the goal." only once the person leaves the field, not as it opens.
  * PR10: a row with two milestone chips keeps its name readable (never one word per line).
+ *
+ * Card: protects=Priorities' Goal buckets show each row's real code or Not in the Ground Truth, a
+ * pencil and menu on every row, a short plan summary, a quiet New goal form, and a readable name
+ * beside two milestone chips; fails_when=initials stand in for a code, a row lacks its pencil,
+ * the summary is long, the form scolds on open, or a name breaks one word a line;
+ * no_claim=saving a goal.
  */
 
 const DESKTOP = { width: 1440, height: 900 };

@@ -3025,6 +3025,8 @@ export function MsBoardRow({
         <span
           key={`t-${m.id}`}
           data-testid="ms-board-track"
+          data-track-milestone={m.id}
+          tabIndex={-1}
           title={`${w} · ${fullDay(m.date!)}`}
           className="inline-flex items-center gap-1.5 rounded-full border border-warn bg-warn-bg px-2 text-xs leading-6 font-semibold text-warn"
         >

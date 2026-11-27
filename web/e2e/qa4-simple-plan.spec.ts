@@ -7,6 +7,12 @@ import { expect, test, type Locator, type Page } from './test';
  * QA pass 4, simple-plan (/simple/priorities): the Ranked list, Compare with Oracle, Value /
  * effort, Goal buckets, the line picker and the suggestions drawer, driven through the UI as a
  * person would on the mock's invented company. Desktop 1440x900 and phone 390x844.
+ *
+ * Card: protects=the Priorities page holds up on a phone and desktop: the line stays one line,
+ * Value / effort marks clear the labels, Compare with Oracle names who pushed a row, and tabs
+ * and the drawer read as the page; fails_when=the page is wider than the phone, marks hit a
+ * label, a passed date applies, a tab has no labelled panel, or a locked row does not say who
+ * can move it; no_claim=real ranking maths.
  */
 
 const PHONE = { width: 390, height: 844 };

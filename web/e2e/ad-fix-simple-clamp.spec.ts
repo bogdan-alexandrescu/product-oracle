@@ -59,9 +59,9 @@ for (const [where, size] of [
     await expect(above).toHaveCount(20);
     const last = above.last();
     await expect(last.getByTestId('prio-title')).toHaveText('Pricing questions page');
-    await expect(last.getByTestId('prio-rank')).toHaveText('40');
+    await expect(last.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 40');
     const bulk = rowByTitle(page, 'Bulk import');
-    await expect(bulk.getByTestId('prio-rank')).toHaveText('33');
+    await expect(bulk.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 33');
 
     await dragOnto(page, 'Bulk import (F-07)', last);
     const dialog = page.getByRole('dialog');
@@ -72,7 +72,7 @@ for (const [where, size] of [
     await expect(
       page.getByRole('status').filter({ hasText: 'Moved Bulk import (F-07) to rank 20' }),
     ).toBeVisible();
-    await expect(bulk.getByTestId('prio-rank')).toHaveText('20');
+    await expect(bulk.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 20');
     await expect(bulk).toHaveAttribute('data-above', 'true');
   });
 }
@@ -95,9 +95,9 @@ for (const [where, size] of [
     await page.goto('/simple/priorities');
     await expect(page.getByTestId('simple-priorities')).toBeVisible();
     const pricing = rowByTitle(page, 'Pricing page words');
-    await expect(pricing.getByTestId('prio-rank')).toHaveText('39');
+    await expect(pricing.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 39');
     const bulk = rowByTitle(page, 'Bulk import');
-    await expect(bulk.getByTestId('prio-rank')).toHaveText('33');
+    await expect(bulk.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 33');
     await expect(bulk).toHaveAttribute('data-above', 'true');
 
     await dragOnto(page, 'Pricing page words (F-04)', bulk);
@@ -110,6 +110,6 @@ for (const [where, size] of [
     await expect(
       page.getByRole('status').filter({ hasText: 'Moved Pricing page words (F-04) to rank 33' }),
     ).toBeVisible();
-    await expect(pricing.getByTestId('prio-rank')).toHaveText('33');
+    await expect(pricing.getByTestId('prio-rank')).toHaveAttribute('title', 'Rank 33');
   });
 }

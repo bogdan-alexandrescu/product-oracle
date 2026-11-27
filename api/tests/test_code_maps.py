@@ -914,3 +914,41 @@ async def test_the_runs_list_names_each_code_map_run_by_its_repo(client, map_run
     runs = (await client.get("/v1/runs", headers=owner.headers)).json()
     row = next(r for r in runs if r["id"] == resp.json()["run_id"])
     assert row["flow_title"] == "Code map" and row["repo"] == REPO
+
+
+@pytest.fixture
+def two_maps_runtime():
+    built = Outcome(artifacts={codemap.FILE: text(MAP)})
+    set_runtime(FakeRuntime({"index": [built, built]}))
+    yield
+    set_runtime(None)
+
+
+async def test_every_code_map_run_of_one_repo_is_named_by_its_repo(client, two_maps_runtime):
+    """#1789: a second map of a repo replaces the first one's row, and both runs still name it."""
+    # protects=#1789 older code map runs read "Code map" once a later run of the repo lands;
+    # fails_when=a run is named from the code map row a later run replaced, or a run made
+    # before its repo was kept on the run is not named; no_claim=which map is the latest.
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "approver")
+    source_id = await github_source(tenant_id, owner)
+    run_ids = []
+    for _ in range(2):
+        resp = await request_map(client, owner, source_id)
+        assert resp.status_code == 201, resp.text
+        run_ids.append(resp.json()["run_id"])
+        await tick(client, tenant_id)
+    # The same commit: the second map replaces the first one's row.
+    assert [m.run_id for m in await maps_of(tenant_id)] == [uuid.UUID(run_ids[1])]
+
+    async def named() -> dict[str, str | None]:
+        runs = (await client.get("/v1/runs", headers=owner.headers)).json()
+        return {r["id"]: r["repo"] for r in runs if r["id"] in run_ids}
+
+    assert await named() == {run_ids[0]: REPO, run_ids[1]: REPO}
+    # A run started before the run kept its repo is named from its map's request.
+    async with tenant_session(tenant_id) as s:
+        for run in (await s.scalars(select(Run).where(Run.flow == "code_map"))).all():
+            run.knobs = {k: v for k, v in run.knobs.items() if k != "repo"}
+        await s.commit()
+    assert await named() == {run_ids[0]: REPO, run_ids[1]: REPO}

@@ -10,6 +10,7 @@ import { calendarDay } from '@/lib/dates';
 import { formatDateRange, formatDateTime } from '@/lib/format';
 
 import { isNew, type Act, type StatedNeed } from './_needs';
+import { requestWords } from './_request-words';
 
 type Proposal = Schemas['InboxSimpleChange'];
 type DateSuggestion = Schemas['InboxSimpleDateSuggestion'];
@@ -119,14 +120,11 @@ const proposalName = (p: Proposal): string =>
           ? 'A section number'
           : 'An item');
 
-const upper = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-
-/** Who or what asked for it: a meeting by its name, Ask Oracle for a teammate, or the teammate. */
-function askedBy(p: Proposal): string {
-  if (p.from_meeting) return `asked for by the meeting ${p.from_meeting.title}`;
-  if (p.from_ask) return `asked through Ask Oracle by ${p.by_name}`;
-  return `asked for by ${p.by_name}`;
-}
+/** #1913: who or what asks for it (a meeting by its name, a teammate, through Ask Oracle) and what, as a request. */
+const askedBy = (p: Proposal): string =>
+  p.from_meeting
+    ? requestWords(`The meeting ${p.from_meeting.title}`, p.asked)
+    : requestWords(p.by_name, p.asked, p.from_ask ? ' through Ask Oracle' : '');
 
 /**
  * inbox-meeting-proposals: every Simple proposal waiting on me (the API's `simple_proposals`):
@@ -160,7 +158,7 @@ export function proposalRows(
             className="block basis-full text-sm break-words whitespace-normal text-text2"
             data-testid="meeting-proposal-context"
           >
-            {upper(p.asked ?? 'a change')} · {askedBy(p)} on {formatDateTime(p.at)}
+            {askedBy(p)} · {formatDateTime(p.at)}
           </span>
         </>
       ),

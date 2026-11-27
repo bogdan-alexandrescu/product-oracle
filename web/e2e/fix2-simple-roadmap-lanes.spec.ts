@@ -7,6 +7,12 @@ import { expect, test, type Locator, type Page } from './test';
  * fix2, the goal lanes (B2/B3): QA findings first written against the goal lanes. The new
  * Timeline (_zoom.tsx) draws no pills, arrows or suggestion marks, so the findings that still
  * hold are checked on the Gantt, which draws them. Each test's comment names its finding.
+ *
+ * Card: protects=On the Gantt, a bar's label says Dates set by you in plain words, a dependency
+ * arrow ends beside the bar, and Oracle's suggestion says what it is on hover; fails_when=a bar
+ * label shows the raw word typed, the arrow head lands on the bar, or the suggestion mark has no
+ * Oracle suggests dates title; no_claim=the Timeline format, which draws no arrows or suggestion
+ * marks.
  */
 
 const URL = '/simple/roadmap?roadmap=onboarding-roadmap';

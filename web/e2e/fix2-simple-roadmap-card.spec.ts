@@ -18,6 +18,12 @@ import { expect, test, type Locator, type Page } from './test';
  * qa-simple-roadmap-14 / 48: the item card's Status, Confidence, dates-source, "Needed by"
  * and "Decided in" read in plain words, not the API's lowercase enum values or a missing
  * colon ("Decided in D-9 Moved Weekly alert digest").
+ *
+ * Card: protects=On the Simple roadmap, Enter in Add an item adds a draft at once, the quick-add
+ * chip is named for dragging with a real icon, and the item card reads Status, Confidence, dates
+ * and Decided in in plain words; fails_when=a sheet reopens after Enter, no Added as a draft note
+ * shows, the chip is named for the typed title or shows a broken glyph, or the card shows
+ * lowercase values or D-9; no_claim=phone add, or placing the dragged item.
  */
 
 const ROADMAP = '/simple/roadmap';

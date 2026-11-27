@@ -235,10 +235,10 @@ for (const phone of [false, true]) {
       const ask = table
         .getByRole('row')
         .filter({ hasText: 'Bulk export' })
-        .filter({ hasText: 'asked for by' });
+        .filter({ hasText: 'proposes' });
       await expect(ask).toHaveCount(1);
       // card: inbox-feature-ask-words: proposed, not filed yet.
-      await expect(ask).toContainText('Proposed the feature ask “Bulk export”');
+      await expect(ask).toContainText('proposes the feature ask “Bulk export”');
       await expect(ask).not.toContainText(/filed/i);
       await expect(ask.getByRole('link', { name: /^Open/ })).toHaveCount(0);
       await expect(ask.getByRole('button', { name: 'Accept' })).toBeVisible();
@@ -306,10 +306,7 @@ for (const phone of [false, true]) {
       );
       await expect(page.getByText('Accepted: it is filed in Requests')).toBeVisible();
       await expect(
-        page
-          .getByRole('row')
-          .filter({ hasText: 'Bulk export' })
-          .filter({ hasText: 'asked for by' }),
+        page.getByRole('row').filter({ hasText: 'Bulk export' }).filter({ hasText: 'proposes' }),
       ).toHaveCount(0);
       await page.goto('/requests');
       const filed = page.getByTestId('request-row').filter({ hasText: 'Bulk export' }).first();

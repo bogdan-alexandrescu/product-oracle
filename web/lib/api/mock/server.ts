@@ -12,6 +12,9 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
+import { routePalette } from './palette';
+import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
@@ -472,7 +475,9 @@ import {
   PRIORITIES_TWINS_OLD_SCENARIO,
   PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
+  PRIORITIES_ONE_FEATURE_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
+  PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
   PRIORITIES_PLAN_KEY_RESULTS_SCENARIO,
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
@@ -2507,6 +2512,37 @@ function seedRoadmapKeyDatesTiedPrdsScenario(): Db {
   const v = db.versions.find((x) => x.document_id === doc.id)!;
   const sec = v.sections.find((x) => x.heading === 'Milestones')!;
   sec.body_md = `| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | Prove it | 2026-11-02 | ${KEYDATES_PRD_DAYS.m1} |`;
+  return db;
+}
+
+/**
+ * #1894, the "milestone-codes-prd" scenario: "roadmap-keydates" whose roadmap read carries the PRD plan's
+ * milestones (M1 Prove it, M2 Scale volume, M3 Open to all) as goal milestones too, as the API's goal_milestones brings
+ * each PRD milestone onto its roadmap, so each has the roadmap's own code beside the PRD's. Invented data.
+ */
+function seedMilestoneCodesPrdScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const rm = db.simple_roadmap!;
+  const prd = { slug: PLAN_PRD_SLUG, title: 'Guided setup' };
+  rm.goal_milestones = [
+    ...(rm.goal_milestones ?? []),
+    ...[
+      ['M1', 'Prove it', KEYDATES_PRD_DAYS.m1],
+      ['M2', 'Scale volume', KEYDATES_PRD_DAYS.m2],
+      ['M3', 'Open to all', '2027-02-12'],
+    ].map(([code, name, date]) => ({
+      id: stableUuid(`simple-gm/prd-${code}`),
+      roadmap: 'onboarding-roadmap',
+      code,
+      name,
+      date,
+      goal: null,
+      gates: [],
+      counts_when: '',
+      progress: 'not_started' as const,
+      prd,
+    })),
+  ];
   return db;
 }
 
@@ -7688,12 +7724,17 @@ function load(): Db {
                                                                                                                                                                                                             return db;
                                                                                                                                                                                                           }
                                                                                                                                                                                                         : scenario ===
-                                                                                                                                                                                                            PRIORITIES_PLAN_GOAL_TWINS_SCENARIO
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_TWINS_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO
                                                                                                                                                                                                           ? () => {
                                                                                                                                                                                                               const db =
                                                                                                                                                                                                                 seedSimplePlanScenario();
                                                                                                                                                                                                               seedPlanGoalTwins(
                                                                                                                                                                                                                 db.simple_roadmap!,
+                                                                                                                                                                                                                scenario,
                                                                                                                                                                                                               );
                                                                                                                                                                                                               return db;
                                                                                                                                                                                                             }
@@ -8578,7 +8619,9 @@ function load(): Db {
                                                                                                                                                                                                                                                                       true,
                                                                                                                                                                                                                                                                     )
                                                                                                                                                                                                                                                                 : scenario ===
-                                                                                                                                                                                                                                                                    ONE_ROADMAP_SCENARIO
+                                                                                                                                                                                                                                                                      ONE_ROADMAP_SCENARIO ||
+                                                                                                                                                                                                                                                                    scenario ===
+                                                                                                                                                                                                                                                                      INBOX_REPLACED_PROPOSAL_SCENARIO
                                                                                                                                                                                                                                                                   ? seedOneRoadmapScenario
                                                                                                                                                                                                                                                                   : scenario ===
                                                                                                                                                                                                                                                                       PRIORITIES_TWINS_SCENARIO
@@ -8959,7 +9002,10 @@ function load(): Db {
                                                                                                                                                                                                                                                                                                                                 : scenario ===
                                                                                                                                                                                                                                                                                                                                     'strategy-none'
                                                                                                                                                                                                                                                                                                                                   ? seedNoStrategyScenario
-                                                                                                                                                                                                                                                                                                                                  : seed,
+                                                                                                                                                                                                                                                                                                                                  : scenario ===
+                                                                                                                                                                                                                                                                                                                                      'milestone-codes-prd'
+                                                                                                                                                                                                                                                                                                                                    ? seedMilestoneCodesPrdScenario
+                                                                                                                                                                                                                                                                                                                                    : seed,
   );
   // The 500-item scenario's plans, known only while its items are the roadmap's.
   knowManyPlans(db.simple_roadmap);
@@ -8967,6 +9013,9 @@ function load(): Db {
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === 'revoke-failures' ? seedRevokeFailures() : [];
   db.access_failures = scenario === 'access-failures' ? seedAccessFailures() : [];
+  // inbox-2 (#1893): an owner change on a replaced PRD's item, waiting on the owner.
+  if (scenario === INBOX_REPLACED_PROPOSAL_SCENARIO)
+    seedReplacedProposal(db.simple_roadmap!, db.members);
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
   if (scenario === 'launches')
@@ -9021,6 +9070,7 @@ function load(): Db {
       roadmap.status = 'approved';
     }
   }
+  if (scenario === PANEL_WORDS_SCENARIO) seedPanelWords(db);
   // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
   if (scenario === TWO_WAY_DATES_SCENARIO) {
     const roadmap = db.documents.find((d) => d.slug === 'usage-alerts-roadmap');
@@ -9341,7 +9391,10 @@ function load(): Db {
   // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
   // dod-perf) has its own 500 items and none of the default company's map features.
   db.goal_map ??=
-    scenario === 'empty' || scenario === 'simple-500' || scenario === 'roadmap-milestones'
+    scenario === 'empty' ||
+    scenario === 'simple-500' ||
+    scenario === 'roadmap-milestones' ||
+    scenario === PRIORITIES_ONE_FEATURE_SCENARIO
       ? { ...seedGoalMap(scenario), features: [] }
       : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
@@ -16395,6 +16448,13 @@ export async function mockFetch(req: Request): Promise<Response> {
       status: 500,
       headers: { 'content-type': 'application/json' },
     });
+  }
+  // build-palette: composed from the mock's own reads, outside the queue (./palette.ts); its
+  // reads are calls of their own, so this one only leaves the burst.
+  const palette = await routePalette(req, mockFetch);
+  if (palette) {
+    leave();
+    return palette;
   }
   // A read whose save may wait for the burst's last call: not one that marks something seen, nor
   // a meeting chat's poll, which saves nothing of its own (S9).

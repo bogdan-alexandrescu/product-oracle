@@ -30,7 +30,13 @@ async function listed(
 ): Promise<{ rank: number; above: boolean; title: string; code: string }[]> {
   return rows(page).evaluateAll((els) =>
     els.map((e) => ({
-      rank: Number(e.querySelector('[data-testid="prio-rank"]')!.textContent),
+      // prio-2 (#1898): split at the line, each part is numbered from 1; the rank is the number's title.
+      rank: Number(
+        (e.querySelector('[data-testid="prio-rank"]')!.getAttribute('title') ?? '').replace(
+          'Rank ',
+          '',
+        ) || e.querySelector('[data-testid="prio-rank"]')!.textContent,
+      ),
       above: e.getAttribute('data-above') === 'true',
       title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? '',
       code: e.querySelector('[data-testid="prio-own-key"]')?.textContent ?? '',
@@ -114,7 +120,7 @@ for (const [device, width, height] of [
       await expect(dialog).toBeHidden();
       await expect(
         rows(page).filter({ hasText: moving.title }).getByTestId('prio-rank'),
-      ).toHaveText(String(lastAboveRank));
+      ).toHaveAttribute('title', `Rank ${lastAboveRank}`);
       const after = await listed(page);
       const at = after.findIndex((r) => r.title === moving.title);
       expect(after[at]).toEqual({

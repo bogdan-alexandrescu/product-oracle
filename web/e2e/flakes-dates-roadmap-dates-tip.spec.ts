@@ -43,7 +43,7 @@ async function setDates(page: Page, start: string, end: string) {
   await panel(page).getByLabel('Start', { exact: true }).fill(start);
   await panel(page).getByLabel('End', { exact: true }).fill(end);
   await tap(panel(page).getByRole('button', { name: 'Save' }));
-  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set here');
+  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Set by a person');
 }
 
 /**
