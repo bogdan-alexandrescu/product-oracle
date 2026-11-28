@@ -1,6 +1,9 @@
-import type { Schemas } from '../client';
+import { requestWords } from '@/app/inbox/_request-words';
+
 import { mockNowMs } from './clock';
 import { companyDayIso } from './connections';
+
+import type { Schemas } from '../client';
 
 type Item = Schemas['SimpleWaitingItem'];
 
@@ -52,6 +55,8 @@ export async function waitingItems(
   meId: string,
   questions: Schemas['SimpleQuestion'][],
   role = '',
+  // #1913: a Simple change's own words (changes.words), for a proposal the reader's changes list leaves out.
+  wordsOf: (id: string) => string | null = () => null,
 ): Promise<Item[]> {
   const read = async <T>(path: string): Promise<T | undefined> =>
     (await get(path).catch(() => undefined)) as T | undefined;
@@ -181,7 +186,8 @@ export async function waitingItems(
       .map((p) => ({
         ...p,
         item: p.item_id ?? undefined,
-        words: p.asked ? p.asked.charAt(0).toUpperCase() + p.asked.slice(1) : '',
+        // #1913: as changes.words says it, a request naming its item by code and name.
+        words: wordsOf(p.id) ?? (p.asked ? requestWords(p.by_name, p.asked) : ''),
       })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   for (const c of proposals) {

@@ -4,6 +4,8 @@ import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { login, signOut } from './helpers';
 import { expect, test, type Page } from './test';
 
+const ASKS_BADGE = 'Theo Brandt asks to change the owner of F-45 Trusted seller badge';
+
 /**
  * inbox-2 (#1912, #1913, #1893), on the mock's "meeting-agenda-owner" company, where
  * approver@example.com decides the invented Onboarding roadmap. A commenter asks Oracle to rename
@@ -77,7 +79,9 @@ test('a pending proposal reads as a request, has the room in its row and waits o
     .getByRole('link', { name: /^Decisions/ })
     .click();
   const mine = page.getByTestId('questions-mine');
-  const waiting = mine.getByRole('listitem').filter({ hasText: 'Renamed Welcome video' });
+  const waiting = mine
+    .getByRole('listitem')
+    .filter({ hasText: 'Theo Brandt asks to rename Welcome video' });
   await expect(waiting).toBeVisible();
   await expect(waiting).toContainText('Proposed by Theo Brandt');
   await expect(waiting.getByRole('button', { name: 'Accept' })).toBeVisible();
@@ -107,9 +111,10 @@ test('an owner change the Inbox counts for the Owner waits on Decisions too', as
     .getByRole('link', { name: /^Decisions/ })
     .click();
   const mine = page.getByTestId('questions-mine');
+  // #1913: left out of my changes list (its PRD was replaced), it still reads as the API words it.
   await expect(
     mine.locator('li[data-kind=proposal]').filter({ hasText: 'Trusted seller badge' }),
-  ).toBeVisible();
+  ).toContainText(ASKS_BADGE);
   await expect(mine).not.toContainText('Nothing waits on you');
 });
 

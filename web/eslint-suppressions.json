@@ -5244,11 +5244,6 @@
       "count": 1
     }
   },
-  "e2e/goal-buckets-editing.spec.ts": {
-    "import-x/order": {
-      "count": 1
-    }
-  },
   "e2e/goal-buckets-key-result-target.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -9754,9 +9749,6 @@
     }
   },
   "lib/api/mock/waiting-list.ts": {
-    "import-x/order": {
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "count": 1
     }

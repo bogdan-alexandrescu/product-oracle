@@ -226,7 +226,8 @@ async def test_unarchive_goal_and_restore_milestone_through_the_change_engine(cl
     # The approver owns the roadmap's track (they change it directly): a commenter proposes.
     prop = (await change(client, ctx, "commenter", "restore_goal_milestone",
                          {"milestone_id": m["id"]}))["change"]  # fmt: skip
-    assert prop["status"] == "proposed" and "restored the milestone Prove it" in prop["words"]
+    assert prop["status"] == "proposed"
+    assert "asks to restore the milestone Prove it" in prop["words"]
     done = (await change(client, ctx, "owner", "restore_goal_milestone",
                          {"milestone_id": m["id"]}))["change"]  # fmt: skip
     assert done["status"] == "applied"

@@ -19,6 +19,9 @@ export function seedReplacedProposal(db: SimpleDb, members: Schemas['MemberOut']
   const commenter = members.find((m) => m.email === 'commenter@example.com')!;
   const badge = db.items.find((s) => s.key === 'trusted-badge');
   if (badge) badge.section = 'f-45';
+  // #1913: Block list too (F-46), so its waiting rows name it by code and name.
+  const blocks = db.items.find((s) => s.key === 'block-list');
+  if (blocks) blocks.section = 'f-46';
   (db.changes ??= []).push({
     id: stableUuid('simple-proposal/inbox-replaced-owner'),
     session_id: null,

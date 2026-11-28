@@ -164,7 +164,7 @@ async def test_approver_who_is_not_the_decider_proposes_the_edit(client):
     change = r.json()["change"]
     assert change["status"] == "proposed"
     assert change["routed_to"] == [str(ctx.users["owner"].id)]
-    assert "proposed" in change["words"] and "edit_decision" not in change["words"]
+    assert " asks to change " in change["words"] and "edit_decision" not in change["words"]
     assert _row(await _page(client, ctx), d["id"])["title"] == d["title"]
     ok = await client.post(f"{CHANGES}/{change['id']}/accept", headers=ctx.as_("owner"),
                            json={})  # fmt: skip

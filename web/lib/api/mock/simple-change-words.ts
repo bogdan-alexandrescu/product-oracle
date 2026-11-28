@@ -3,6 +3,9 @@
  * for Home's "Since your last visit": who, what, the item's code and name, "· undone" once
  * undone. Never the op's internal name; an op without a sentence reads "changed <the item>".
  */
+
+import { requestOf } from '@/app/inbox/_request-words';
+
 type Values = Record<string, unknown>;
 
 const HORIZON_WORDS: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' };
@@ -262,19 +265,10 @@ export function changeSentence(
     return `${who} undid: ${changePhrase(c.op, target, after, before, item)}`;
   const what = changePhrase(c.op, target, before, after, item);
   let words = `${who} ${what}`;
-  // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
-  const asked =
-    c.op === 'delete_item' || c.op === 'delete_goal'
-      ? `move${what.slice('moved'.length)}`
-      : c.op === 'archive_goal'
-        ? `archive${what.slice('archived'.length)}`
-        : c.op === 'unarchive_goal'
-          ? `restore${what.slice('restored'.length)}`
-          : c.op === 'link_goal_map' && what.startsWith('moved')
-            ? `move${what.slice('moved'.length)}`
-            : what;
-  if (c.status === 'proposed') words = `${who} proposed: ${asked}`;
-  else if (c.status === 'declined') words = `${who} proposed: ${asked} · declined`;
+  // #1913 (change_words.sentence): one that waits is a request, as the Inbox words it; a declined one, what was asked.
+  const asked = requestOf(what) ?? what;
+  if (c.status === 'proposed') words = `${who} asks to ${asked}`;
+  else if (c.status === 'declined') words = `${who} asked to ${asked} · declined`;
   if (undone) words += ' · undone';
   return words;
 }
