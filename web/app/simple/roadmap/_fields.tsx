@@ -99,6 +99,7 @@ function Field({
         {open ? (
           <div
             data-testid={`${testId}-edit`}
+            data-own-esc=""
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;
               e.preventDefault();
