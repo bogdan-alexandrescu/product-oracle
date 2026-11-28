@@ -602,3 +602,31 @@ eslint-suppressions.json: import-x/order 32 -> 10 (lower, from lane 4). module_s
 - Run `roadmap-decide.spec.ts:373` and `de-r1-delete.spec.ts:33` 5 times each on a main worktree to compare flake rates.
 - Rerun `npm run lint` in the foreground to capture its exit code (it takes about 40 min alongside other load).
 - Not pushed from here: the worker publishes the branch.
+
+## Train fix round (review verdict NOT_YET at 971aa2a)
+Fixed exactly the review's two blockers and its major (gates); minors left as they are.
+- Blocker 1 (lane 3, `web/components/keys/KeyTips.tsx` PhoneSteps): at 390 px the fixed Previous/Next feature buttons
+  sat left of Close, over the panel's More actions. They now render via a portal into a `data-panel-steps` slot in the
+  panel header's own flow (`web/app/simple/roadmap/_card.tsx`, before Hide the talk / More actions / Close), so they cover
+  no control. one-feature-panel:220, port-feature-panel:69, panel-menu-tree:486, roadmap-edit-fixes-2:133,
+  simple-priorities-qa:290 (390 light and dark) and build-shortcuts (KS3 A phone steps) pass: 31 passed, --retries=0.
+- Blocker 2 (`web/e2e/qa-shell-pass2-review.spec.ts:74`): lane 3 pins Company, Settings and the account menu below the
+  scrolling rail top on purpose (#1790). The spec now wheels over `app-nav-scroll` and asserts exactly: its scrollTop > 5,
+  the rail itself has no scroll range (0), the avatar did not move, the menu's foot is level with the avatar (≤ 2 px).
+- web `npx tsc --noEmit`: exit 0. prettier and eslint on the three touched files: clean.
+
+### Gates this round (head d4eccb1a9, mock build of it)
+Mock suite, CI's command `E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=N/8` (retries=1 from e2e/ci.env):
+- shard 1/8: from the previous round (971aa2a): 1016 passed, 0 failed, 1 flaky (de-r1-delete:33, same rate on main per review).
+- shard 2/8: 1016 passed, 0 failed, 0 flaky, 1 skipped (13.1 m).
+- shard 3/8: 1017 passed, 0 failed, 0 flaky (17.0 m).
+- shard 4/8: 1014 passed, 3 failed, 0 flaky (16.2 m). Failures:
+  - `prose-guard.spec.ts:302` and `:324`: need an `origin/main` ref, absent in this clone (the review: 35/35 pass with
+    `PROSE_BASE=e70c5fcb0`; no ceiling raised). Environment, not code.
+  - `panel-menu-tree.spec.ts:486` (1440), both attempts: strict-mode violation, two `floating-card`s for a moment after a
+    second row is tapped while a panel is open (the old one, "Alert history export", still in the DOM). The 390 case,
+    the review's blocker, passed in this shard. Alone it passes 10/10 (`--repeat-each=5`, both sizes). The whole file
+    `--repeat-each=3 --workers=4 --retries=0`: train 82 passed, 2 failed (486 at 390, 224 at 390, same violation);
+    main e70c5fcb0 (its own mock build, worktree) 83 passed, 1 failed (486 at 1440, same violation). A load race that
+    already exists on main, not caused by the train; left for its own issue.
+- shard 5/8: 1016 passed, 0 failed, 0 flaky (14.4 m).
