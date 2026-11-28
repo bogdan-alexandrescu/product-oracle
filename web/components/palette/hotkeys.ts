@@ -81,6 +81,8 @@ function onEscape(e: KeyboardEvent) {
   const panel = a.closest('[data-testid=item-panel]');
   // The panel's own card is a dialog; a dialog around the panel (or a field outside it) is not ours.
   if (!panel || a.closest(DIALOG)?.contains(panel)) return;
+  // #1905: a value's own editor closes on Esc and gives the focus back to the value.
+  if (a.closest('[data-own-esc]')) return;
   e.stopImmediatePropagation();
   e.preventDefault();
   a.blur();

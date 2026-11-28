@@ -260,8 +260,9 @@ for (const size of SIZES) {
       } else {
         test('P-8: the desktop look is unchanged (small links stay small)', async ({ page }) => {
           await openItem(page, 'alert-digest');
+          // #1905: the value is the control; a one-line value (the dates wrap as text) stays small.
           const box = await panel(page)
-            .getByRole('button', { name: 'Change the dates' })
+            .getByRole('button', { name: 'Change the status' })
             .boundingBox();
           expect(box!.height).toBeLessThan(30);
         });

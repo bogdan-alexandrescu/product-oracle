@@ -1194,8 +1194,13 @@ function flagsFor(db: SimpleDb, ids: string[]): Schemas['SimpleItemFlags'][] {
 function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
   const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
   const undone = (db.changes ?? []).some((x) => x.undoes_id === c.id);
+  // home-3 (#1900, changes._past): an older version's item id names the item as it is now, else its last name.
+  const past = c.target.item_id ? db.past?.[String(c.target.item_id)] : undefined;
+  const now = past && db.items.some((x) => x.key === past.key) ? db.ids[past.key] : undefined;
+  const target = now ? { ...c.target, item_id: now } : c.target;
   return {
     ...c,
+    target,
     routed_to: route(db, ctx, c),
     undone,
     can_decide: c.status === 'proposed' && decidesChange(db, ctx, c),
@@ -1204,7 +1209,9 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     words: changeSentence(
       c,
       c.by_name,
-      c.op === 'delete_goal' ? goalLabel(db, c.target.goal_id) : itemLabel(db, c.target.item_id),
+      c.op === 'delete_goal'
+        ? goalLabel(db, c.target.goal_id)
+        : (itemLabel(db, target.item_id) ?? past?.title ?? null),
       undone,
     ),
   };

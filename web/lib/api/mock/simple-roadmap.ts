@@ -29,8 +29,9 @@ import {
 import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
 import { codedTitle, inheritedCode, prdCode, shownCode } from './item-code';
+import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
+import { byPrdRank, prdRanker } from './prd-rank';
 import { withRoadmapCodes } from './roadmap-codes';
-import { plainFlow } from './simple-visuals';
 import {
   calendarDay,
   milestoneOut,
@@ -40,11 +41,6 @@ import {
   type MockMilestone,
   type OldCtx,
 } from './simple-milestones';
-import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
-import { reply } from './typed';
-
-import type { OnePagerDb } from './simple-one-pager';
-
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -53,9 +49,12 @@ import {
   planSpan,
   type PlanDb,
 } from './simple-plan';
-import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
-import { byPrdRank, prdRanker } from './prd-rank';
+import { liveShapeRoadmap } from './simple-priorities-live';
+import { plainFlow, bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
+import { reply } from './typed';
+
+import type { OnePagerDb } from './simple-one-pager';
 
 export { codedTitle, prdCode, shownCode, shownName, takenFrom } from './item-code';
 
@@ -195,6 +194,8 @@ interface SimpleDb {
   /** Simple S3a (./simple-changes.ts): sessions and changes. */
   sessions?: Schemas['SimpleSessionOut'][];
   changes?: Schemas['SimpleChangeOut'][];
+  /** home-3 (#1900): ids an older roadmap version gave its items (changes._past), the item's key and last name. */
+  past?: Record<string, { key: string; title: string }>;
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
@@ -2996,6 +2997,16 @@ export function pickedName(
 }
 
 export function roadmapOut(
+  db: SimpleDb,
+  role: Role,
+  q: URLSearchParams,
+  me?: Who,
+): Schemas['SimpleRoadmapOut'] | null {
+  const out = roadmapRead(db, role, q, me);
+  return out && liveShapeRoadmap(out);
+}
+
+function roadmapRead(
   db: SimpleDb,
   role: Role,
   q: URLSearchParams,

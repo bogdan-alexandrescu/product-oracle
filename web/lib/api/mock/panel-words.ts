@@ -11,8 +11,14 @@ import { ROADMAPS, roadmapGoal, seedSimpleRoadmap, writeRoadmapGoal } from './si
 import type { Db } from './server';
 
 export const PANEL_WORDS_SCENARIO = 'panel-words';
+/** panel-target (#1907): the same, its target ending the way the live one does: each milestone code
+ * in the bracket followed by a word or a number ("(M1 pilot, M2 40)"). */
+export const PANEL_TARGET_LIVE_SCENARIO = 'panel-words-live';
 
-export function seedPanelWords(db: Db): void {
+export const isPanelWords = (scenario?: string | null): scenario is string =>
+  scenario === PANEL_WORDS_SCENARIO || scenario === PANEL_TARGET_LIVE_SCENARIO;
+
+export function seedPanelWords(db: Db, scenario: string = PANEL_WORDS_SCENARIO): void {
   for (const [i, [email, name]] of [
     ['robin.hart@example.com', 'Robin Hart'],
     ['sam.ortiz@example.com', 'Sam Ortiz'],
@@ -41,5 +47,6 @@ export function seedPanelWords(db: Db): void {
     db.members.map((m) => ({ id: m.id, name: m.name ?? m.email, email: m.email, role: m.role })),
   );
   const goal = roadmapGoal(rm, 'grow-retention');
-  writeRoadmapGoal(rm, 'grow-retention', { ...goal, target: `${goal.target} (M2)` });
+  const tail = scenario === PANEL_TARGET_LIVE_SCENARIO ? '(M1 pilot, M2 40)' : '(M2)';
+  writeRoadmapGoal(rm, 'grow-retention', { ...goal, target: `${goal.target} ${tail}` });
 }

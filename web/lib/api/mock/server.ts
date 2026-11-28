@@ -12,9 +12,10 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { HOME_3_SCENARIO, withHome3 } from './home-3';
 import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { routePalette } from './palette';
-import { PANEL_WORDS_SCENARIO, seedPanelWords } from './panel-words';
+import { isPanelWords, seedPanelWords } from './panel-words';
 import { mockName as displayName } from './people';
 import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
@@ -476,6 +477,7 @@ import {
   PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_ONE_FEATURE_SCENARIO,
+  PRIORITIES_LIVE_SHAPE_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -3675,6 +3677,8 @@ function seedSimpleHomeScenario(): Db {
     'faster-activation': 20000,
     'quiet-alerts': 15,
   };
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === HOME_3_SCENARIO)
+    db.simple_roadmap = withHome3(db.simple_roadmap);
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
     for (const e of db.baseline.entities)
       if (e.key in reads) e.attrs = { ...e.attrs, current: reads[e.key] };
@@ -7262,7 +7266,9 @@ function load(): Db {
                                                                                                                                   : scenario ===
                                                                                                                                         'simple-home' ||
                                                                                                                                       scenario ===
-                                                                                                                                        'home-goal-status'
+                                                                                                                                        'home-goal-status' ||
+                                                                                                                                      scenario ===
+                                                                                                                                        HOME_3_SCENARIO
                                                                                                                                     ? seedSimpleHomeScenario
                                                                                                                                     : scenario ===
                                                                                                                                         'simple-home-move'
@@ -7737,7 +7743,9 @@ function load(): Db {
                                                                                                                                                                                                             scenario ===
                                                                                                                                                                                                               PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO ||
                                                                                                                                                                                                             scenario ===
-                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO
+                                                                                                                                                                                                              PRIORITIES_ONE_FEATURE_SCENARIO ||
+                                                                                                                                                                                                            scenario ===
+                                                                                                                                                                                                              PRIORITIES_LIVE_SHAPE_SCENARIO
                                                                                                                                                                                                           ? () => {
                                                                                                                                                                                                               const db =
                                                                                                                                                                                                                 seedSimplePlanScenario();
@@ -9079,7 +9087,7 @@ function load(): Db {
       roadmap.status = 'approved';
     }
   }
-  if (scenario === PANEL_WORDS_SCENARIO) seedPanelWords(db);
+  if (isPanelWords(scenario)) seedPanelWords(db, scenario);
   // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
   if (scenario === TWO_WAY_DATES_SCENARIO) {
     const roadmap = db.documents.find((d) => d.slug === 'usage-alerts-roadmap');

@@ -6,6 +6,8 @@ import { InfoTip } from '@/components/ds';
 import type { Schemas } from '@/lib/api/client';
 import { calendarDay } from '@/lib/dates';
 
+import { planMilestone, useCodedMilestone } from './milestone-codes';
+
 type Plan = Schemas['SimplePlanOut'];
 type Milestone = Schemas['SimplePlanMilestone'];
 type Slice = Schemas['SimpleSlice'];
@@ -73,9 +75,10 @@ export function milestoneColour(
  * "Nov 2 – Nov 27" and "13 of 16 weeks" (no dates or capacity: left out); when the two numbers take different nouns,
  * each its own: "2 weeks of 1 week", never "2 of 1 week".
  */
-function legendParts(m: Milestone): { dates: string | null; full: string } {
+function legendParts(m: Milestone, placed = 0): { dates: string | null; full: string } {
   const dates = m.start_date && m.end_date ? `${day(m.start_date)} – ${day(m.end_date)}` : null;
-  const planned = m.planned_weeks ?? 0;
+  // #1739: never fewer than its parts' engineer-weeks.
+  const planned = Math.max(m.planned_weeks ?? 0, placed);
   const of =
     m.effort_weeks == null
       ? null
@@ -94,10 +97,13 @@ export const planSpan = (span: { start: string; end: string }): string =>
   `${day(span.start)} – ${day(span.end)}`;
 
 /** "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks." */
-function summary(plan: Plan): string {
+function summary(plan: Plan, floor = 0): string {
   const ms = plan.milestones;
   const span = plan.span ? `This plan, ${planSpan(plan.span)}` : 'This plan';
-  const planned = ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0);
+  const planned = Math.max(
+    floor,
+    ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0),
+  );
   const over = count(ms.length, 'milestone', 'milestones');
   if (ms.some((m) => m.effort_weeks == null))
     return `${span}: ${engineerWeeks(planned)} planned over ${over}. Bars are engineer-weeks.`;
@@ -111,9 +117,12 @@ function summary(plan: Plan): string {
 }
 
 /** PR7: the summary's short line, "Nov 2 – Feb 12 · 56 engineer-weeks, 5 spare" (its sentence and the footnote behind the (i)). */
-function shortSummary(plan: Plan): string {
+function shortSummary(plan: Plan, floor = 0): string {
   const ms = plan.milestones;
-  const planned = ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0);
+  const planned = Math.max(
+    floor,
+    ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0),
+  );
   let weeks = `${engineerWeeks(planned)} planned`;
   if (!ms.some((m) => m.effort_weeks == null)) {
     const capacity = ms.reduce((n, m) => n + (m.effort_weeks ?? 0), 0);
@@ -130,9 +139,13 @@ export function planGoals(plan: Plan): string[] {
   return names;
 }
 
-/** Each goal with its weeks per milestone. */
+/**
+ * Each goal with its weeks per milestone. #1739: a goal's total is at least its weeks this quarter (`buckets`, the set
+ * the Ranked list and Value / effort read); the weeks the plan does not place are one more part, with no milestone.
+ */
 function goalRows(
   plan: Plan,
+  quarterWeeks?: (goal: string) => number | undefined,
 ): { goal: string; parts: { milestone: string; weeks: number }[]; total: number }[] {
   const order = new Map(plan.milestones.map((m, i) => [m.code, i]));
   return planGoals(plan).map((goal) => {
@@ -140,7 +153,10 @@ function goalRows(
       .filter((w) => w.goal === goal && w.weeks > 0)
       .sort((a, b) => (order.get(a.milestone) ?? 99) - (order.get(b.milestone) ?? 99))
       .map((w) => ({ milestone: w.milestone, weeks: w.weeks }));
-    return { goal, parts, total: parts.reduce((n, p) => n + p.weeks, 0) };
+    const placed = parts.reduce((n, p) => n + p.weeks, 0);
+    const rest = (quarterWeeks?.(goal) ?? 0) - placed;
+    if (rest > 0) parts.push({ milestone: '', weeks: rest });
+    return { goal, parts, total: placed + Math.max(0, rest) };
   });
 }
 
@@ -235,11 +251,15 @@ function GoalBar({
 }) {
   const [track, width] = useWidth<HTMLDivElement>();
   // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 weeks"), never the code alone.
-  // A milestone's code and name; its code alone when it has no name.
-  const named = (code: string) =>
-    [code, plan.milestones.find((x) => x.code === code)?.name].filter(Boolean).join(' ');
+  // #1894: by the roadmap's one code, else its name alone (never the PRD's own number).
+  const coded = useCodedMilestone();
+  const named = (code: string) => {
+    if (!code) return '';
+    const m = planMilestone(coded, plan, code);
+    return [m.code, m.name].filter(Boolean).join(' ');
+  };
   const label = (p: { milestone: string; weeks: number }) =>
-    `${named(p.milestone)} · ${weeksWords(p.weeks)}`;
+    p.milestone ? `${named(p.milestone)} · ${weeksWords(p.weeks)}` : weeksWords(p.weeks);
   const fitting = useFittingLabels(track, width, parts.map(label).join('|'));
   return (
     <li
@@ -268,11 +288,11 @@ function GoalBar({
               key={p.milestone}
               data-testid="goal-bar-segment"
               data-milestone={p.milestone}
-              title={`${named(p.milestone)}: ${engineerWeeks(p.weeks)}`}
+              title={`${p.milestone ? named(p.milestone) : 'Outside the plan'}: ${engineerWeeks(p.weeks)}`}
               className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-sm font-[650] text-on-accent tabular-nums"
               style={{
                 width: `${(p.weeks / max) * 100}%`,
-                background: milestoneColour(plan, p.milestone).bar,
+                background: p.milestone ? milestoneColour(plan, p.milestone).bar : 'var(--text2)',
               }}
             >
               {/* A label that does not fit stays in the page, unseen (measured, and read out as sr-only text is). */}
@@ -300,14 +320,20 @@ export function PlanBucketsHead<G extends { name: string }>({
   codeOf,
   milestoneOf,
   onMilestone,
+  quarterWeeks,
 }: {
   plan: Plan;
   codeOf: (goal: string) => string | null;
   /** milestone-rename: the roadmap's own milestone a plan milestone is (its name and rights), if the reader sees it. */
   milestoneOf?: (code: string, name: string) => G | null;
   onMilestone?: (m: G) => void;
+  /** #1739: a goal's engineer-weeks this quarter (the priorities read's buckets). */
+  quarterWeeks?: (goal: string) => number | undefined;
 }) {
-  const rows = goalRows(plan);
+  const rows = goalRows(plan, quarterWeeks);
+  // #1739: never fewer weeks than the bars hold.
+  const floor = rows.reduce((n, r) => n + r.total, 0);
+  const coded = useCodedMilestone();
   // The longest bar stops short of the column's end, as B draws it.
   const max = Math.max(1, ...rows.map((r) => r.total)) * 1.07;
   return (
@@ -317,9 +343,9 @@ export function PlanBucketsHead<G extends { name: string }>({
     >
       <h2 className="text-xl font-[650] leading-7">Where each goal&apos;s work lands</h2>
       <p className="mb-2 mt-0.5 flex items-center gap-1.5 text-base leading-6 text-text2">
-        <span data-testid="buckets-summary">{shortSummary(plan)}</span>
+        <span data-testid="buckets-summary">{shortSummary(plan, floor)}</span>
         <InfoTip label="these bars" align="start" testId="buckets-about">
-          <span data-testid="buckets-summary-full">{summary(plan)}</span>{' '}
+          <span data-testid="buckets-summary-full">{summary(plan, floor)}</span>{' '}
           <span data-testid="buckets-footnote">
             Each feature counts once, under the goal it moves most (the first goal the one-pager
             names for it). Engineer-weeks are the one-pager&apos;s, part by part.
@@ -328,15 +354,23 @@ export function PlanBucketsHead<G extends { name: string }>({
       </p>
       <ul className="mb-1.5 flex flex-wrap gap-x-[18px] gap-y-1" aria-label="Milestones">
         {plan.milestones.map((m) => {
-          const { dates, full } = legendParts(m);
+          const { dates, full } = legendParts(
+            m,
+            plan.slices
+              .filter((x) => x.milestone === m.code)
+              .reduce((n, x) => n + (x.effort_weeks ?? 0), 0),
+          );
           // milestone-rename: its code opens the milestone's card, its name in place (the code stays).
           const own = milestoneOf?.(m.code, m.name) ?? null;
           const name = own?.name ?? m.name;
+          // #1894: the roadmap's one code, else the name alone (the PRD's own number never shows).
+          const head = planMilestone(coded, plan, m.code).code;
+          const label = head ? `${head} ${name}` : name;
           return (
             <li
               key={m.code}
               data-testid="milestone-chip"
-              title={`${m.code} ${name}`}
+              title={label}
               className="inline-flex items-center gap-1.5 text-sm leading-5 tabular-nums"
             >
               <span
@@ -348,14 +382,14 @@ export function PlanBucketsHead<G extends { name: string }>({
                 <button
                   type="button"
                   data-testid="milestone-chip-edit"
-                  aria-label={`${m.code} ${name}`}
+                  aria-label={label}
                   className="font-[650] hover:underline"
                   onClick={() => onMilestone(own)}
                 >
-                  {m.code}{' '}
+                  {head ?? name}{' '}
                 </button>
               ) : (
-                <b className="font-[650]">{m.code} </b>
+                <b className="font-[650]">{head ?? name} </b>
               )}
               {dates && <span className="whitespace-nowrap">{dates}</span>}
               {` · ${full}`}
@@ -402,8 +436,8 @@ export function planFeatures(
   });
 }
 
-/** "4 features in the plan" (the plan may run past the quarter). */
+/** "4 features in the Guided setup plan" (#1739: the plan is one PRD's, and may run past the quarter). */
 export const featureCount = (plan: Plan, goal: string | null): string => {
   const n = planFeatures(plan, goal).length;
-  return `${n} ${n === 1 ? 'feature' : 'features'} in the plan`;
+  return `${n} ${n === 1 ? 'feature' : 'features'} in the ${plan.prd.title} plan`;
 };

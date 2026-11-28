@@ -3,7 +3,7 @@
 // save is one Simple change (Undo, the "changed by …" conflict rule; a commenter's is a
 // suggestion for an approver). Without canChange (a viewer) the fields only read.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { Button, toast } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
@@ -46,6 +46,13 @@ const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 /** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
 const REMOVE =
   'relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11';
+/** #1905: a value that opens its editor: the text as it reads, a pointer and a pencil on hover or focus. */
+// An inline span (role button), so a value that wraps keeps its (i) tip on its last line as before;
+// on a phone its tap area is 44 px high (its ::before), with no change to the layout.
+const VALUE =
+  "group relative cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:-inset-y-3.5 max-sm:before:min-w-11 max-sm:before:content-['']";
+/** On a phone the row stays 44 px high, as it was with its Change link; the value's tap area is its ::before. */
+const VALUE_ROW = 'max-sm:min-h-11 max-sm:items-center';
 const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-base';
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
@@ -58,42 +65,80 @@ const dayWords = (day: string) =>
 /** "61%", "3 days": a goal's reading in its unit. */
 const readingWords = (n: number, unit?: string | null) => goalFigure(n, unit);
 
-/** One field: its value, and (canChange) a Change button that opens its editor in place. */
+/** One field: its value, and (canChange) the value itself is the button that opens its editor in
+ * place (#1905: no "Change" link on every row; a pencil on hover or focus). `extra`: what sits
+ * beside the value and is no part of it (an (i) tip, a badge), outside the button. */
 function Field({
   label,
   testId,
   value,
+  extra,
   canChange,
   editor,
 }: {
   label: string;
   testId: string;
   value: React.ReactNode;
+  extra?: React.ReactNode;
   canChange: boolean;
   editor: (done: () => void) => React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  // 'back': closed by Esc, Cancel or a save, so focus goes back to the value it opened from.
+  const [state, setState] = useState<'shut' | 'open' | 'back'>('shut');
+  const open = state === 'open';
+  const button = useRef<HTMLSpanElement>(null);
+  const valueId = useId();
+  useEffect(() => {
+    if (state === 'back') button.current?.focus();
+  }, [state]);
+  const close = () => setState('back');
   return (
     <>
       <dt className="text-text2">{label}</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
         {open ? (
-          <div data-testid={`${testId}-edit`}>{editor(() => setOpen(false))}</div>
+          <div
+            data-testid={`${testId}-edit`}
+            data-own-esc=""
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return;
+              e.preventDefault();
+              e.stopPropagation();
+              close();
+            }}
+          >
+            {editor(close)}
+          </div>
         ) : (
-          <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className={`flex flex-wrap items-baseline gap-x-2 ${canChange ? VALUE_ROW : ''}`}>
             <span data-testid={testId} className="min-w-0">
-              {value}
+              {canChange ? (
+                <span
+                  ref={button}
+                  role="button"
+                  tabIndex={0}
+                  className={VALUE}
+                  aria-label={`Change the ${label.toLowerCase()}`}
+                  aria-describedby={valueId}
+                  onClick={() => setState('open')}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    setState('open');
+                  }}
+                >
+                  <span id={valueId}>{value}</span>
+                  <Icon
+                    name="pencil"
+                    size={16}
+                    className="invisible ml-1.5 inline align-[-3px] text-text2 group-hover:visible group-focus-visible:visible"
+                  />
+                </span>
+              ) : (
+                value
+              )}
+              {extra && <> {extra}</>}
             </span>
-            {canChange && (
-              <button
-                type="button"
-                className={LINK}
-                aria-label={`Change the ${label.toLowerCase()}`}
-                onClick={() => setOpen(true)}
-              >
-                Change
-              </button>
-            )}
           </span>
         )}
       </dd>
@@ -315,14 +360,7 @@ const windowOnly = (item: Item): boolean =>
 function DeciderNames({ names }: { names: readonly string[] }) {
   if (!names.length) return <span className="text-text2">No decider yet</span>;
   if (names.length === 1) return <>{names[0]}</>;
-  return (
-    <>
-      Any of: {names.join(', ')}{' '}
-      <InfoTip label="who decides" align="start" testId="card-decider-why">
-        Any one of them can decide.
-      </InfoTip>
-    </>
-  );
+  return <>Any of: {names.join(', ')}</>;
 }
 
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
@@ -410,37 +448,90 @@ const CodeText = ({ code }: { code?: string | null }) => (
   </span>
 );
 
-/** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
-function ownCode(item: Item, canChange: boolean, take: () => void): ReactNode {
+/** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either.
+ * #1905: the code is the value (the button that changes it); its tip and badges sit beside it. */
+function ownCode(
+  item: Item,
+  canChange: boolean,
+  take: () => void,
+): { value: ReactNode; extra: ReactNode } | null {
+  if (!item.code) return null;
   // unique-codes (Nov 23): an item's own code; the Ground Truth feature it is part of stays named.
   const part = item.feature_name ? (
     <InfoTip label="its feature" align="start" testId="card-code-feature">
       Part of the Ground Truth feature {item.feature_name}.
     </InfoTip>
   ) : null;
-  if (!item.code || (!item.confirm_feature_id && !part)) return item.code;
+  if (!item.confirm_feature_id && !part) return { value: item.code, extra: null };
+  return {
+    value: <CodeText code={item.code} />,
+    extra: (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        {part}
+        {/* panel-stages (#1815 5): this item takes its feature's code; the one that had it, the next number. */}
+        {part && canChange && (
+          <Button
+            variant="ghost"
+            data-testid="card-code-take"
+            className="h-6! px-2! text-xs!"
+            onClick={take}
+          >
+            Use {item.feature_name?.split(' ')[0]}
+          </Button>
+        )}
+        {item.confirm_feature_id && (
+          <>
+            <NotInGt className="h-5! px-2! text-xs!" />
+            <ConfirmIntoGt item={item} />
+          </>
+        )}
+      </span>
+    ),
+  };
+}
+
+/** The Code field: its value (the button that changes it) and what sits beside it. */
+function codeParts(
+  item: Item,
+  canChange: boolean,
+  take: () => void,
+): { value: ReactNode; extra: ReactNode } {
+  // A code from its Ground Truth feature or its PRD is read here, never changed.
+  if (item.code_from)
+    return {
+      value: (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <CodeText code={item.code} />
+          <InfoTip label="this code" align="start" testId="card-code-why">
+            {item.code_from === 'feature'
+              ? 'It comes from its Ground Truth feature: change it there.'
+              : "It comes from its PRD's section: change it in the PRD."}
+          </InfoTip>
+          {/* gt-proposed: a code from a feature a run only proposed is still no Ground Truth one. */}
+          {item.confirm_feature_id && (
+            <>
+              <NotInGt className="h-5! px-2! text-xs!" />
+              <ConfirmIntoGt item={item} />
+            </>
+          )}
+        </span>
+      ),
+      extra: null,
+    };
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      <CodeText code={item.code} />
-      {part}
-      {/* panel-stages (#1815 5): this item takes its feature's code; the one that had it, the next number. */}
-      {part && canChange && (
-        <Button
-          variant="ghost"
-          data-testid="card-code-take"
-          className="h-6! px-2! text-xs!"
-          onClick={take}
-        >
-          Use {item.feature_name?.split(' ')[0]}
-        </Button>
-      )}
-      {item.confirm_feature_id && (
-        <>
-          <NotInGt className="h-5! px-2! text-xs!" />
-          <ConfirmIntoGt item={item} />
-        </>
-      )}
-    </span>
+    ownCode(item, canChange, take) ?? {
+      value: <span className="text-text2">None</span>,
+      // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
+      extra: (
+        <span className="inline-flex flex-wrap items-center gap-x-1" data-testid="card-code-flag">
+          · <NotInGt className="h-5! px-2! text-xs!" />
+          <InfoTip label={NOT_IN_GT} align="start" testId="card-code-gt-why">
+            Roadmap items that are no feature of the Ground Truth, or one only proposed so far.
+          </InfoTip>
+          {item.confirm_feature_id && <ConfirmIntoGt item={item} />}
+        </span>
+      ),
+    }
   );
 }
 
@@ -562,6 +653,11 @@ export function PanelFields({
       ),
     }));
 
+  const code = codeParts(
+    item,
+    canChange,
+    () => void change('Code changed', 'take_feature_code', { code: item.code }, {}),
+  );
   return (
     <dl
       // QA Nov 12 #9: a label on its value's line (a phone's 44 px Change centred only the value).
@@ -573,46 +669,8 @@ export function PanelFields({
         label="Code"
         testId="card-code"
         canChange={canChange && !item.code_from}
-        value={
-          item.code_from ? (
-            // A code from its Ground Truth feature or its PRD is read here, never changed.
-            <span className="inline-flex flex-wrap items-center gap-1">
-              <CodeText code={item.code} />
-              <InfoTip label="this code" align="start" testId="card-code-why">
-                {item.code_from === 'feature'
-                  ? 'It comes from its Ground Truth feature: change it there.'
-                  : "It comes from its PRD's section: change it in the PRD."}
-              </InfoTip>
-              {/* gt-proposed: a code from a feature a run only proposed is still no Ground Truth one. */}
-              {item.confirm_feature_id && (
-                <>
-                  <NotInGt className="h-5! px-2! text-xs!" />
-                  <ConfirmIntoGt item={item} />
-                </>
-              )}
-            </span>
-          ) : (
-            (ownCode(
-              item,
-              canChange,
-              () => void change('Code changed', 'take_feature_code', { code: item.code }, {}),
-            ) ?? (
-              // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
-              <span
-                className="inline-flex flex-wrap items-center gap-x-1"
-                data-testid="card-code-flag"
-              >
-                <span className="text-text2">None</span> ·{' '}
-                <NotInGt className="h-5! px-2! text-xs!" />
-                <InfoTip label={NOT_IN_GT} align="start" testId="card-code-gt-why">
-                  Roadmap items that are no feature of the Ground Truth, or one only proposed so
-                  far.
-                </InfoTip>
-                {item.confirm_feature_id && <ConfirmIntoGt item={item} />}
-              </span>
-            ))
-          )
-        }
+        value={code.value}
+        extra={code.extra}
         editor={(done) => (
           <TextEdit
             label="Code"
@@ -683,12 +741,14 @@ export function PanelFields({
                 {yearSpan(item.start.date, item.end.date)} ·{' '}
                 <span data-testid="card-dates-kind">{datesKind(item)}</span>
               </>
-            )}{' '}
-            {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
-            <InfoTip label="these dates" align="start" testId="card-dates-why">
-              {datesReason(item)}
-            </InfoTip>
+            )}
           </>
+        }
+        extra={
+          /* QA Nov 12 #10: the circled (i) every other why on the page uses. */
+          <InfoTip label="these dates" align="start" testId="card-dates-why">
+            {datesReason(item)}
+          </InfoTip>
         }
         editor={(done) => (
           <DatesEdit
@@ -788,6 +848,13 @@ export function PanelFields({
         testId="card-decider"
         canChange={canChange}
         value={<DeciderNames names={item.deciders} />}
+        extra={
+          item.deciders.length > 1 && (
+            <InfoTip label="who decides" align="start" testId="card-decider-why">
+              Any one of them can decide.
+            </InfoTip>
+          )
+        }
         editor={(done) =>
           peopleRead ?? (
             <Pick

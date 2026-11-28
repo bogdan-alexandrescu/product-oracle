@@ -110,7 +110,9 @@ test('#1739 a goal card with no plan work leads to its features this quarter out
   await expect(made.getByTestId('prio-goal')).toHaveText('Grow retention');
   await page.getByRole('tab', { name: 'Goal buckets' }).click();
   const card = page.locator('[data-testid="plan-goal"][data-goal="Grow retention"]');
-  await expect(card.getByTestId('plan-goal-count')).toContainText('0 features in the plan');
+  await expect(card.getByTestId('plan-goal-count')).toContainText(
+    '0 features in the Guided setup plan',
+  );
   const more = card.getByTestId('plan-goal-outside');
   await expect(more).toHaveText('+ 1 outside the plan');
   await more.click();

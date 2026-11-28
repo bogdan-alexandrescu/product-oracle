@@ -180,10 +180,11 @@ test.describe('KS3 A: Esc steps out of the field first', () => {
     await expect(sheet(page)).toBeHidden();
     await expect(rows(page).nth(0)).toHaveAttribute('data-kfocus', '');
 
+    // #1905 (merged in night-o): Esc closes the value's editor and gives the focus back to the value.
     await page.keyboard.press('Escape');
     await expect(panel).toBeVisible();
-    await expect(notes).not.toBeFocused();
-    await expect(notes).toHaveValue('jk?g');
+    await expect(notes).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Change the notes' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
   });
