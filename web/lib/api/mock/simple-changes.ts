@@ -1206,15 +1206,23 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     can_decide: c.status === 'proposed' && decidesChange(db, ctx, c),
     can_undo:
       c.status === 'applied' && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
-    words: changeSentence(
-      c,
-      c.by_name,
-      c.op === 'delete_goal'
-        ? goalLabel(db, c.target.goal_id)
-        : (itemLabel(db, target.item_id) ?? past?.title ?? null),
-      undone,
-    ),
+    words: changeWords(db, c),
   };
+}
+
+/** changes.words: the change's sentence, its item named as change_items.name names it (#1913: the waiting list's too). */
+export function changeWords(db: SimpleDb, c: Change): string {
+  const undone = (db.changes ?? []).some((x) => x.undoes_id === c.id);
+  const past = c.target.item_id ? db.past?.[String(c.target.item_id)] : undefined;
+  const now = past && db.items.some((x) => x.key === past.key) ? db.ids[past.key] : undefined;
+  return changeSentence(
+    c,
+    c.by_name,
+    c.op === 'delete_goal'
+      ? goalLabel(db, c.target.goal_id)
+      : (itemLabel(db, now ?? c.target.item_id) ?? past?.title ?? null),
+    undone,
+  );
 }
 
 /** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name

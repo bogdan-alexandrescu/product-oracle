@@ -459,6 +459,7 @@ import {
   withKeyResultBuckets,
 } from './goal-buckets';
 import {
+  changeWords,
   proposeGoalDelete,
   restoreCodeTaken,
   routeSimpleChanges,
@@ -16433,7 +16434,10 @@ async function withWaitingItems(db: Db, req: Request, res: Response): Promise<Re
     { user_id?: string; role?: string } | undefined;
   return reply('/v1/simple/decisions/waiting', 'get', {
     ...out,
-    items: await waitingItems(get, me?.user_id ?? '', out.questions, me?.role ?? ''),
+    items: await waitingItems(get, me?.user_id ?? '', out.questions, me?.role ?? '', (id) => {
+      const c = db.simple_roadmap?.changes?.find((x) => x.id === id);
+      return c && db.simple_roadmap ? changeWords(db.simple_roadmap, c) : null;
+    }),
   });
 }
 

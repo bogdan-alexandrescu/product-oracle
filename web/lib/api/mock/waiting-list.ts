@@ -7,10 +7,6 @@ import type { Schemas } from '../client';
 
 type Item = Schemas['SimpleWaitingItem'];
 
-/** The item in `asked` by its code and name (change_items.name), as the API's words name it. */
-const named = (asked: string, title: string | null | undefined, code: string | null | undefined) =>
-  title && code && !title.startsWith(`${code} `) ? asked.replace(title, `${code} ${title}`) : asked;
-
 /** What a run stop asks, in plain words (oracle.simple.waiting_list _STOP_ACTION). */
 const STOP_ACTION: Record<string, string> = {
   feature_set: 'Check the feature set',
@@ -59,6 +55,8 @@ export async function waitingItems(
   meId: string,
   questions: Schemas['SimpleQuestion'][],
   role = '',
+  // #1913: a Simple change's own words (changes.words), for a proposal the reader's changes list leaves out.
+  wordsOf: (id: string) => string | null = () => null,
 ): Promise<Item[]> {
   const read = async <T>(path: string): Promise<T | undefined> =>
     (await get(path).catch(() => undefined)) as T | undefined;
@@ -189,7 +187,7 @@ export async function waitingItems(
         ...p,
         item: p.item_id ?? undefined,
         // #1913: as changes.words says it, a request naming its item by code and name.
-        words: p.asked ? requestWords(p.by_name, named(p.asked, p.item_title, p.item_code)) : '',
+        words: wordsOf(p.id) ?? (p.asked ? requestWords(p.by_name, p.asked) : ''),
       })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   for (const c of proposals) {
