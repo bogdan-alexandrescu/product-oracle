@@ -3,6 +3,7 @@
 // feature panel. KS3 A on a phone: no keys and no tips; the feature panel gets previous and next
 // buttons that step through features in the order j and k do.
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@/components/ds/Button';
 import { usePhone } from '@/components/ds/page-info';
@@ -15,6 +16,8 @@ type Tip = { label: string; k: Key; style: React.CSSProperties };
 
 const ROW_NAME = '[data-testid=prio-title], [data-testid=timeline-row-label]';
 const PANEL_CLOSE = '[data-testid=item-panel] button[aria-label=Close]';
+// The panel header's own place for them, before its actions, so they cover none of its controls.
+const PANEL_STEPS = '[data-testid=item-panel] [data-panel-steps]';
 
 function tipFor(el: Element, go: Key[]): Tip | null {
   const link = el.closest('nav a[href]');
@@ -98,17 +101,16 @@ function stepTarget(d: 1 | -1): HTMLElement | null {
   return names[at + d] ?? null;
 }
 
-/** KS3 A: on a phone the feature panel's previous and next buttons, beside its Close. */
+/** KS3 A: on a phone the feature panel's previous and next buttons, in its header before its actions. */
 export function PhoneSteps() {
   const phone = usePhone();
-  // Drawn again when the panel opens, closes or shows another feature (its name, its Close's place).
+  // Drawn again when the panel opens, closes or shows another feature.
   const [, setSeen] = useState('');
   useEffect(() => {
     if (!phone) return;
     const look = () => {
       const p = document.querySelector('[data-testid=item-panel]');
-      const c = document.querySelector(PANEL_CLOSE)?.getBoundingClientRect();
-      return `${p?.getAttribute('aria-label') ?? ''}|${c ? `${c.top},${c.left}` : ''}`;
+      return `${p?.getAttribute('aria-label') ?? ''}|${document.querySelector(PANEL_STEPS) ? 1 : 0}`;
     };
     const first = window.setTimeout(() => setSeen(look()), 0);
     const seen = new MutationObserver(() => setSeen(look()));
@@ -119,17 +121,13 @@ export function PhoneSteps() {
     };
   }, [phone]);
   if (!phone) return null;
-  const close = document.querySelector<HTMLElement>(PANEL_CLOSE);
-  const r = close?.getBoundingClientRect();
-  if (!r || !r.width) return null;
+  const slot = document.querySelector<HTMLElement>(PANEL_STEPS);
+  if (!slot) return null;
   const prev = stepTarget(-1);
   const next = stepTarget(1);
   if (!prev && !next) return null;
-  return (
-    <div
-      className="fixed z-[70] flex items-center gap-1"
-      style={{ right: window.innerWidth - r.left + 8, top: r.top + r.height / 2 - 22 }}
-    >
+  return createPortal(
+    <div className="flex flex-none items-center gap-1">
       <Button
         aria-label="Previous feature"
         disabled={!prev}
@@ -146,6 +144,7 @@ export function PhoneSteps() {
       >
         ›
       </Button>
-    </div>
+    </div>,
+    slot,
   );
 }

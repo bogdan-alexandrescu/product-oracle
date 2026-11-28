@@ -1209,6 +1209,8 @@ export function FloatingCard({
           </>
         )}
       </div>
+      {/* KS3 A: a phone's previous and next feature buttons are drawn here (KeyTips' PhoneSteps). */}
+      <span data-panel-steps className="contents" />
       {beside && (
         <button
           type="button"
