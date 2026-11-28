@@ -701,7 +701,7 @@ pr-1943 99c0eb0db. Merged with `--no-ff` in that order:
   changed changes.py code.
 - test_frozen_migrations, test_home_since_names_items, test_module_size, the read-speed digest tests:
   `1 failed, 153 passed, 1 skipped` (the failure is the timing budget above).
-- pyright baseline: NOT RUN (out of time). api/oracle changed (Home lane), so CI's pyright job must decide.
+- pyright, run as CI runs it: `pyright: 1263 errors, baseline 1263`, exit 0.
 - web: `npx tsc --noEmit -p .` exit 0; `npm run lint` exit 0; `npm run format:check` "All matched files use
   Prettier code style!".
 - Playwright (prebuilt mock, --retries=0, 2 workers):
@@ -720,6 +720,5 @@ pr-1943 99c0eb0db. Merged with `--no-ff` in that order:
 
 ## Left
 - The roadmap read timing budget (above).
-- Pyright baseline.
 - The rest of the API chunk B3 and the timing suite.
 - The owner's pick on Esc's typed text (questions.json).
