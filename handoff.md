@@ -714,7 +714,13 @@ pr-1943 99c0eb0db. Merged with `--no-ff` in that order:
     panel-menu, panel-ux, panel-words, panel-stages, port-feature-panel, roadmap-panel-overlap,
     simple-roadmap-qa-nov12-panel/side-panel) plus the keys specs: `171 passed, 1 failed`. The failure is
     palette-keys.spec.ts:132, the minor night-n's handoff already lists.
-  - NOT RUN for lack of time: the other ~260 spec files that open the panel, Priorities or Home. CI's 8 shards
+  - Home specs (home-2, home-fixes, home-milestone-labels, home-milestone-rename, home-ux-nov24,
+    home-waiting-one-list, home, simple-home, home-ground-truth-flags, simple-home-qa-nov17/nov14,
+    fix4-simple-home): `154 passed`.
+  - Priorities specs (dod-priorities-actions, fix2/fix4-plan-priorities, flakes-dates-priorities-edit-link,
+    prio-company, prio-line-once, prio-line-track-prd, prio-twin-propose, prio-twins, prio-unranked,
+    priorities-buckets-weeks, priorities-key-results, priorities-keydates, priorities-move-dialog): `130 passed`.
+  - NOT RUN for lack of time: the other ~230 spec files that open the panel, Priorities or Home. CI's 8 shards
     cover them.
 - Not pushed from this step: the worker publishes the branch.
 
