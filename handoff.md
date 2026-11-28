@@ -1,3 +1,9 @@
+# waiting-words (#1913, #1907 part 2): see the lane's artifacts handoff; summary
+
+- Waiting changes read "<who> asks to <request>" (change_words.request_of, one verb table shared with the Inbox via docs/contracts/api-request-verbs.json); declined "<who> asked to ... · declined". Item naming on the waiting list already worked (change_items.name), proven by api/tests/test_simple_waiting_request_words.py.
+- Priorities goal-measure reads targetWords(rec.target).
+- Whole API suite not run to the end here (time); simple/inbox/home/trash subset 1672 passed; test_inbox_reads needs an unfetched pinned commit. qa2-simple-decisions.spec.ts:45 intermittent (1 of 4) here.
+
 # inbox-2 (PR #1922), fix round after re-review NOT_YET — handoff
 
 Branch base: 47e8c419; merged origin/main (d26f6f1c, Nov 24 train) clean as 6330a43c and pushed.
