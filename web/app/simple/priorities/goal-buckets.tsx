@@ -12,7 +12,7 @@ import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { PendingMark } from './feature-order';
-import { useCodedMilestone } from './milestone-codes';
+import { planMilestone, useCodedMilestone } from './milestone-codes';
 import {
   CodeTag,
   goalLabel,
@@ -73,7 +73,12 @@ const same = (a: string, b: string) =>
  * The plan as the goal links place it: each feature under the first goal it serves (its goal
  * links when it has them, else the one-pager's goal), the goals in the owner's order.
  */
-export function placedPlan(plan: Plan, gb: Buckets | undefined): Plan {
+export function placedPlan(
+  read: Plan,
+  gb: Buckets | undefined,
+  rows: readonly { code: string; own_key?: string | null; effort?: number | null }[] = [],
+): Plan {
+  const plan = rowWeeks(read, rows);
   if (!gb?.goals.length) return plan;
   const titleOf = new Map(gb.goals.map((g) => [g.id, g.title]));
   const goalOf = (code: string, name: string, goal: string | null | undefined): string | null => {
@@ -116,6 +121,34 @@ export function placedPlan(plan: Plan, gb: Buckets | undefined): Plan {
   };
 }
 
+/**
+ * #1739: a plan feature whose parts carry no engineer-weeks (and are not PM-owned) takes its row's effort, the weeks
+ * the Ranked list and Value / effort show, shared evenly by its parts.
+ */
+function rowWeeks(
+  plan: Plan,
+  rows: readonly { code: string; own_key?: string | null; effort?: number | null }[],
+): Plan {
+  const bare = new Set(
+    plan.slices
+      .map((s) => s.feature_code)
+      .filter((c) =>
+        plan.slices.every((s) => s.feature_code !== c || (s.effort_weeks == null && !s.pm_owned)),
+      ),
+  );
+  if (!bare.size) return plan;
+  const effortOf = (c: string) =>
+    rows.find((r) => (r.own_key ?? r.code).toLowerCase() === c.toLowerCase())?.effort ?? null;
+  const parts = (c: string) => plan.slices.filter((s) => s.feature_code === c).length;
+  return {
+    ...plan,
+    slices: plan.slices.map((s) => {
+      const e = bare.has(s.feature_code) ? effortOf(s.feature_code) : null;
+      return e == null ? s : { ...s, effort_weeks: Number((e / parts(s.feature_code)).toFixed(1)) };
+    }),
+  };
+}
+
 function featureOf(
   gb: Buckets | undefined,
   code: string,
@@ -153,7 +186,9 @@ function parseDay(text: string, year: string): string | null {
 /** "A, B and C". */
 const andList = (xs: string[]) =>
   xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
-const count = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'} in the plan`;
+/** #1739: "2 features in the Guided setup plan": the plan is one PRD's. */
+const count = (n: number, prd?: string) =>
+  `${n} ${n === 1 ? 'feature' : 'features'} in the ${prd ? `${prd} plan` : 'plan'}`;
 const lower = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
 
 export function OrderBadge({ n }: { n: number }) {
@@ -796,7 +831,8 @@ export function FeatureRows({
             >
               {milestones.map((code) => {
                 const c = milestoneColour(plan, code);
-                const name = plan.milestones.find((m) => m.code === code)?.name ?? '';
+                // #1894: the roadmap's one code and the name, else the name alone.
+                const shown = planMilestone(coded, plan, code);
                 const of = f.slices.filter((x) => x.milestone === code);
                 const weeks = of.every((x) => x.pm_owned || x.effort_weeks == null)
                   ? 'PM-owned'
@@ -805,11 +841,11 @@ export function FeatureRows({
                   <span
                     key={code}
                     data-testid="plan-chip"
-                    title={`${code} ${name}: ${weeks}`}
+                    title={`${[shown.code, shown.name].filter(Boolean).join(' ')}: ${weeks}`}
                     className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-[650]"
                     style={{ background: c.tag, color: c.ink }}
                   >
-                    <span>{code}</span> <span>{name}</span>
+                    {shown.code && <span>{shown.code}</span>} <span>{shown.name}</span>
                   </span>
                 );
               })}
@@ -889,6 +925,7 @@ export function ArchiveDialog({
   ask?: string[] | null;
 }) {
   const [mode, setMode] = useState<'move' | 'none'>('move');
+  const coded = useCodedMilestone();
   const [to, setTo] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -901,8 +938,11 @@ export function ArchiveDialog({
   const multi = list.filter((f) => otherGoal(gb, f, goal.id));
   const rest = list.length - multi.length;
   const ms = [...new Set(list.flatMap((f) => f.slices.map((s) => s.milestone)))].sort();
-  const msLabel = (code: string) =>
-    `${code} ${plan?.milestones.find((m) => m.code === code)?.name ?? ''}`.trim();
+  // #1894: the roadmap's one code and the name, else the name alone.
+  const msLabel = (code: string) => {
+    const m = plan ? planMilestone(coded, plan, code) : { code, name: '' };
+    return [m.code, m.name].filter(Boolean).join(' ');
+  };
   const feats = `${list.length} ${list.length === 1 ? 'feature' : 'features'}`;
   const inPlan = list.filter((f) => f.slices.length).length;
   const picked = mode === 'none' || !!to || rest === 0;

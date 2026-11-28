@@ -384,7 +384,9 @@ test.describe('QA pass 2: simple-plan, Goal buckets', () => {
     await expect(page.locator('#prio-about-text')).toHaveText(
       'Where the engineer-weeks go, goal by goal.',
     );
-    await expect(page.getByTestId('plan-goal-count').first()).toContainText('in the plan');
+    await expect(page.getByTestId('plan-goal-count').first()).toContainText(
+      'in the Guided setup plan',
+    );
     for (const card of await page
       .locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])')
       .all()) {

@@ -10,7 +10,13 @@
  * dependency. `estimate_feature` writes a person's goal value or effort, which the score uses.
  */
 import type { Schemas } from '@/lib/api/client';
+
+import { bucketGoalIds, lazyGoalBuckets, seedGoalBuckets } from './goal-buckets';
+import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
+import { madeOrder } from './made-order';
+import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
 import { PLAN_PRD_SLUG, planOut, planSlices } from './simple-plan';
+import { PRIORITIES_LIVE_SHAPE_SCENARIO, liveShape } from './simple-priorities-live';
 import {
   canDecideItem,
   closed,
@@ -27,10 +33,6 @@ import {
   type SimpleDb,
 } from './simple-roadmap';
 import { flowFor } from './simple-visuals';
-import { madeOrder } from './made-order';
-import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
-import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
-import { bucketGoalIds, lazyGoalBuckets, seedGoalBuckets } from './goal-buckets';
 
 type Row = Schemas['SimplePriorityRow'];
 type Item = Schemas['SimpleRoadmapItem'];
@@ -244,6 +246,7 @@ export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = 'priorities-plan-goal-twins';
 export const PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO = 'priorities-plan-goal-outside';
 /** prio-2 (#1739 review), "priorities-one-feature": "priorities-plan-goal-outside" with one feature left, Alert rules engine. */
 export const PRIORITIES_ONE_FEATURE_SCENARIO = 'priorities-one-feature';
+export { PRIORITIES_LIVE_SHAPE_SCENARIO } from './simple-priorities-live';
 export function seedPlanGoalTwins(db: SimpleDb, scenario?: string | null): void {
   if (!db.plan) throw new Error(`${scenario}: the seed has no plan to name its goals`);
   if (scenario === PRIORITIES_ONE_FEATURE_SCENARIO) {
@@ -251,7 +254,10 @@ export function seedPlanGoalTwins(db: SimpleDb, scenario?: string | null): void 
     seedPlanGoalTwins(db, PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO);
     return;
   }
-  if (scenario !== PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO) {
+  if (
+    scenario !== PRIORITIES_PLAN_GOAL_OUTSIDE_SCENARIO &&
+    scenario !== PRIORITIES_LIVE_SHAPE_SCENARIO
+  ) {
     db.plan.twin_goals = true;
     return;
   }
@@ -1307,7 +1313,7 @@ export function prioritiesOut(
     localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_BUCKET_ONLY_SCENARIO
       ? buckets.find((b) => !b.no_goal)?.codes[0]
       : undefined;
-  return {
+  const out: Schemas['SimplePrioritiesOut'] = {
     // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today,
     quarter: read.span ?? quarter(today),
@@ -1332,6 +1338,7 @@ export function prioritiesOut(
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,
   };
+  return liveShape(out);
 }
 
 /** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */

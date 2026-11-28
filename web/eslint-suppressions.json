@@ -9552,9 +9552,6 @@
     "import-x/no-cycle": {
       "count": 1
     },
-    "import-x/order": {
-      "count": 5
-    },
     "max-lines": {
       "count": 1
     },
@@ -9608,12 +9605,6 @@
     },
     "import-x/no-cycle": {
       "count": 2
-    },
-    "import-x/no-duplicates": {
-      "count": 2
-    },
-    "import-x/order": {
-      "count": 5
     },
     "max-lines": {
       "count": 1

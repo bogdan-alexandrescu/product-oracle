@@ -132,7 +132,7 @@ test('#1739 the Ranked list and Goal buckets count one quarter', async ({ page }
   await open(page, '', 'simple-plan');
   const makes = await page.locator('[data-testid="prio-row"][data-above="true"]').count();
   await page.getByRole('tab', { name: 'Goal buckets' }).click();
-  const counts = await page.getByText(/^\d+ features? in the plan$/).allInnerTexts();
+  const counts = await page.getByText(/^\d+ features? in the Guided setup plan$/).allInnerTexts();
   const inPlan = counts.reduce((n, t) => n + Number(t.split(' ')[0]), 0);
   expect(makes).toBe(inPlan);
 });
@@ -164,7 +164,7 @@ test('#1776 Value / effort: no mark covers another, and the side list says why i
   expect([...shown].sort((a, b) => a - b)).toEqual(shown.map((_, i) => i + 1));
   await side.getByTestId('side-ranks-help').click();
   await expect(page.getByRole('tooltip')).toContainText(
-    'shown on hover over its number in the Ranked list',
+    "Each number is the feature's number in the Ranked list",
   );
 });
 
