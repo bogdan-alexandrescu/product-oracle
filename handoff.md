@@ -647,3 +647,79 @@ Mock suite, CI's command `E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shar
 - `roadmap-r2-timeline-drag.spec.ts:60` flaked once in shard 6. Measure it 5 times on main.
 - The minors from the review (build-shortcuts:119 flake, roadmap-decide :339/:373, palette-keys:132) were left as
   they are, per the brief.
+
+---
+
+# Train night-o (Nov 28): merge notes
+
+Base: a9954c8 (night-n). The fetched heads matched the brief: pr-1941 439581e80, pr-1942 e9374f469,
+pr-1943 99c0eb0db. Merged with `--no-ff` in that order:
+389cefe6c (Panel click to edit, target), 8480af4b0 (Priorities, live data), d86f86076 (Home, live data).
+(The clone was shallow; `git fetch --unshallow` was needed before the merges.)
+
+## Conflicts and how each was resolved
+- Only one textual conflict: `api/tests/module_sizes.json` (`oracle/simple/changes.py`): main's 2568 against
+  the Home lane's 2571, so 2568 was kept. test_module_size then said the entry was stale (the file is 2567 lines),
+  so it was lowered to 2567 (separate commit).
+- Auto-merged with no conflict: `web/lib/api/mock/server.ts` (lane 1's `isPanelWords` seed and lane 3's
+  HOME_3 scenario import, seed and `load()` branch are all kept), `web/eslint-suppressions.json` (lane 1 lowers
+  `_fields.tsx` no-raw-button 11 to 10, lane 2 removes two stale import-x entries; nothing raised),
+  `web/e2e/feature-panel-qa.spec.ts` (lane 1). The prose ceilings, openapi.json and schema.d.ts did not change.
+- A behaviour conflict with no text conflict (6bc3492be): night-n's captured Esc
+  (`web/components/palette/hotkeys.ts` onEscape, KS3 A) blurred any panel field and stopped the event, so lane 1's
+  click-to-edit editor never got Esc (`panel-click-edit.spec.ts:30` failed 4 of 4: focus was in the Outcome
+  textarea and the editor stayed open). Fix: the capture steps aside inside a value's own editor
+  (`data-own-esc` on the editor wrapper in `_fields.tsx`). That editor closes and gives the focus back to the
+  value, and a second Esc still closes the panel. `build-shortcuts.spec.ts` KS3 A now asserts exactly that
+  (the editor is gone and 'Change the notes' has the focus). Lost: night-n's "the field keeps what was typed
+  after the first Esc". Lane 1's Esc throws the typed text away (#1905's design). This is the owner's call: see
+  questions.json.
+- The phone's Previous/Next buttons in the panel header slot: lane 1 did not touch `_card.tsx`.
+  one-feature-panel and port-feature-panel passed.
+
+## Duties
+- Alembic: one head, `0139_task_tracker_push_error (head)`. No lane added a migration.
+- `python3 docs/contracts/check.py`: no output, exit 0. `make openapi`: no change.
+- Pinned digests: test_simple_read_speed and test_simple_roadmap_speed digest tests pass (153 passed in the group
+  below), so nothing was re-pinned.
+- Issue 1763: no lane adds `u.name or u.email` (the Home lane's change_items uses item titles only).
+
+## Gates (result lines)
+- ruff check / format: `All checks passed!` / `1791 files already formatted`.
+- API suite, `-m "not timing"`, in chunks with -n 6. The whole run at -n 4 does not fit the 10-minute foreground
+  limit: it reached 28% in 9.6 min. Postgres needed `max_locks_per_transaction=2048` (at 256, two chunks errored
+  `out of shared memory` on DROP SCHEMA: an environment problem, rerun clean).
+  - Chunk A: 100% of the dots, no F/E, killed by the timeout before its summary line.
+  - Chunk B0: `1635 passed, 1 skipped`.
+  - Chunk B1+B2: 3493 results, no F/E, killed at 100% before its summary.
+  - Chunk B3: no F/E up to 96%, then cut off by the timeout. The last ~4% of that chunk DID NOT RUN.
+  - Chunk B4: no F/E at 100%, cut off before its summary.
+- `-m timing`: NOT COMPLETED (over 280 s in the foreground). test_simple_roadmap_speed::test_reads_answer_within_budget
+  alone FAILS on the train: best of 3 for /v1/simple/roadmap was 388, 365 and 401 ms against a 360 ms budget.
+  On a worktree of main (a9954c8) it passed twice at 353 and 340 ms. The only API change in the train is the Home
+  lane's changes.py/change_items.py. OPEN: measure 5+ runs on each, and check whether the roadmap read calls the
+  changed changes.py code.
+- test_frozen_migrations, test_home_since_names_items, test_module_size, the read-speed digest tests:
+  `1 failed, 153 passed, 1 skipped` (the failure is the timing budget above).
+- pyright baseline: NOT RUN (out of time). api/oracle changed (Home lane), so CI's pyright job must decide.
+- web: `npx tsc --noEmit -p .` exit 0; `npm run lint` exit 0; `npm run format:check` "All matched files use
+  Prettier code style!".
+- Playwright (prebuilt mock, --retries=0, 2 workers):
+  - prose-guard plus panel-click-edit, panel-target, home-3, prio-3 and feature-panel-qa: 83 passed, 1 failed
+    (the Esc failure, fixed in 6bc3492be).
+  - panel-click-edit, build-shortcuts and panel-close after the fix: `25 passed`.
+  - fix2-simple-plan, goal-buckets-accept, prio-2, prio-milestone-one-read, prio-milestone-rename, prio-ux,
+    simple-plan-charts and walkb-priorities: `54 passed`.
+  - The panel specs (feature-panel-gaps, fix2/fix4-simple-roadmap-card, one-feature-panel, panel-fits-viewport,
+    panel-menu, panel-ux, panel-words, panel-stages, port-feature-panel, roadmap-panel-overlap,
+    simple-roadmap-qa-nov12-panel/side-panel) plus the keys specs: `171 passed, 1 failed`. The failure is
+    palette-keys.spec.ts:132, the minor night-n's handoff already lists.
+  - NOT RUN for lack of time: the other ~260 spec files that open the panel, Priorities or Home. CI's 8 shards
+    cover them.
+- Not pushed from this step: the worker publishes the branch.
+
+## Left
+- The roadmap read timing budget (above).
+- Pyright baseline.
+- The rest of the API chunk B3 and the timing suite.
+- The owner's pick on Esc's typed text (questions.json).
