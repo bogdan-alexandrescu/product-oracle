@@ -252,23 +252,69 @@ def sentence(
         return f"{who} undid: {phrase(op, target, after, before, item)}"
     what = phrase(op, target, before, after, item)
     words = f"{who} {what}"
-    # What was asked, not done: "proposed: move F-26 Alert rules engine to Trash".
-    asked = what
-    if op in ("delete_item", "delete_goal"):
-        asked = "move" + what[len("moved") :]
-    elif op == "archive_goal":
-        asked = "archive" + what[len("archived") :]
-    elif op == "unarchive_goal":
-        asked = "restore" + what[len("restored") :]
-    elif op == "link_goal_map" and what.startswith("moved"):
-        asked = "move" + what[len("moved") :]
+    # #1913: one that waits is a request, as the Inbox words it: "Ana asks to move F-26 ... to
+    # Trash"; a declined one, what was asked.
     if status == "proposed":
-        words = f"{who} proposed: {asked}"
+        words = f"{who} asks to {request_of(what)}"
     elif status == "declined":
-        words = f"{who} proposed: {asked} · declined"
+        words = f"{who} asked to {request_of(what)} · declined"
     if undone:
         words += " · undone"
     return words
+
+
+# #1913: the verb asked for, by the past tense phrase() starts with. The Inbox's own table
+# (web/app/inbox/_request-words.ts VERB, which the mock's words use too); the Playwright spec
+# waiting-request-words.spec.ts holds the two equal.
+VERB = {
+    "accepted": "accept",
+    "added": "add",
+    "archived": "archive",
+    "asked": "ask",
+    "changed": "change",
+    "cleared": "clear",
+    "confirmed": "confirm",
+    "cut": "cut",
+    "decided": "decide",
+    "edited": "edit",
+    "filed": "file",
+    "gave": "give",
+    "kept": "keep",
+    "linked": "link",
+    "made": "make",
+    "marked": "mark",
+    "merged": "merge",
+    "moved": "move",
+    "named": "name",
+    "put": "put",
+    "removed": "remove",
+    "renamed": "rename",
+    "reordered": "reorder",
+    "restored": "restore",
+    "set": "set",
+    "took": "take",
+    "unlinked": "unlink",
+    "withdrew": "withdraw",
+}
+# set_depends reads with its item first: "F-01 Sign in now depends on F-02 Billing page".
+_DEPENDS = re.compile(r"^(.+) (now|no longer) depends on (.+)$")
+
+
+def request_of(what: str) -> str:
+    """phrase()'s words as the thing asked for: "change the owner of F-01 Sign in"."""
+    first, _, rest = what.partition(" ")
+    if verb := VERB.get(first):
+        return f"{verb} {rest}".rstrip()
+    if m := _DEPENDS.match(what):
+        no = "" if m.group(2) == "now" else "no longer "
+        return f"make {m.group(1)} {no}depend on {m.group(3)}"
+    # None known: as is (tests/test_simple_waiting_request_words.py fails on it).
+    return what
+
+
+def request(op: str, target: dict, before: dict, after: dict, item: str | None) -> str:
+    """A change still to decide, as asked (an infinitive): "move F-26 Alert rules to Trash"."""
+    return request_of(phrase(op, target, before, after, item))
 
 
 # A heading's own count (" · 8 items", " (8 items)") is not part of the section's name.

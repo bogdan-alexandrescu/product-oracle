@@ -10,7 +10,7 @@ Test cards (protects / fails_when / no_claim):
   fails_when=it stays in a read, a link or its goal is lost, or Restore leaves it out;
   no_claim=the Trash screen.
 - test_an_approver_who_does_not_decide_proposes_the_delete: protects=an approver who is
-  not the decider gets a proposal ("proposed: move ... to Trash"), the feature stays;
+  not the decider gets a proposal ("asks to move ... to Trash"), the feature stays;
   the decider accepts it and the feature goes to Trash; a declined one leaves it;
   fails_when=the approver deletes directly or the words show the op's name;
   no_claim=the Inbox screen.
@@ -59,7 +59,7 @@ Test cards (protects / fails_when / no_claim):
   fails_when=two items share a key or the dependent points at the new one; no_claim=PRD
   imports (the same helper).
 - test_a_commenters_goal_delete_is_a_proposal_to_its_decider: protects=a commenter's goal
-  delete is a delete_goal proposal ("proposed: move the goal “Grow” to Trash"), the goal
+  delete is a delete_goal proposal ("asks to move the goal “Grow” to Trash"), the goal
   stays until an owner accepts it; the commenter may not accept it; a viewer is refused;
   fails_when=the commenter is refused or deletes directly; no_claim=the Inbox screen.
 - test_a_proposed_delete_of_a_feature_already_in_trash_is_closed: protects=a proposal to
@@ -175,7 +175,7 @@ async def test_an_approver_who_does_not_decide_proposes_the_delete(client):
     change = r.json()["change"]
     assert r.json()["entry"] is None
     assert change["status"] == "proposed" and change["op"] == "delete_item"
-    assert "proposed: move" in change["words"] and "Cut A to Trash" in change["words"]
+    assert "asks to move" in change["words"] and "Cut A to Trash" in change["words"]
     assert "delete_item" not in change["words"]
     assert "cut-a" in await _items(client, w)
     # A second ask while one waits is refused.
@@ -523,7 +523,7 @@ async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
     assert r.json()["entry"] is None
     change = r.json()["change"]
     assert change["status"] == "proposed" and change["op"] == "delete_goal"
-    assert "proposed: move the goal “Grow” to Trash" in change["words"]
+    assert "asks to move the goal “Grow” to Trash" in change["words"]
     assert grow in [g["id"] for g in (await w.read(client))["goals"]]
     # The owners read it among the changes, theirs to decide.
     r = await client.get("/v1/simple/changes", headers=w.as_("owner"))

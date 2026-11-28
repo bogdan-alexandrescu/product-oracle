@@ -94,7 +94,7 @@ async def test_a_twin_merge_proposal_names_both_features_by_code(client):
     [row] = [r for r in (await w.read(client))["rows"] if r["feature_id"] == w.ids["ledger"]]
     assert row["short_code"] and twin and row["short_code"] != twin, (row, twin)
     change = (await _propose(client, w)).json()["change"]
-    words = f"merged {twin} Ledger into {row['short_code']} Ledger"
+    words = f"asks to merge {twin} Ledger into {row['short_code']} Ledger"
     assert words in change["words"], change["words"]
     assert w.ids["ledger"] not in change["words"], change["words"]
 
