@@ -86,6 +86,7 @@ export function PlanByMonth({
   names,
   codes,
   rename,
+  dateBy,
 }: {
   plan: PlanStrip;
   /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
@@ -107,6 +108,8 @@ export function PlanByMonth({
   /** Home (home-milestone-rename): a milestone row's rename (the Roadmap's milestone card, its name alone), by its
    * milestone's id; null where the reader may neither change nor propose it. */
   rename?: (ms: string) => (() => void) | null;
+  /** Home (#1897): who sets the date of an undated milestone row with no pencil, and where. */
+  dateBy?: (ms: string | undefined) => string;
 }) {
   const open = useOpenFeature();
   const from = ms(plan.start);
@@ -224,6 +227,8 @@ export function PlanByMonth({
           const heard = twins.length && whose ? `${label}, ${whose}` : label;
           // home-milestone-rename / one-pager-milestone-rename: the row's milestone renamed in place.
           const go = rename && r.ms ? rename(r.ms) : null;
+          // #1897: an undated milestone the reader may not edit here says who sets its date, in its (i).
+          const by = named && r.milestone && !when && !go && dateBy ? dateBy(r.ms) : null;
           const rowLabel = `${heard}${when ? ` · ${when}` : ''}: open the roadmap${prd ? ` filtered to ${prd.title}` : ''}`;
           const words = (
             <span
@@ -353,7 +358,7 @@ export function PlanByMonth({
                       className="w-6 flex-none"
                       title={rowNames.length > 0 ? `The items in ${heard}` : undefined}
                     >
-                      {rowNames.length > 0 && (
+                      {(rowNames.length > 0 || by) && (
                         <InfoTip label={`the items in ${heard}`} testId={`${testId}-items-tip`}>
                           <ul className="flex flex-col gap-0.5">
                             {rowNames.map((x, j) => (
@@ -366,6 +371,11 @@ export function PlanByMonth({
                           {r.also?.length ? (
                             <p className="mt-1 break-words">Also: {r.also.join(', ')}</p>
                           ) : null}
+                          {by && (
+                            <p className="mt-1 break-words" data-testid={`${testId}-date-by`}>
+                              {by}
+                            </p>
+                          )}
                         </InfoTip>
                       )}
                     </span>

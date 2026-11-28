@@ -12,6 +12,7 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { actionItemRows } from './action-items';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { HOME_3_SCENARIO, withHome3 } from './home-3';
 import { INBOX_REPLACED_PROPOSAL_SCENARIO, seedReplacedProposal } from './inbox-proposal-scenario';
 import { routePalette } from './palette';
 import { isPanelWords, seedPanelWords } from './panel-words';
@@ -3676,6 +3677,8 @@ function seedSimpleHomeScenario(): Db {
     'faster-activation': 20000,
     'quiet-alerts': 15,
   };
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === HOME_3_SCENARIO)
+    db.simple_roadmap = withHome3(db.simple_roadmap);
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === 'home-goal-status')
     for (const e of db.baseline.entities)
       if (e.key in reads) e.attrs = { ...e.attrs, current: reads[e.key] };
@@ -7263,7 +7266,9 @@ function load(): Db {
                                                                                                                                   : scenario ===
                                                                                                                                         'simple-home' ||
                                                                                                                                       scenario ===
-                                                                                                                                        'home-goal-status'
+                                                                                                                                        'home-goal-status' ||
+                                                                                                                                      scenario ===
+                                                                                                                                        HOME_3_SCENARIO
                                                                                                                                     ? seedSimpleHomeScenario
                                                                                                                                     : scenario ===
                                                                                                                                         'simple-home-move'

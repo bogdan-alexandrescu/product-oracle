@@ -117,7 +117,7 @@ from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import codes
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import code_take, dates, drafts, service, stages
+from oracle.simple import change_items, code_take, dates, drafts, service, stages
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -2084,6 +2084,7 @@ class _View:
         self.agendas: dict[uuid.UUID, Any] = {}
         # trash-features-goals: the items in Trash its changes are on, "<name> (deleted)".
         self.deleted: dict[str, str] = {}
+        self.past: dict[str, tuple[service.Entry | None, str]] = {}  # home-3: change_items
 
     def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool | None]:
         """(the meeting it was made in, whether its item is off that meeting's agenda)."""
@@ -2192,6 +2193,8 @@ class _View:
 def _target(c: SimpleChange, v: _View) -> dict:
     """edit-decisions: a sheet suggestion still waiting names its decision as it is now (its
     code and title), not as it was when it was sent (Home's and Waiting for you's rows)."""
+    if (e := v.past.get(str((c.target or {}).get("item_id")), (None, ""))[0]) is not None:
+        return {**c.target, "item_id": str(e.row.id)}  # home-3: the item as it is now
     d = v.questions.get(str((c.target or {}).get("decision_id")))
     if c.status != "proposed" or c.op not in SHEET_OPS or c.op == "add_question" or d is None:
         return c.target
@@ -2220,12 +2223,7 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict)
     and name as this reader reads it, "· undone" once undone."""
     from oracle.simple import change_words
 
-    e = v.entry(c) if c.target.get("item_id") else None
-    item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
-    if item is None and c.target.get("item_id"):
-        item = v.deleted.get(str(c.target["item_id"]))
-    if c.op == "delete_goal":
-        item = v.deleted.get(str(c.target.get("goal_id")))
+    item = change_items.name(c, v)
     return change_words.sentence(c.op, target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
@@ -2271,6 +2269,7 @@ async def _view(
     v.questions = await _questions(db, changes)
     v.agendas = await _agendas(db, sids)
     v.deleted = await _deleted(db, changes, v)
+    v.past = await change_items.past(db, changes, v.by_id, v.deleted)
     return v
 
 

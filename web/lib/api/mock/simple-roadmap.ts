@@ -194,6 +194,8 @@ interface SimpleDb {
   /** Simple S3a (./simple-changes.ts): sessions and changes. */
   sessions?: Schemas['SimpleSessionOut'][];
   changes?: Schemas['SimpleChangeOut'][];
+  /** home-3 (#1900): ids an older roadmap version gave its items (changes._past), the item's key and last name. */
+  past?: Record<string, { key: string; title: string }>;
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
