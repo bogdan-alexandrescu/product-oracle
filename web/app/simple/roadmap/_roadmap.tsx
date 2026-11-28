@@ -169,7 +169,7 @@ import {
   takeRoadmap,
   warmRoadmapPage,
 } from './_warm';
-import { ConflictPanel, ZoomTimeline } from './_zoom';
+import { ConflictPanel, Key, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
@@ -684,7 +684,11 @@ function GoalCounters({
     </li>
   );
   return (
-    <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
+    <ul
+      id="goal-counters"
+      className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4"
+      data-testid="goal-counters"
+    >
       {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
       {/* goal-order: every card in the one goal order, goals with no items among the others. */}
       {[
@@ -1655,6 +1659,8 @@ function DecisionTray({
   );
 }
 
+const GOALS_SHUT_KEY = 'po-roadmap-goals-shut';
+
 export function SimpleRoadmap() {
   const { me, can } = useMe();
   // simple-speed: the parts' reads start now, beside the roadmap's own (./_warm).
@@ -1670,6 +1676,22 @@ export function SimpleRoadmap() {
     goal: params.get('goal') ?? '',
   }));
   const [format, setFormat] = useState<Format>('timeline');
+  // #1901: the goal cards folded away, remembered on this browser.
+  const [goalsShut, setGoalsShut] = useState(() => {
+    try {
+      return localStorage.getItem(GOALS_SHUT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const shutGoals = (shut: boolean) => {
+    setGoalsShut(shut);
+    try {
+      localStorage.setItem(GOALS_SHUT_KEY, shut ? '1' : '0');
+    } catch {
+      // Storage may be off; the pick then holds for the visit.
+    }
+  };
   // tb-mk (owner Nov 10, "Track everywhere"): the Gantt, the Board and the Waterfall start grouped by track, like
   // the Timeline's bands, till a person picks a Group by.
   const groupPicked = useRef(false);
@@ -3172,6 +3194,17 @@ export function SimpleRoadmap() {
   ].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      {/* #1901: the goal cards fold away, so the chart starts higher; the pick holds on this browser. */}
+      {!phone && !pickedDraft && (
+        <Button
+          data-testid="goals-toggle"
+          aria-expanded={!goalsShut}
+          aria-controls="goal-counters"
+          onClick={() => shutGoals(!goalsShut)}
+        >
+          {goalsShut ? 'Goals ▸' : 'Goals ▾'}
+        </Button>
+      )}
       <RemovedButton
         items={data.items}
         canChange={canChange}
@@ -3205,6 +3238,8 @@ export function SimpleRoadmap() {
         {!phone && <span aria-hidden className="h-6 border-l border-line" />}
         <TracksButton items={data.items} canChange={canChange} onChanged={reload} />
       </span>
+      {/* #1901: the Timeline's key folds into this row (a phone keeps it above the chart). */}
+      {format === 'timeline' && !phone && <Key data={goalLaned ?? data} />}
       {/* The Timeline always draws track bands, so it offers no Group by; the Gantt's starts at Track. */}
       {format !== 'timeline' && (
         <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
@@ -3477,7 +3512,7 @@ export function SimpleRoadmap() {
                   track={addTrack}
                 />
               )}
-              {!phone && goalCounters}
+              {!phone && !goalsShut && goalCounters}
               <StartSheet
                 open={starting}
                 onClose={() => setStarting(false)}
@@ -3506,7 +3541,8 @@ export function SimpleRoadmap() {
               {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
                * the legend and goal cards at the page's foot. */}
               {!blank && filters}
-              {!blank && <MsKey />}
+              {/* #1901: the Timeline's key names a PRD's milestones itself. */}
+              {!blank && format !== 'timeline' && <MsKey />}
               {/* #1586: the next step depends on the goals Oracle suggests for: unread, it is not guessed. */}
               {blank && suggestions.error && !suggestions.data && (
                 <LoadError

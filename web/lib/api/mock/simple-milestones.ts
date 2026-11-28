@@ -358,6 +358,49 @@ export function seedOwnMilestones(): MockMilestone[] {
   ];
 }
 
+/** #1903 ("roadmap-band-crowd"): eleven milestones in a crowded fortnight, two pairs on one
+ * day and one just before the 3 months' first day in sight, so the band folds labels into "+N". */
+export const BAND_CROWD_SCENARIO = 'roadmap-band-crowd';
+export function seedCrowdedMilestones(): MockMilestone[] {
+  const days = [
+    '10-12',
+    '11-02',
+    '11-03',
+    '11-03',
+    '11-04',
+    '11-05',
+    '11-05',
+    '11-06',
+    '11-09',
+    '11-10',
+    '11-12',
+  ];
+  const names = [
+    'Pilot starts',
+    'Invites open',
+    'Rules ready',
+    'Digest ready',
+    'Alerts on mobile',
+    'Quiet hours on',
+    'Setup tips on',
+    'Import ready',
+    'Teams onboarded',
+    'Weekly digest sent',
+    'Survey closes',
+  ];
+  return days.map((d, n) => ({
+    id: stableUuid(`simple-gm/crowded-${n + 1}`),
+    roadmap: n % 2 ? 'onboarding-roadmap' : 'alerts-roadmap',
+    code: `M${n + 1}`,
+    name: names[n],
+    date: `2026-${d}`,
+    goal: n % 2 ? 'faster-activation' : 'grow-retention',
+    gates: [],
+    counts_when: 'Holds 7 days in a row',
+    progress: 'on_track' as const,
+  }));
+}
+
 /** A PRD's own milestones ("Usage alerts"), dated from its approved roadmap version; one has no date. */
 export function seedPrdMilestones(): MockMilestone[] {
   const prd = { slug: 'usage-alerts', title: 'Usage alerts' };

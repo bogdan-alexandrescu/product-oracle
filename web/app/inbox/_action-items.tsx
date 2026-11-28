@@ -37,7 +37,12 @@ export function actionItemRows(
       <span className="flex min-w-0 flex-wrap items-center gap-2" data-testid="action-item-context">
         {a.due_date && <Chip kind={a.late ? 'warn' : 'line'}>Due {calendarDay(a.due_date)}</Chip>}
         {a.item_id && a.item_title && (
-          <FeatureName name={a.item_title} itemId={a.item_id} documentId={a.roadmap_id} />
+          <FeatureName
+            name={a.item_title}
+            itemId={a.item_id}
+            documentId={a.roadmap_id}
+            code={a.item_code}
+          />
         )}
       </span>
     ),

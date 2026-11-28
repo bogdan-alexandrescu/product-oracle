@@ -564,3 +564,86 @@ after each merge.
   re-run: no API file changed in this round.
 - Minors from the verdict left as they were (brief: blocker and major only). Note: the earlier
   "d0b30e6e6" sha above is wrong; the gates there ran on ca00d08's tree.
+
+---
+
+# train night-n (Nov 27) — merge train notes
+
+Base: main e70c5fcb0e. Merged with `git merge --no-ff`, in order, each head checked against the named sha:
+1. #1931 Roadmap timeline (3eee9772f9) — conflict: **handoff.md only**, kept main's text (lanes' notes live in their PRs).
+2. #1932 Roadmap cursor and badge (30f710c5c2) — clean.
+3. #1933 Keyboard shortcuts (bcdf42854b) — clean.
+4. #1935 Inbox item codes (3ddf73a750) — clean (its handoff text merged in automatically; this file was then reset to main's text plus these notes).
+No code file conflicted. Main's roadmap focus fixes (rename field, item card focus, de-r1 close control) are untouched by the merges.
+eslint-suppressions.json: import-x/order 32 -> 10 (lower, from lane 4). module_sizes.json: changes.py 2572 -> 2568 (lower). Prose-guard ceilings: no lane changed them.
+
+## Train duties
+- Migrations: `uv run alembic heads` -> `0139_task_tracker_push_error (head)`, one head; no lane added a migration.
+- `python3 docs/contracts/check.py`: exit 0, no output. `make openapi`: no change.
+- Pinned read digests: passed in the full suite, nothing re-pinned.
+- No `u.name or u.email` brought back (no lane touched person display).
+
+## Gates
+- API whole suite `pytest -q -n 7 -m "not timing" tests`: **11887 passed, 16 skipped, 1 xfailed in 2549s** (includes tests/test_frozen_migrations.py).
+- `pytest -m timing tests`: **NOT COMPLETE** — killed by the 500 s command timeout at about 88 %, no failure shown up to then (out of time to rerun detached).
+- pyright baseline: **NOT RUN** (out of time; no lane's api/oracle change beyond small schema/field edits).
+- web `npx tsc --noEmit -p .`: exit 0. `npm run format:check`: "All matched files use Prettier code style!".
+- `npm run lint` (full, run detached alongside the API suite): finished with no output after the header (no errors printed); its exit code was not captured.
+- Playwright `--retries=0 --workers=2` on prose-guard + the 14 specs the lanes touched: **150 passed, 1 failed, 7 skipped**. The failure,
+  `e2e/roadmap-decide.spec.ts:373` (ms-asked label hidden right after the ask), passed 3/3 when rerun alone (`--repeat-each=3`):
+  timing under load, not a merge defect seen. Not yet measured 5x on a main worktree.
+- Whole mock suite, CI's command (`E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=N/8`, CI retries=1 from e2e/ci.env):
+  - shard 1/8: **1016 passed, 0 failed, 1 flaky** (16.0 m). Flaky: `e2e/de-r1-delete.spec.ts:33` (timed out waiting for
+    `add-row-title` after "Add to Guided setup track", passed on retry). It touches main's add-row and focus area: check it on main.
+  - shards 2–8: **NOT RUN**. Each shard is about 1,017 tests and 16 minutes here, and the 119-minute step ran out.
+
+## Left for the next session / owner
+- Run mock shards 2–8. Run `pytest -m timing tests` detached (it needs more than 500 s). Run the pyright baseline check as ci.yml does.
+- Run `roadmap-decide.spec.ts:373` and `de-r1-delete.spec.ts:33` 5 times each on a main worktree to compare flake rates.
+- Rerun `npm run lint` in the foreground to capture its exit code (it takes about 40 min alongside other load).
+- Not pushed from here: the worker publishes the branch.
+
+## Train fix round (review verdict NOT_YET at 971aa2a)
+Fixed exactly the review's two blockers and its major (gates); minors left as they are.
+- Blocker 1 (lane 3, `web/components/keys/KeyTips.tsx` PhoneSteps): at 390 px the fixed Previous/Next feature buttons
+  sat left of Close, over the panel's More actions. They now render via a portal into a `data-panel-steps` slot in the
+  panel header's own flow (`web/app/simple/roadmap/_card.tsx`, before Hide the talk / More actions / Close), so they cover
+  no control. one-feature-panel:220, port-feature-panel:69, panel-menu-tree:486, roadmap-edit-fixes-2:133,
+  simple-priorities-qa:290 (390 light and dark) and build-shortcuts (KS3 A phone steps) pass: 31 passed, --retries=0.
+- Blocker 2 (`web/e2e/qa-shell-pass2-review.spec.ts:74`): lane 3 pins Company, Settings and the account menu below the
+  scrolling rail top on purpose (#1790). The spec now wheels over `app-nav-scroll` and asserts exactly: its scrollTop > 5,
+  the rail itself has no scroll range (0), the avatar did not move, the menu's foot is level with the avatar (≤ 2 px).
+- web `npx tsc --noEmit`: exit 0. prettier and eslint on the three touched files: clean.
+
+### Gates this round (head d4eccb1a9, mock build of it)
+Mock suite, CI's command `E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=N/8` (retries=1 from e2e/ci.env):
+- shard 1/8: from the previous round (971aa2a): 1016 passed, 0 failed, 1 flaky (de-r1-delete:33, same rate on main per review).
+- shard 2/8: 1016 passed, 0 failed, 0 flaky, 1 skipped (13.1 m).
+- shard 3/8: 1017 passed, 0 failed, 0 flaky (17.0 m).
+- shard 4/8: 1014 passed, 3 failed, 0 flaky (16.2 m). Failures:
+  - `prose-guard.spec.ts:302` and `:324`: need an `origin/main` ref, absent in this clone (the review: 35/35 pass with
+    `PROSE_BASE=e70c5fcb0`; no ceiling raised). Environment, not code.
+  - `panel-menu-tree.spec.ts:486` (1440), both attempts: strict-mode violation, two `floating-card`s for a moment after a
+    second row is tapped while a panel is open (the old one, "Alert history export", still in the DOM). The 390 case,
+    the review's blocker, passed in this shard. Alone it passes 10/10 (`--repeat-each=5`, both sizes). The whole file
+    `--repeat-each=3 --workers=4 --retries=0`: train 82 passed, 2 failed (486 at 390, 224 at 390, same violation);
+    main e70c5fcb0 (its own mock build, worktree) 83 passed, 1 failed (486 at 1440, same violation). A load race that
+    already exists on main, not caused by the train; left for its own issue.
+- shard 5/8: 1016 passed, 0 failed, 0 flaky (14.4 m).
+- shard 6/8: 1014 passed, 0 failed, 1 flaky, 1 skipped (16.5 m). Flaky: `roadmap-r2-timeline-drag.spec.ts:60`
+  (desktop 1024), passed on CI's retry. That spec belongs to lane 1's timeline area. It was not measured on main.
+- shards 7/8 and 8/8: **NOT RUN**. Each takes about 15–17 minutes here, run one after another at 4 workers. The step's
+  119 minutes ran out after shard 6. They are the first thing to run next.
+- `pytest -m timing tests`: **NOT RUN** this round, for the same reason: it can't run beside Playwright (memory), and
+  no API file changed since 971aa2a. Pyright baseline and the full `npm run lint`: **not rerun** by me. The review ran
+  both at 971aa2a: pyright 1263 errors against a baseline of 1263, check exit 0; lint exit 0. Since then only
+  `KeyTips.tsx`, `_card.tsx` and the qa-shell spec changed, with no api change. Eslint and prettier on those files:
+  clean. tsc: exit 0.
+
+## Left (next session)
+- Mock shards 7/8 and 8/8 (`E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=N/8`), then `uv run pytest -m timing tests`
+  to completion (run it detached: it needs more than 10 minutes).
+- `panel-menu-tree.spec.ts` two-`floating-card` race: on main too (see shard 4 above), for its own issue.
+- `roadmap-r2-timeline-drag.spec.ts:60` flaked once in shard 6. Measure it 5 times on main.
+- The minors from the review (build-shortcuts:119 flake, roadmap-decide :339/:373, palette-keys:132) were left as
+  they are, per the brief.

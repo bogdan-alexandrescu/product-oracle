@@ -182,7 +182,7 @@ test('a count that drops to 0 leaves the Summary, the flags stay (1761)', async 
     await conflicts.getByRole('button', { name: 'Save the risk' }).click();
     await expect(conflicts.getByTestId('conflict')).toHaveCount(left - 1);
   }
-  await expect(conflicts).toContainText('No broken links');
+  await expect(conflicts).toHaveCount(0);
   await page.goto('/simple');
   await expect(summary.getByTestId('gtf-line')).toBeVisible();
   await expect(summary.getByTestId('home-summary-decisions')).toBeVisible();

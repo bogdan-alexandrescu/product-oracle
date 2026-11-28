@@ -1,5 +1,5 @@
 import { mockNowMs } from './clock';
-import { canDecideItem, roadmapId, type SimpleDb } from './simple-roadmap';
+import { canDecideItem, roadmapId, shownCode, type SimpleDb } from './simple-roadmap';
 
 import type { Schemas } from '../client';
 
@@ -53,6 +53,12 @@ export function actionItemRows(
     const key = Object.keys(db?.ids ?? {}).find((k) => db!.ids[k] === id);
     return db?.items.find((s) => s.key === key)?.title ?? null;
   };
+  // inbox-codes (#1786): as meeting_actions.inbox_rows, the linked item's code (codes.code_of).
+  const codeOf = (id: string) => {
+    const key = Object.keys(db?.ids ?? {}).find((k) => db!.ids[k] === id);
+    const s = db?.items.find((x) => x.key === key);
+    return s ? shownCode(s, (f) => db!.feature_codes?.[f]) : null;
+  };
   const roadmapOf = (id: string) => {
     const key = Object.keys(db?.ids ?? {}).find((k) => db!.ids[k] === id);
     const roadmap = db?.items.find((s) => s.key === key)?.roadmap;
@@ -72,6 +78,7 @@ export function actionItemRows(
         late: !!due && due < today,
         item_id: item,
         item_title: item ? titleOf(item) : null,
+        item_code: item ? codeOf(item) : null,
         roadmap_id: item ? roadmapOf(item) : null,
         meeting_id: meeting,
         meeting_title: meeting ? meetingTitle(meeting) : null,

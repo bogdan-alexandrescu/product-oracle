@@ -1,7 +1,5 @@
 'use client';
 
-import { RoleBadge } from '@/components/RoleBadge';
-import { Link, useRouter } from '@/lib/nav';
 import {
   Fragment,
   useCallback,
@@ -13,11 +11,17 @@ import {
   type MouseEvent,
 } from 'react';
 
+import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
 import { BuildRoadmapButton, SourceLink } from '@/components/BuildRoadmap';
 import { CommentPopover, SelectionButton, type PageRect } from '@/components/CommentPopover';
-import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
+import { useDateRights } from '@/components/DateBasisDialog';
+import { DateMarkContext, type DateMarkCtx } from '@/components/DateMarker';
+import { SpecDesignLinks } from '@/components/DesignReview';
+import { DiscussionThread } from '@/components/discuss/DiscussionThread';
+import { StartDiscussion, type DiscussionSubject } from '@/components/discuss/StartDiscussion';
 import { DocCrumb } from '@/components/DocToolbar';
-import { PricingDecide } from '@/components/PricingDecide';
+import { DocumentNotFound } from '@/components/DocumentNotFound';
+import { DraftNewItems } from '@/components/DraftNewItems';
 import {
   Button,
   Chip,
@@ -31,9 +35,7 @@ import {
   SegmentedControl,
   Sheet,
 } from '@/components/ds';
-import { DocumentNotFound } from '@/components/DocumentNotFound';
-import { DiscussionThread } from '@/components/discuss/DiscussionThread';
-import { StartDiscussion, type DiscussionSubject } from '@/components/discuss/StartDiscussion';
+import { PricingDecide } from '@/components/PricingDecide';
 import { SectionQuestions, type GoTo } from '@/components/FeedbackPanel';
 import { HeldRewritesButton, HeldRewritesPanel, useHeldRewrites } from '@/components/HeldRewrites';
 import {
@@ -52,26 +54,24 @@ import {
 import { Kbd } from '@/components/review/parts';
 import { ReviewPanel, type PanelTab } from '@/components/review/ReviewPanel';
 import { RunReviewBar } from '@/components/review/RunReviewBar';
-import { useDateRights } from '@/components/DateBasisDialog';
-import { DateMarkContext, type DateMarkCtx } from '@/components/DateMarker';
 import { DateMarker, type ExpandCtx, type Highlight } from '@/components/MarkdownBody';
-import { DraftNewItems } from '@/components/DraftNewItems';
+import { addPageKeys } from '@/components/palette/hotkeys';
 import { DraftWithOracleButton, isTemplateOnly } from '@/components/DraftWithOracle';
 import { numbersOf, PrdLook } from '@/components/PrdLook';
-import { SectionView } from '@/components/SectionView';
-import { SpecDesignLinks } from '@/components/DesignReview';
-import { SpecStaleness } from '@/components/SpecStaleness';
-import { buildCodeIndex } from '@/lib/code-index';
-import { useCodeEntities } from '@/lib/codes';
-import { BuildDraftButton } from '@/components/NextDraft';
 import { DraftRoadmapPane } from '@/components/roadmap/DraftRoadmapPane';
 import { RoadmapItemsPane } from '@/components/roadmap/RoadmapItemsPane';
 import { VersionTabs } from '@/components/roadmap/VersionTabs';
-import { ApproveButton, ExportButtons } from '@/components/VersionActions';
-import { EvidencePane } from '@/components/evidence/EvidencePane';
-import { VersionSwitcher } from '@/components/VersionSwitcher';
+import { RoleBadge } from '@/components/RoleBadge';
+import { SectionView } from '@/components/SectionView';
+import { SpecStaleness } from '@/components/SpecStaleness';
 import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { ApproveButton, ExportButtons } from '@/components/VersionActions';
+import { VersionSwitcher } from '@/components/VersionSwitcher';
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from '@/lib/anchor';
+import { buildCodeIndex } from '@/lib/code-index';
+import { useCodeEntities } from '@/lib/codes';
+import { BuildDraftButton } from '@/components/NextDraft';
+import { EvidencePane } from '@/components/evidence/EvidencePane';
 import {
   ApiError,
   api,
@@ -86,6 +86,7 @@ import { feedbackEntries, openBySection } from '@/lib/feedback';
 import { formatDate } from '@/lib/format';
 import { blocksText, parseBlocks } from '@/lib/markdown';
 import { useMe } from '@/lib/me';
+import { Link, useRouter } from '@/lib/nav';
 import { OWNER_APPROVES } from '@/lib/owner-kinds';
 import { PRD_LIST } from '@/lib/prd-list-name';
 import { useDocumentView, type DocumentView } from '@/lib/preferences';
@@ -128,11 +129,6 @@ function usePhone() {
     () => window.matchMedia(PHONE).matches,
     () => false,
   );
-}
-
-function isTyping(target: EventTarget | null) {
-  const el = target as HTMLElement | null;
-  return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
 }
 
 /** A plain click on a link: the page handles it (a modified click opens a tab as usual). */
@@ -807,9 +803,8 @@ export function VersionView({
       if (target) select(target.section_key);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
-      // Not inside a dialog (the sheets, the build sheet, the switcher): its keys are its own.
-      if ((e.target as HTMLElement | null)?.closest?.('[role=dialog]')) return;
+      // The one key layer (palette/hotkeys.ts) lets typing, modifiers and a dialog (the sheets, the
+      // build sheet, the switcher) keep their keys.
       // The Items tab: only { } (versions, keeping the tab).
       if (!onDocument && e.key !== '{' && e.key !== '}') return;
       if (e.key === '/') {
@@ -837,8 +832,25 @@ export function VersionView({
         setActiveId(null);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // #1795: on the one key layer, unchanged; a key it does not list (? and g) is the app's.
+    return addPageKeys(
+      Object.fromEntries(
+        [
+          '/',
+          '[',
+          ']',
+          'j',
+          'k',
+          'Shift+ArrowLeft',
+          'Shift+ArrowRight',
+          'v',
+          'c',
+          '{',
+          '}',
+          'Escape',
+        ].map((k) => [k, onKey]),
+      ),
+    );
   }, [
     selection,
     openComposer,

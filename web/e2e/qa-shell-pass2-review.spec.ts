@@ -5,7 +5,7 @@ import { ADMIN, login } from './helpers';
 
 /*
  * The review of the shell's QA pass 2: Home's inspector shows its stat and blocker words whole,
- * the account menu stays by its avatar while the rail scrolls, sign-in never waits forever, the mode switch's arrow keys move
+ * the account menu stays by its pinned avatar while the rail's top scrolls, sign-in never waits forever, the mode switch's arrow keys move
  * focus without leaving the page, and the rail never scrolls sideways.
  * protects = what a person sees and does in the shell; fails_when = any of those comes back;
  * no_claim = the pages' own content.
@@ -71,24 +71,26 @@ for (const [name, size] of [
 
 test.describe('on a short window', () => {
   test.use({ viewport: { width: 1366, height: 600 } });
-  test('UserMenu: the account menu follows its avatar when the rail scrolls while it is open', async ({
+  test('UserMenu: the account menu stays by its pinned avatar when the rail scrolls while it is open', async ({
     page,
   }) => {
     await login(page);
     const rail = page.getByTestId('app-nav');
+    // #1790 (keyboard shortcuts lane): the rail's top scrolls; the avatar stays pinned below it.
+    const top = page.getByTestId('app-nav-scroll');
     const avatar = page.getByTestId('user-menu');
-    await avatar.scrollIntoViewIfNeeded();
     await avatar.click();
     const menu = page.getByRole('dialog', { name: 'Account' });
     await expect(menu).toBeInViewport({ ratio: 1 });
+    const before = (await avatar.boundingBox())!;
     const railBox = await rail.boundingBox();
     await page.mouse.move(railBox!.x + 44, railBox!.y + 300);
-    await page.mouse.wheel(0, -40);
-    await expect
-      .poll(() => rail.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
-      .toBeGreaterThan(5);
+    await page.mouse.wheel(0, 40);
+    await expect.poll(() => top.evaluate((el) => el.scrollTop)).toBeGreaterThan(5);
+    expect(await rail.evaluate((el) => el.scrollHeight - el.clientHeight)).toBe(0);
     await expect(menu).toBeVisible();
-    // Its foot level with the avatar's (kept on screen), not where the avatar was.
+    // The avatar did not move, and the menu's foot is level with it.
+    expect((await avatar.boundingBox())!.y).toBe(before.y);
     await expect
       .poll(async () => {
         const a = (await avatar.boundingBox())!;

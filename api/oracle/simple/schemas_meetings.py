@@ -734,6 +734,8 @@ class InboxSimpleActionItem(BaseModel):
     late: bool = False
     item_id: uuid.UUID | None = None
     item_title: str | None = None
+    # inbox-codes (#1786): the linked item's code (codes.code_of); None for one with none.
+    item_code: str | None = None
     roadmap_id: uuid.UUID | None = None
     meeting_id: uuid.UUID | None = None
     meeting_title: str | None = None
