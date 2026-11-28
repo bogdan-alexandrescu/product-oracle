@@ -1,3 +1,22 @@
+# waiting-words fix round (review NOT_YET, one major) — handoff
+
+- Fixed the one major: web/lib/api/mock/waiting-list.ts's routed-only branch (a proposal the Inbox
+  routes to me but my changes list leaves out, e.g. one on a replaced PRD) no longer words the row
+  from the Inbox's `asked` plus a string replace of the title (`named` is gone). It takes the change's
+  own sentence through `changeWords` (simple-changes.ts, the function view() now uses too: changeSentence
+  with the item named as change_items.name), passed in by server.ts withWaitingItems. Rows that are not
+  Simple roadmap changes (PRD question, one-pager line) keep requestWords on `asked`.
+- Spec: inbox-2-proposal-rows.spec.ts:91 asserts the Owner's Decisions row reads exactly
+  "Theo Brandt asks to change the owner of F-45 Trusted seller badge" (that row goes through the
+  routed-only branch). mutate.mjs: dropping changeWords (row loses F-45) and the old
+  "proposed: changed …" words both turn it red: MUTATE: OK 2/2.
+- Gates: tsc 0; full npm run lint 0; format:check ok; vitest app/inbox + simple-changes 4 passed;
+  Playwright --retries=0, 2 workers: home-waiting-one-list, qa2-simple-decisions, inbox-2-proposal-rows,
+  waiting-request-words 54 passed; home-2, home-3, milestone-asks 17 passed.
+- Not run: API suite, pyright, frozen migrations (no API change this round); prose guard (no visible
+  word added: the words were already the API's).
+- Minors from the review left as they were (the brief: blocker and major only).
+
 # waiting-words (#1913, #1907 part 2): see the lane's artifacts handoff; summary
 
 - Waiting changes read "<who> asks to <request>" (change_words.request_of, one verb table shared with the Inbox via docs/contracts/api-request-verbs.json); declined "<who> asked to ... · declined". Item naming on the waiting list already worked (change_items.name), proven by api/tests/test_simple_waiting_request_words.py.
