@@ -1,5 +1,6 @@
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { THEME_KEY } from '../lib/theme';
+
 import { ADMIN, login } from './helpers';
 import { expect, test, type Page } from './test';
 
@@ -421,4 +422,17 @@ test.describe('phone note', () => {
       });
     });
   }
+});
+
+// #1907: a target ending in milestone shorthand ("(M1 pilot, M2 40)") reads without it on the goal's measure line.
+test('a goal’s measure line drops a milestone bracket from its target', async ({ page }) => {
+  await open(page, SIZES[0].viewport);
+  const card = bucket(page, 'Reliability');
+  await card.getByRole('button', { name: 'Edit Reliability' }).click();
+  const form = card.getByTestId('goal-form');
+  await form.getByLabel('Target').fill('99.95% (M1 pilot, M2 40)');
+  await form.getByRole('button', { name: 'Save goal' }).click();
+  await expect(card.getByTestId('goal-measure')).toHaveText(
+    'Setups that finish without an error: 99.95% by Feb 12, 2027',
+  );
 });

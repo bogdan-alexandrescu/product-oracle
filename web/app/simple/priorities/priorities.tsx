@@ -43,6 +43,7 @@ import { LoadError, Loading } from '@/components/ui';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
+import { targetWords } from '../roadmap/_panel-words';
 import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { Named, NotInGt } from '@/components/simple/FeatureName';
 import {
@@ -4591,7 +4592,8 @@ function PlanBuckets({
                         </span>
                       ) : (
                         <>
-                          {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by{' '}
+                          {rec.measure}:{' '}
+                          <b className="font-[650] text-text">{targetWords(rec.target ?? '')}</b> by{' '}
                           {dayOf(rec.due, year)}
                         </>
                       )}

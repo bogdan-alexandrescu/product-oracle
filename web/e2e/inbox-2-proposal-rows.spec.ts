@@ -77,7 +77,9 @@ test('a pending proposal reads as a request, has the room in its row and waits o
     .getByRole('link', { name: /^Decisions/ })
     .click();
   const mine = page.getByTestId('questions-mine');
-  const waiting = mine.getByRole('listitem').filter({ hasText: 'Renamed Welcome video' });
+  const waiting = mine
+    .getByRole('listitem')
+    .filter({ hasText: 'Theo Brandt asks to rename Welcome video' });
   await expect(waiting).toBeVisible();
   await expect(waiting).toContainText('Proposed by Theo Brandt');
   await expect(waiting.getByRole('button', { name: 'Accept' })).toBeVisible();

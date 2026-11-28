@@ -14,7 +14,7 @@ Test cards (protects / fails_when / no_claim):
 - test_every_op_has_a_request_form: protects=every op phrase() knows has a request form that
   starts with a verb asked for (the Inbox's own table, web/app/inbox/_request-words.ts VERB);
   fails_when=a new op's request falls back to the past tense; no_claim=the Inbox's rendering
-  (the Playwright spec waiting-request-words.spec.ts pins both tables equal).
+  (docs/contracts/api-request-verbs.json, read by web/app/inbox/_request-words.test.ts).
 - test_declined_and_done_rows_keep_their_tense: protects=a declined one reads "<who> asked to
   <request> · declined", an applied one and an undo keep today's words; fails_when=either
   changes; no_claim=which rows list them.

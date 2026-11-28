@@ -1,8 +1,15 @@
-import type { Schemas } from '../client';
+import { requestWords } from '@/app/inbox/_request-words';
+
 import { mockNowMs } from './clock';
 import { companyDayIso } from './connections';
 
+import type { Schemas } from '../client';
+
 type Item = Schemas['SimpleWaitingItem'];
+
+/** The item in `asked` by its code and name (change_items.name), as the API's words name it. */
+const named = (asked: string, title: string | null | undefined, code: string | null | undefined) =>
+  title && code && !title.startsWith(`${code} `) ? asked.replace(title, `${code} ${title}`) : asked;
 
 /** What a run stop asks, in plain words (oracle.simple.waiting_list _STOP_ACTION). */
 const STOP_ACTION: Record<string, string> = {
@@ -181,7 +188,8 @@ export async function waitingItems(
       .map((p) => ({
         ...p,
         item: p.item_id ?? undefined,
-        words: p.asked ? p.asked.charAt(0).toUpperCase() + p.asked.slice(1) : '',
+        // #1913: as changes.words says it, a request naming its item by code and name.
+        words: p.asked ? requestWords(p.by_name, named(p.asked, p.item_title, p.item_code)) : '',
       })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   for (const c of proposals) {

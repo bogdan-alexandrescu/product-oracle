@@ -20,10 +20,18 @@ def _json(name: str):
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+def _request_verbs():
+    from oracle.simple.change_words import VERB
+
+    return VERB
+
+
 PUBLISHED = {
     "api-audience-redaction": lambda: _json("audience_redaction.json"),
     "api-plan-strip-cases": lambda: _json("plan_strip_cases.json"),
     "api-code-left-out-cases": lambda: _json("code_left_out_cases.json"),
+    # #1913: the verbs a waiting change is asked by (the Inbox's table, web/app/inbox).
+    "api-request-verbs": lambda: _request_verbs(),
     "api-one-pager-contract": lambda: {
         "prd": (FIXTURES / "one_pager_contract.md").read_text(encoding="utf-8"),
         "contract": _json("one_pager_contract.json"),

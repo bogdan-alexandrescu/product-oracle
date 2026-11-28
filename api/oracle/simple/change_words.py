@@ -264,8 +264,8 @@ def sentence(
 
 
 # #1913: the verb asked for, by the past tense phrase() starts with. The Inbox's own table
-# (web/app/inbox/_request-words.ts VERB, which the mock's words use too); the Playwright spec
-# waiting-request-words.spec.ts holds the two equal.
+# (web/app/inbox/_request-words.ts VERB, which the mock's words use too), published as
+# docs/contracts/api-request-verbs.json, which the web's _request-words.test.ts reads.
 VERB = {
     "accepted": "accept",
     "added": "add",
